@@ -9,7 +9,12 @@ def calc_norm(x1, x2, weights):
     assert len(x1) == len(weights)
     assert np.all(weights >= 0)
     
-    return (x1*weights).dot(x2) / np.sum(x2*x2*weights)
+    #- catch unnormalizable (but not fatal) case
+    blat = np.sum(x2*x2*weights)
+    if blat == 0:
+        return 1.0
+    else:
+        return (x1*weights).dot(x2) / blat
 
 def calc_zchi2(redshifts, spectra, template):
     '''Calculates chi2 vs. redshift for a given template.
