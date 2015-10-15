@@ -16,7 +16,7 @@ def calc_norm(x1, x2, weights):
     else:
         return (x1*weights).dot(x2) / blat
 
-def calc_zchi2(redshifts, spectra, template):
+def calc_zchi2(redshifts, spectra, template, rchi2=False):
     '''Calculates chi2 vs. redshift for a given template.
     
     Args:
@@ -29,6 +29,12 @@ def calc_zchi2(redshifts, spectra, template):
         template: dictionary with keys
             - wave : array of wavelengths [Angstroms]
             - flux : array of flux densities [10e-17 erg/s/cm^2/Angstrom]
+
+    Optional:
+        rchi2 : if True, return reduced chi2/dof instead of chi2
+
+    Returns:
+        chi2 array with one element per input redshift
     '''
     
     nz = len(redshifts)
@@ -50,6 +56,8 @@ def calc_zchi2(redshifts, spectra, template):
         norm = calc_norm(sflux, tflux, weights)
 
         zchi2[i] = np.sum( (sflux - tflux*norm)**2 * weights )
+        if rchi2:
+            zchi2[i] /= len(sflux) - 1
     
     return zchi2        
 
