@@ -16,9 +16,42 @@ def calc_norm(x1, x2, weights):
     else:
         return (x1*weights).dot(x2) / blat
 
-def calc_zchi2(redshifts, spectra, template, rchi2=False):
+def calc_zchi2(redshifts, spectra, templates, rchi2=False):
+    '''Calculates chi2 vs. redshift for a set of templates.
+
+    Args:
+        redshifts: array of redshifts to evaluate
+        spectra: list of dictionaries, each of which has keys
+            - wave : array of wavelengths [Angstroms]
+            - flux : array of flux densities [10e-17 erg/s/cm^2/Angstrom]
+            - ivar : inverse variances of flux
+            - R : spectro-perfectionism resolution matrix
+        templates: list of dictionaries, each of which with keys
+            - wave : array of wavelengths [Angstroms]
+            - flux : array of flux densities [10e-17 erg/s/cm^2/Angstrom]
+
+    Optional:
+        rchi2 : if True, return reduced chi2/dof instead of chi2
+
+    Returns:
+        chi2[num_templates, num_redshifts] 2D array with chi2 for each
+            template at each redshift
+
+    Notes:
+        The spectra are multiple individual spectra for the same object.
+        They are assumed to be flux calibrated and consistent with each other.
+        The only free parameter is an overall scale factor per template per
+        redshift; there is no spectrum-to-spectrum re-normalization.
+    '''
+    zchi2 = np.zeros([len(templates), len(redshifts)])
+    for i in range(len(templates)):
+        zchi2[i] = calc_zchi2_template(redshifts, spectra, templates[i], rchi2=rchi2)
+        
+    return zchi2
+
+def calc_zchi2_template(redshifts, spectra, template, rchi2=False):
     '''Calculates chi2 vs. redshift for a given template.
-    
+
     Args:
         redshifts: array of redshifts to evaluate
         spectra: list of dictionaries, each of which has keys

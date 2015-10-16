@@ -16,7 +16,7 @@ def centers2edges(centers):
     #- edge edges are extrapolation of interior bin sizes
     edges[0] = centers[0] - (centers[1]-edges[1])
     edges[-1] = centers[-1] + (centers[-1]-edges[-2])
-    
+
     return edges
 
 def trapz_rebin(edges, x, y):
@@ -51,6 +51,9 @@ def trapz_rebin(edges, x, y):
     x = np.asarray(x)
     y = np.asarray(y)
     
+    #- Pre-calculate y(x) interpolation at bin edges
+    yedge = np.interp(edges, x, y)
+    
     #- Loop over pixel, creating temporary regions to integrate that
     #- include the edges and interior y(x) points
     results = np.zeros(len(edges)-1)
@@ -61,8 +64,8 @@ def trapz_rebin(edges, x, y):
         xx[0] = edges[i]
         xx[-1] = edges[i+1]
         xx[1:-1] = x[ii]
-        yy[0] = np.interp(edges[i], x, y)
-        yy[-1] = np.interp(edges[i+1], x, y)
+        yy[0] = yedge[i]
+        yy[-1] = yedge[i+1]
         yy[1:-1] = y[ii]
         results[i] = np.trapz(yy, xx) / (edges[i+1] - edges[i])
         
