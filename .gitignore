@@ -5,6 +5,11 @@
 docs/api
 docs/_build
 
+# Latex documentation
+doc/latex/*.aux
+doc/latex/*.pdf
+doc/latex/*.log
+
 # iPython
 docs/nb/.ipynb_checkpoints
 

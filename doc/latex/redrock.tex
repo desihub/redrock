@@ -1,0 +1,108 @@
+\title{Redrock: Redshift fitting spectra with different resolutions}
+\author{Stephen Bailey, David Schlegel}
+\date{\today}
+
+\documentclass[12pt]{article}
+
+\begin{document}
+\maketitle
+
+\abstract{Redrock is a redshift fitting toolkit for multiple spectra of
+the same object, each of which can have a different wavelength grid and
+resolution.  As input, redrock takes spectra defined by their flux,
+uncorrelated errors, and resolution matrix as calculated by the
+spectroperfectionism algorithm.}
+
+%-------------------------------------------------------------------------
+\section{Inputs}
+
+\begin{enumerate}
+    \item Multiple flux calibrated spectra $\mathbf{s}_i$ with uncorrelated
+        pixels $s_{i\lambda}$.
+    \item Uncertainties $\sigma_{i\lambda}$ on $s_{i\lambda}$; also expressed
+        as a diagonal covariance matrix $C_i = \mathrm{diag}(\sigma_i^2)$
+    \item A perfect resolution restframe template $\mathbf{t}_0$ evaluated at
+        redshift $z$ is $\mathbf{t}_z$, i.e. $\mathbf{t}_z(\lambda) =
+        \mathbf{t}_0(\lambda(1+z))$
+    \item $P_i(\mathbf{t}_z)$ resamples $\mathbf{t}_z$ onto the same
+        wavelength pixelization as $\mathbf{s}_i$
+    \item Resolution matrix $R_i$ that convolves $P_i(\mathbf{t}_z)$ to the
+        resolution of spectrum $\mathbf{s}_i$
+\end{enumerate}
+
+Notes:
+\begin{enumerate}
+    \item The pixels $s_{i\lambda}$ and $[P_i(\mathbf{t}_z)]_\lambda$
+        are a flux density interpreted as the
+        integral of the spectrum over each pixel divided by
+        the pixel width; it is not just an evaluation of the continuous
+        flux density at a single wavelength.  When used as a subscript,
+        $\lambda$ is a pixel index representing the center
+        of the pixel.
+\end{enumerate}
+
+%-------------------------------------------------------------------------
+\section{Evaluating $\chi^2$}
+
+The $\chi^2$ for a given template evaluated at redshift $z$ compared to the
+spectra $\mathbf{s}$ is then
+\begin{equation}
+    \chi^2_z = \sum_i \sum_\lambda
+        \left( {s_{i\lambda} - a [R_i P_i(\mathbf{t}_{z})]_\lambda) \over
+            \sigma_{i\lambda}} \right)^2
+\end{equation}
+where $a$ is a flux normalization term applied to the template to match the
+data.
+Expressed in matrix notation this is
+\begin{eqnarray}
+    \Delta_i & = & \mathbf{s}_i - a R_i P_i(\mathbf{t}_z) \\
+    \chi^2_z & = & \sum_i \Delta_i^T C_i^{-1} \Delta_i
+\end{eqnarray}
+
+%-------------------------------------------------------------------------
+\section{Flux correction terms}
+
+In practice, broadband errors in the flux calibration of $\mathbf{s}_i$
+should be absorbed as individual $a_i(\lambda)$ functions rather than a
+single flux calibration term $a$.  {\it e.g.}~$a_i(\lambda)$ may be expressed
+as a sum of Legendre polynomials $L_j(\lambda)$:
+\begin{eqnarray}
+    a_i(\lambda) & = & \sum_j b_{ij} L_j(\lambda) \\
+    \mathbf{a}_i & = & L \mathbf{b}_i
+\end{eqnarray}
+In this case, the $\chi^2_z$ becomes
+\begin{eqnarray}
+    \Delta_i & = & \mathbf{s}_i - \mathbf{a}_i \odot R_i P_i(\mathbf{t}_z) \\
+    \Delta_i & = & \mathbf{s}_i - (L \mathbf{b}_i) \odot (R_i P_i(\mathbf{t}_z)) \\
+    \chi^2_z & = & \sum_i \Delta_i^T C_i^{-1} \Delta_i
+\end{eqnarray}
+Where the notation $\mathbf{x} \odot \mathbf{y}$ indicates the elementwise
+multiplication of vectors $\mathbf{x}$ and $\mathbf{y}$.  The vectors
+$\mathbf{b}_i$ are coefficients to solve to minimize the $\chi^2_z$.
+
+\textbf{Question}: is there any actual benefit to fitting for fluxcorr terms
+during template fitting, or should we just consider those to be solved
+separately ahead of time to keep the template fitting nice and simple?
+
+%-------------------------------------------------------------------------
+\section{Pixelizing the template}
+
+$P_i(\mathbf{t}_z)$ pixelizes the continuous function $\mathbf{t}_z(\lambda)$
+by integrating over each pixel.  In practice, $\mathbf{t}_z$ is reported as
+discrete samplings of the function at wavelengths $\lambda$.
+
+TODO: define exactly how to integrate those pixels.
+The current implementation is just trapezoidal integration.
+
+%-------------------------------------------------------------------------
+\section{Optimizations}
+
+Spectroperfectionism extractions can be performed on a common wavelength
+grid for multiple spectra on the same camera, even if they don't perfectly
+align with the CCD pixels.  Thus $P_i(\mathbf{t}_z)$ is not unique for every
+spectrum $i$.  It can be pre-calculated for each camera and each redshift $z$
+and then applied to many spectra.  In the previous equations $P_i$ is treated
+as different for every spectrum to be completely general, but in practice
+this is not necessary.
+
+\end{document}
