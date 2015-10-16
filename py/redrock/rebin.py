@@ -19,6 +19,16 @@ def centers2edges(centers):
 
     return edges
 
+def _trapz(x, y):
+    '''
+    trapz integration, about 2x faster than numpy,
+    probably because this does no error checking.
+    Note that x and y are in opposite order of numpy.trapz(y, x)
+    '''
+    heights = 0.5*(y[0:-1] + y[1:])
+    widths = x[1:] - x[0:-1]
+    return np.sum(widths*heights)
+
 def trapz_rebin(edges, x, y):
     '''Rebin y(x) flux density using trapezoidal integration between bin edges
     
@@ -67,54 +77,9 @@ def trapz_rebin(edges, x, y):
         yy[0] = yedge[i]
         yy[-1] = yedge[i+1]
         yy[1:-1] = y[ii]
-        results[i] = np.trapz(yy, xx) / (edges[i+1] - edges[i])
-        
+        results[i] = _trapz(xx, yy) / (edges[i+1] - edges[i])
+
     return results
-    
-def nyquist_rebin(edges, x, y):
-    '''
-    rebin a Nyquist sampled spectrum y(x) along new bin edges
-    
-    NOTE: THIS DOESN'T WORK UNLESS YOUR INPUT REALLY IS BAND LIMITED AND
-    YOU ARE *EXACTLY* NYQUIST SAMPLED.
-    
-    i.e. don't use this, but i'm not quite willing to delete the code yet
-    '''
-
-    if len(x) != len(y):
-        raise ValueError('len(x) {} != len(y) {}'.format(len(x), len(y)))
-    if edges[0] < x[0] or x[-1] < edges[-1]:
-        raise ValueError('edges must be contained within input x range')
-
-    #- Use FFT to get representation of Nyquist sampled spectrum
-    #- y(x) = sum_i a_i cos(x*2pi*i/n) + b_i sin(x*2pi*i/n)
-    n = len(x)
-    f = fftpack.fft(y - np.mean(y))
-    a = np.real(f)/n
-    b = np.imag(f)/n
-
-    #- Should be able to get the same thing back
-    twopi = 2*np.pi
-    newy = np.zeros_like(y) + np.mean(y)
-    ex = np.arange(len(x))
-    for i in range(n):
-        xx = ex*i*twopi/n
-        newy += a[i]*np.cos(xx) - b[i]*np.sin(xx)
-
-    assert np.allclose(y, newy)
-
-    #- convert edges to units of input bins
-    ex = np.interp(edges, x, np.arange(len(x)))
-
-    #- Integral over bins
-    z = np.zeros_like(edges) + np.mean(y)*ex
-    for i in range(1,n):
-        xx = ex*i*twopi/n
-        z += (a[i]*np.sin(xx) + b[i]*np.cos(xx)) * (n/twopi/i)
-        
-    nbin = len(edges)-1
-    zz = (z[1:1+nbin] - z[0:nbin]) / (edges[1:1+nbin] - edges[0:nbin])
-    return zz    
 
 #-------------------------------------------------------------------------
 #- development tests
