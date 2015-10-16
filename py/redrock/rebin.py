@@ -29,23 +29,29 @@ def _trapz(x, y):
     widths = x[1:] - x[0:-1]
     return np.sum(widths*heights)
 
-def trapz_rebin(edges, x, y):
+def trapz_rebin(x, y, xnew=None, xedges=None):
     '''Rebin y(x) flux density using trapezoidal integration between bin edges
     
     Args:
-        edges : array of new bin edges
         x, y : arrays of input y vs. x samples
+        xnew : array of new bin centers
+        xedges : array of new bin edges
+        
+        Either `xnew` or `edges` must be provided
         
     Returns:
-        array of integrated results with len(results) = len(edges)-1
+        array of integrated results with len(results) = len(xedges)-1
         
     Notes:
         y is interpreted as a density, as is the output, e.g.
 
         >>> x = np.arange(10)
         >>> y = np.ones(10)
-        >>> trapz_rebin([0,2,4,6,8])  #- density preserved as 1, not 2
+        >>> trapz_rebin(x, y, xedges=[0,2,4,6,8])  #- density still 1, not 2
         array([ 1.,  1.,  1.,  1.])
+        
+        When xnew is provided, this uses `redrock.rebin.centers2edges()`
+        to calculate what you probably mean as the bin edges.
         
     Raises:
         ValueError if edges are outside the range of x
@@ -55,29 +61,37 @@ def trapz_rebin(edges, x, y):
     #- Check inputs
     if len(x) != len(y):
         raise ValueError('len(x) {} != len(y) {}'.format(len(x), len(y)))
-    if edges[0] < x[0] or x[-1] < edges[-1]:
-        raise ValueError('edges must be contained within input x range')
+    if (xedges is None) and (xnew is None):
+        raise ValueError('must provide either xnew or xedges')
+    if (xedges is not None) and (xnew is not None):
+        raise ValueError('must xnew or xedges but not both')
+
+    if xedges is None:
+        xedges = centers2edges(xnew)
+        
+    if xedges[0] < x[0] or x[-1] < xedges[-1]:
+        raise ValueError('xedges must be contained within input x range')
 
     x = np.asarray(x)
     y = np.asarray(y)
     
     #- Pre-calculate y(x) interpolation at bin edges
-    yedge = np.interp(edges, x, y)
+    yedge = np.interp(xedges, x, y)
     
     #- Loop over pixel, creating temporary regions to integrate that
     #- include the edges and interior y(x) points
-    results = np.zeros(len(edges)-1)
-    for i in range(len(edges)-1):
-        ii = np.where((edges[i] < x) & (x < edges[i+1]))[0]
+    results = np.zeros(len(xedges)-1)
+    for i in range(len(xedges)-1):
+        ii = np.where((xedges[i] < x) & (x < xedges[i+1]))[0]
         xx = np.zeros(len(ii)+2)
         yy = np.zeros(len(ii)+2)
-        xx[0] = edges[i]
-        xx[-1] = edges[i+1]
+        xx[0] = xedges[i]
+        xx[-1] = xedges[i+1]
         xx[1:-1] = x[ii]
         yy[0] = yedge[i]
         yy[-1] = yedge[i+1]
         yy[1:-1] = y[ii]
-        results[i] = _trapz(xx, yy) / (edges[i+1] - edges[i])
+        results[i] = _trapz(xx, yy) / (xedges[i+1] - xedges[i])
 
     return results
 

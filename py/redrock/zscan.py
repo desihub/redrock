@@ -26,7 +26,7 @@ def calc_zchi2(redshifts, spectra, templates, rchi2=False):
             - flux : array of flux densities [10e-17 erg/s/cm^2/Angstrom]
             - ivar : inverse variances of flux
             - R : spectro-perfectionism resolution matrix
-        templates: list of dictionaries, each of which with keys
+        templates: list of dictionaries, each of which has keys
             - wave : array of wavelengths [Angstroms]
             - flux : array of flux densities [10e-17 erg/s/cm^2/Angstrom]
 
@@ -81,8 +81,7 @@ def calc_zchi2_template(redshifts, spectra, template, rchi2=False):
         #- rebin and convolve the template to the resolution of each spectrum
         tflux = list()
         for s in spectra:
-            edges = rebin.centers2edges(s['wave'])
-            t = rebin.trapz_rebin(edges, (1+z)*template['wave'], template['flux'])
+            t = rebin.trapz_rebin((1+z)*template['wave'], template['flux'], s['wave'])
             tflux.append(s['R'].dot(t))
 
         tflux = np.concatenate(tflux)
