@@ -127,13 +127,13 @@ def calc_zchi2_pca(redshifts, spectra, template, rchi2=False, verbose=False):
     weights = np.concatenate( [s['ivar'] for s in spectra] )
     nflux = len(sflux)
     
-    nt = template['flux'].shape[0]
     for i, z in enumerate(redshifts):
         if verbose:
             print '{}/{} z={}'.format(i, len(redshifts), z)
             
         a, T = pca_fit(z, spectra, template)
-        zchi2[i] = np.sum( (sflux - T.dot(a))**2 * weights )
+        Ts = np.vstack(T)
+        zchi2[i] = np.sum( (sflux - Ts.dot(a))**2 * weights )
         if rchi2:
             zchi2[i] /= len(sflux) - 1
     
@@ -144,6 +144,7 @@ def pca_fit(z, spectra, template):
     weights = np.concatenate( [s['ivar'] for s in spectra] )
     nflux = len(sflux)
 
+    nt = template['flux'].shape[0]
     T = list()
     for s in spectra:
         Tx = np.zeros((len(s['wave']), nt))
