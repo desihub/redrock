@@ -1,6 +1,7 @@
 from __future__ import division
 
 import numpy as np
+import scipy.sparse
 from redrock import rebin
 
 def calc_norm(x1, x2, weights):
@@ -93,5 +94,69 @@ def calc_zchi2_template(redshifts, spectra, template, rchi2=False):
     
     return zchi2        
 
+def calc_zchi2_pca(redshifts, spectra, template, rchi2=False, verbose=False):
+    '''Calculates chi2 vs. redshift for a given PCA template.
+
+    Args:
+        redshifts: array of redshifts to evaluate
+        spectra: list of dictionaries, each of which has keys
+            - wave : array of wavelengths [Angstroms]
+            - flux : array of flux densities [10e-17 erg/s/cm^2/Angstrom]
+            - ivar : inverse variances of flux
+            - R : spectro-perfectionism resolution matrix
+        template: dictionary with keys
+            - wave : array of wavelengths [Angstroms]
+            - flux[i,wave] : array of PCA flux densities
+
+    Optional:
+        rchi2 : if True, return reduced chi2/dof instead of chi2
+
+    Returns:
+        chi2 array with one element per input redshift
+        
+    TODO:
+        Factor out coefficient solving to make it easier for other
+        code to get the same solution.
+    '''
     
+    nz = len(redshifts)
+    zchi2 = np.zeros(nz)
+    
+    #- Regroup spectra fluxes and ivars into two arrays
+    sflux = np.concatenate( [s['flux'] for s in spectra] )
+    weights = np.concatenate( [s['ivar'] for s in spectra] )
+    nflux = len(sflux)
+    
+    nt = template['flux'].shape[0]
+    for i, z in enumerate(redshifts):
+        if verbose:
+            print '{}/{} z={}'.format(i, len(redshifts), z)
+            
+        a, T = pca_fit(z, spectra, template)
+        zchi2[i] = np.sum( (sflux - T.dot(a))**2 * weights )
+        if rchi2:
+            zchi2[i] /= len(sflux) - 1
+    
+    return zchi2        
+
+def pca_fit(z, spectra, template):
+    sflux = np.concatenate( [s['flux'] for s in spectra] )
+    weights = np.concatenate( [s['ivar'] for s in spectra] )
+    nflux = len(sflux)
+
+    T = list()
+    for s in spectra:
+        Tx = np.zeros((len(s['wave']), nt))
+        for j in range(nt):
+            t = rebin.trapz_rebin((1+z)*template['wave'], template['flux'][j], s['wave'])                    
+            Tx[:,j] = s['R'].dot(t)
+        
+        T.append(Tx)
+        
+    Ts = np.vstack(T)
+
+    #- solve s = T * a
+    W = scipy.sparse.dia_matrix((weights, 0), (nflux, nflux))
+    a = np.linalg.solve(Ts.T.dot(W.dot(Ts)), Ts.T.dot(W.dot(sflux)))
+    return a, T
     

@@ -6,3 +6,4 @@ __version__ = '0.0.0.dev'
 
 from . import rebin
 from . import zscan
+from . import pickz
