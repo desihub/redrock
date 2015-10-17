@@ -78,6 +78,11 @@ def trapz_rebin(x, y, xnew=None, xedges=None):
     #- Pre-calculate y(x) interpolation at bin edges
     yedge = np.interp(xedges, x, y)
     
+    #- Trim input xy to just match the range we need
+    ii = (xedges[0] < x) & (x < xedges[-1])
+    x = x[ii]
+    y = y[ii]
+    
     #- Loop over pixel, creating temporary regions to integrate that
     #- include the edges and interior y(x) points
     results = np.zeros(len(xedges)-1)
