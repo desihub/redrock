@@ -1,3 +1,5 @@
+from __future__ import division, print_function
+
 import numpy as np
 import numba
 
@@ -21,11 +23,14 @@ def centers2edges(centers):
     return edges
 
 #- numba JIT compiler doesn't seem to like keyword args, so wrap it
-def trapz_rebin(x, y, xnew=None, xedges=None):
-    if xedges is None:
-        xedges = centers2edges(xnew)
+def trapz_rebin(x, y, xnew=None, edges=None):
+    if edges is None:
+        edges = centers2edges(xnew)
 
-    return _trapz_rebin(x, y, xedges)
+    if edges[0] < x[0] or x[-1] < edges[-1]:
+        raise ValueError('edges must be within input x range')
+
+    return _trapz_rebin(x, y, edges)
 
 @numba.jit
 def _trapz_rebin(x, y, edges):
@@ -50,53 +55,55 @@ def _trapz_rebin(x, y, edges):
         ValueError if edges are outside the range of x
         ValueError if len(x) != len(y)
     '''
-    assert x[0] < edges[0]
-    assert x[-1] > edges[-1]
-    
     edges = np.asarray(edges)
     
-    n = len(edges)-1
-    results = np.zeros(n)
+    nbin = len(edges)-1
+    nx = len(x)
+    results = np.zeros(nbin)
     i = 0  #- index counter for output
     j = 0  #- index counter for inputs
     
     #- Find edge and include first trapezoid
-    
-    while i < n:
+    # print('---')
+    # print(x)
+    # print('edges =', repr(edges))
+    while i < nbin:
+        #- Seek next sample beyond bin edge
         while x[j] <= edges[i]:
             j += 1
 
+        #- What is the y value where the interpolation crossed the edge?
         yedge = y[j-1] + (edges[i]-x[j-1]) * (y[j]-y[j-1]) / (x[j]-x[j-1])
-        if i > 0:
-            blat = 0.5 * (yedge + y[j-1]) * (edges[i] - x[j-1])
-            results[i-1] += blat
 
-        blat = 0.5 * (y[j] + yedge) * (x[j] - edges[i])
-        results[i] += blat
+        #- Is this sample inside this bin?
+        if x[j] < edges[i+1]:
+            area = 0.5 * (y[j] + yedge) * (x[j] - edges[i])
+            # print('edge_dn ', i, j, area)
+            results[i] += area
 
-        #- Continue with interior bins
-        j += 1
-        while x[j] < edges[i+1]:
-            blat = 0.5 * (y[j] + y[j-1]) * (x[j] - x[j-1])
-            results[i] += blat
-            j += 1
+            #- Continue with interior bins
+            while x[j+1] < edges[i+1]:
+                j += 1
+                area = 0.5 * (y[j] + y[j-1]) * (x[j] - x[j-1])
+                # print('interior', i, j, area)
+                results[i] += area
             
-        #- Get last edge trap
-        if i == n-1:
-            yedge = y[j-1] + (edges[i+1]-x[j-1]) * (y[j]-y[j-1]) / (x[j]-x[j-1])
-            blat = 0.5 * (yedge + y[j-1]) * (edges[i+1] - x[j-1])
-            results[i] += blat
+            #- Next sample will be outside this bin; handle upper edge
+            yedge = y[j] + (edges[i+1]-x[j]) * (y[j+1]-y[j]) / (x[j+1]-x[j])
+            area = 0.5 * (yedge + y[j]) * (edges[i+1] - x[j])
+            # print('edge_up ', i, j, area)
+            results[i] += area
+
+        #- Otherwise the samples span over this bin
+        else:
+            ylo = y[j] + (edges[i]-x[j]) * (y[j] - y[j-1]) / (x[j] - x[j-1])
+            yhi = y[j] + (edges[i+1]-x[j]) * (y[j] - y[j-1]) / (x[j] - x[j-1])
+            area = 0.5 * (ylo+yhi) * (edges[i+1]-edges[i])
+            # print('step over', i, j, area)
+            results[i] += area
 
         i += 1
 
     return results / (edges[1:] - edges[0:-1])
-    
-#-------------------------------------------------------------------------
-#- development tests
-
-if __name__ == '__main__':
-    assert np.allclose(centers2edges([1,2,3]), [0.5, 1.5, 2.5, 3.5])
-    assert np.allclose(centers2edges([1,3,5]), [0, 2, 4, 6])
-    assert np.allclose(centers2edges([1,3,4]), [0, 2, 3.5, 4.5])
     
 
