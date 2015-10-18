@@ -1,100 +1,10 @@
-from __future__ import division
+from __future__ import division, print_function
 
 import numpy as np
 import scipy.sparse
 from redrock import rebin
 
-def calc_norm(x1, x2, weights):
-    '''Calculate weighted normalization for x1 = norm*x2'''
-    assert len(x1) == len(x1)
-    assert len(x1) == len(weights)
-    assert np.all(weights >= 0)
-    
-    #- catch unnormalizable (but not fatal) case
-    blat = np.sum(x2*x2*weights)
-    if blat == 0:
-        return 1.0
-    else:
-        return (x1*weights).dot(x2) / blat
-
-def calc_zchi2(redshifts, spectra, templates, rchi2=False):
-    '''Calculates chi2 vs. redshift for a set of templates.
-
-    Args:
-        redshifts: array of redshifts to evaluate
-        spectra: list of dictionaries, each of which has keys
-            - wave : array of wavelengths [Angstroms]
-            - flux : array of flux densities [10e-17 erg/s/cm^2/Angstrom]
-            - ivar : inverse variances of flux
-            - R : spectro-perfectionism resolution matrix
-        templates: list of dictionaries, each of which has keys
-            - wave : array of wavelengths [Angstroms]
-            - flux : array of flux densities [10e-17 erg/s/cm^2/Angstrom]
-
-    Optional:
-        rchi2 : if True, return reduced chi2/dof instead of chi2
-
-    Returns:
-        chi2[num_templates, num_redshifts] 2D array with chi2 for each
-            template at each redshift
-
-    Notes:
-        The spectra are multiple individual spectra for the same object.
-        They are assumed to be flux calibrated and consistent with each other.
-        The only free parameter is an overall scale factor per template per
-        redshift; there is no spectrum-to-spectrum re-normalization.
-    '''
-    zchi2 = np.zeros([len(templates), len(redshifts)])
-    for i in range(len(templates)):
-        zchi2[i] = calc_zchi2_template(redshifts, spectra, templates[i], rchi2=rchi2)
-        
-    return zchi2
-
-def calc_zchi2_template(redshifts, spectra, template, rchi2=False):
-    '''Calculates chi2 vs. redshift for a given template.
-
-    Args:
-        redshifts: array of redshifts to evaluate
-        spectra: list of dictionaries, each of which has keys
-            - wave : array of wavelengths [Angstroms]
-            - flux : array of flux densities [10e-17 erg/s/cm^2/Angstrom]
-            - ivar : inverse variances of flux
-            - R : spectro-perfectionism resolution matrix
-        template: dictionary with keys
-            - wave : array of wavelengths [Angstroms]
-            - flux : array of flux densities [10e-17 erg/s/cm^2/Angstrom]
-
-    Optional:
-        rchi2 : if True, return reduced chi2/dof instead of chi2
-
-    Returns:
-        chi2 array with one element per input redshift
-    '''
-    
-    nz = len(redshifts)
-    zchi2 = np.zeros(nz)
-    
-    #- Regroup spectra fluxes and ivars into two arrays
-    sflux = np.concatenate( [s['flux'] for s in spectra] )
-    weights = np.concatenate( [s['ivar'] for s in spectra] )
-    
-    for i, z in enumerate(redshifts):
-        #- rebin and convolve the template to the resolution of each spectrum
-        tflux = list()
-        for s in spectra:
-            t = rebin.trapz_rebin((1+z)*template['wave'], template['flux'], s['wave'])
-            tflux.append(s['R'].dot(t))
-
-        tflux = np.concatenate(tflux)
-        norm = calc_norm(sflux, tflux, weights)
-
-        zchi2[i] = np.sum( (sflux - tflux*norm)**2 * weights )
-        if rchi2:
-            zchi2[i] /= len(sflux) - 1
-    
-    return zchi2        
-
-def calc_zchi2_pca(redshifts, spectra, template, rchi2=False, verbose=False):
+def calc_zchi2(redshifts, spectra, template, rchi2=False):
     '''Calculates chi2 vs. redshift for a given PCA template.
 
     Args:
@@ -106,58 +16,89 @@ def calc_zchi2_pca(redshifts, spectra, template, rchi2=False, verbose=False):
             - R : spectro-perfectionism resolution matrix
         template: dictionary with keys
             - wave : array of wavelengths [Angstroms]
-            - flux[i,wave] : array of PCA flux densities
+            - flux[i,wave] : template basis vectors of flux densities
 
     Optional:
         rchi2 : if True, return reduced chi2/dof instead of chi2
 
     Returns:
         chi2 array with one element per input redshift
-        
-    TODO:
-        Factor out coefficient solving to make it easier for other
-        code to get the same solution.
+
+    Notes:
+        template['flux'] is a basis set; spectra will be modeled as
+        flux = sum_i a[i] template['flux'][i]
+        To use an archetype, provide a template with dimensions [1,nwave]
     '''
-    
     nz = len(redshifts)
     zchi2 = np.zeros(nz)
     
-    #- Regroup spectra fluxes and ivars into two arrays
-    sflux = np.concatenate( [s['flux'] for s in spectra] )
+    #- Regroup fluxes and ivars into 1D arrays
+    flux = np.concatenate( [s['flux'] for s in spectra] )
     weights = np.concatenate( [s['ivar'] for s in spectra] )
-    nflux = len(sflux)
+    nflux = len(flux)
     
+    #- Loop over redshifts, solving for template fit coefficients
     for i, z in enumerate(redshifts):
-        if verbose:
-            print '{}/{} z={}'.format(i, len(redshifts), z)
-            
-        a, T = pca_fit(z, spectra, template)
-        Ts = np.vstack(T)
-        zchi2[i] = np.sum( (sflux - Ts.dot(a))**2 * weights )
+        a, T = template_fit(z, spectra, template, flux=flux, weights=weights)
+        Tx = np.vstack(T)
+        zchi2[i] = np.sum( (flux - Tx.dot(a))**2 * weights )
         if rchi2:
-            zchi2[i] /= len(sflux) - 1
+            zchi2[i] /= len(flux) - 1
     
     return zchi2        
 
-def pca_fit(z, spectra, template):
-    sflux = np.concatenate( [s['flux'] for s in spectra] )
-    weights = np.concatenate( [s['ivar'] for s in spectra] )
-    nflux = len(sflux)
+def template_fit(z, spectra, template, flux=None, weights=None):
+    '''Fit a template to the data at a given redshift
+    
+    flux = sum_i a[i] template['flux'][i]
+    
+    Args:
+        z : redshift
+        spectra: list of dictionaries, each of which has keys
+            - wave : array of wavelengths [Angstroms]
+            - flux : array of flux densities [10e-17 erg/s/cm^2/Angstrom]
+            - ivar : inverse variances of flux
+            - R : spectro-perfectionism resolution matrix
+        template: dictionary with keys
+            - wave : array of wavelengths [Angstroms]
+            - flux[i,wave] : template basis vectors of flux densities
+            
+    Optional (for efficiency, since they may be pre-calculated for all z):
+        flux : precalculated np.concatenate( [s['flux'] for s in spectra] )
+        weights : precalculated np.concatenate( [s['ivar'] for s in spectra] )
+        
+    Returns a, T:
+        a : coefficients that fit this template to these spectra
+        T : list of matrices which sample the template basis vectors to the
+            binning and resolution of each matrix.
+            
+    Notes:
+        T[i].dot(a) is the model for spectra[i]['flux']
+    '''
+    
+    if flux is None:
+        flux = np.concatenate( [s['flux'] for s in spectra] )
+    if weights is None:
+        weights = np.concatenate( [s['ivar'] for s in spectra] )
+        
+    nflux = len(flux)
 
-    nt = template['flux'].shape[0]
+    #- Make a list of matrices that bin the template basis for each spectrum
+    nbasis = template['flux'].shape[0]  #- number of template basis vectors
     T = list()
     for s in spectra:
-        Tx = np.zeros((len(s['wave']), nt))
-        for j in range(nt):
+        Ti = np.zeros((len(s['wave']), nbasis))
+        for j in range(nbasis):
             t = rebin.trapz_rebin((1+z)*template['wave'], template['flux'][j], s['wave'])                    
-            Tx[:,j] = s['R'].dot(t)
+            Ti[:,j] = s['R'].dot(t)
         
-        T.append(Tx)
+        T.append(Ti)
         
-    Ts = np.vstack(T)
+    #- Convert to a single matrix for solving `a`
+    Tx = np.vstack(T)
 
-    #- solve s = T * a
+    #- solve s = Tx * a
     W = scipy.sparse.dia_matrix((weights, 0), (nflux, nflux))
-    a = np.linalg.solve(Ts.T.dot(W.dot(Ts)), Ts.T.dot(W.dot(sflux)))
+    a = np.linalg.solve(Tx.T.dot(W.dot(Tx)), Tx.T.dot(W.dot(flux)))
     return a, T
     
