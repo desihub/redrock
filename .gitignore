@@ -30,5 +30,8 @@ distribute-*.tar.gz
 .*.swp
 *~
 
+# testing
+.coverage
+
 # Mac OSX
 .DS_Store

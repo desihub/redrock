@@ -1,28 +1,20 @@
 import numpy as np
 import redrock.zscan
 
-def pickz(zchi2, redshifts, spectra, templates):
-    '''Identifies which template has the best redshift and refines the z answer
-    zchi2[num_templates, num_redshifts]
+def pickz(zchi2, redshifts, spectra, template):
+    '''Refines redshift measurement
     '''
-    itemplate = np.argmin(np.min(zchi2, axis=1))
-    iz = np.argmin(zchi2[itemplate])
-    zmin = redshifts[iz]
-    print "Best chi2 for template {} at z={:0.5f}".format(itemplate, zmin)
-    
-    dz = 0.005
-    zz = np.linspace(zmin-dz, zmin+dz, 51)
-    zchi2_new = redrock.zscan.calc_zchi2_template(zz, spectra, templates[itemplate])
-    
-    inew = np.argmin(zchi2_new)
-    znew = zz[inew]
-    print "New zmin at {:0.5f}".format(znew)
-    
-    #- Fit parabola
-    ii = np.where(zchi2_new <= zchi2_new[inew]+9)[0]
-    p = np.polyfit(zz[ii], zchi2_new[ii], 2)
-        
-    #- Evaluate zbest at minimum of fitted parabola
+    zmin = redshifts[np.argmin(zchi2)]
+    dz = 0.001
+    zz = np.linspace(zmin-dz, zmin+dz, 21)
+    zzchi2 = redrock.zscan.calc_zchi2(zz, spectra, template)
+    chi2min = np.min(zzchi2)
+
+    zmin = zz[np.argmin(zzchi2)]
+
+    jj = (zzchi2 < np.min(zzchi2)+50)
+    p = np.polyfit(zz[jj], zzchi2[jj], 2)
+
     a, b, c = p
     zbest = -b/(2*a)
     chi2min = c - b**2/(4*a)
