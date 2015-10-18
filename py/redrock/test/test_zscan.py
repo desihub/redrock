@@ -38,7 +38,7 @@ class TestZScan(unittest.TestCase):
         #- Create some noisy spectra on different wavelength grids
         spectra = list()
         sn2 = 0.0;
-        a = [100, 100]
+        a = [200, 200]
         for i in range(5):
             wave = np.arange(210+10*i, 400+10*i, 2.1)
             nwave = len(wave)
@@ -73,7 +73,16 @@ class TestZScan(unittest.TestCase):
             self.assertEqual(Tfit[i].shape, (len(spectra[i]['flux']), 2))
             
         #- Also test pickz since we are here
-        zbest, zerr = redrock.pickz.pickz(zchi2, redshifts, spectra, template)
+        zbest, zerr, zwarn = redrock.pickz.pickz(zchi2, redshifts, spectra, template)
+        self.assertAlmostEqual(zbest, z, delta=0.01)
+        self.assertLess(zerr, 0.01)
+        self.assertEqual(zwarn, 0)
+        
+        #- Test zwarning
+        zchi2[0] = 0
+        zbest, zerr, zwarn = redrock.pickz.pickz(zchi2, redshifts, spectra, template)
+        self.assertNotEqual(zwarn, 0)
+        
                 
 if __name__ == '__main__':
     unittest.main()
