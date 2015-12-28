@@ -5,12 +5,9 @@ Redrock for DESI
 """
 from __future__ import absolute_import, division, print_function
 
-import sys, os
+import sys
 import numpy as np
-from glob import glob
 
-import desispec.io
-from desispec.resolution import Resolution
 import redrock
 from redrock.external import desi
 
@@ -18,7 +15,7 @@ import optparse
 parser = optparse.OptionParser(usage = "%prog [options] brickfile1 brickfile2...")
 parser.add_option("-t", "--templates", type="string",  help="template directory")
 parser.add_option("-o", "--output", type="string",  help="output file")
-parser.add_option("--debug", help="debug with ipython", action="store_true")
+### parser.add_option("--debug", help="debug with ipython", action="store_true")
 
 opts, brickfiles = parser.parse_args()
 
@@ -33,4 +30,6 @@ if len(brickfiles) == 0:
 targets = desi.read_bricks(brickfiles)
 templates = redrock.io.read_templates(opts.templates)
 results = redrock.zfind(targets[0:2], templates[0:1])
+
+### redrock.io.write_results(opts.output, results)
 
