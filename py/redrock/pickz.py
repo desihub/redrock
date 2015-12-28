@@ -31,8 +31,13 @@ def pickz(zchi2, redshifts, spectra, template):
         zp = (-b + np.sqrt(blat)) / (2*a)
         zerr = zp-zbest
     else:
-        zerr = 1e6
+        zerr = -1
         zwarn |= ZW.BAD_MINFIT
+
+    #- Other minima are too similar
+    #- TODO: tune exclusion of close values
+    if np.any((np.abs(redshifts-zbest)>5*zerr) & (zchi2 < chi2min + 9)):
+        zwarn |= ZW.SMALL_DELTA_CHI2
 
     #- Initial minimum or best fit too close to edge of redshift range
     if zbest < redshifts[1] or zbest > redshifts[-2]:
@@ -48,6 +53,9 @@ def pickz(zchi2, redshifts, spectra, template):
     #- (somewhat arbitrary cutoff)
     if abs(zbest - zmin) > 0.01:
         zwarn |= ZW.BAD_MINFIT
-        
-    return zbest, zerr, zwarn
+    
+    #- chi2 at zbest    
+    chi2min = redrock.zscan.calc_zchi2([zbest,], spectra, template)[0]
+    
+    return zbest, zerr, zwarn, chi2min
 

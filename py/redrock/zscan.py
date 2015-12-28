@@ -70,7 +70,7 @@ def template_fit(z, spectra, template, flux=None, weights=None):
     Returns a, T:
         a : coefficients that fit this template to these spectra
         T : list of matrices which sample the template basis vectors to the
-            binning and resolution of each matrix.
+            binning and resolution of each spectrum.
             
     Notes:
         T[i].dot(a) is the model for spectra[i]['flux']
@@ -96,7 +96,7 @@ def template_fit(z, spectra, template, flux=None, weights=None):
         
     #- Convert to a single matrix for solving `a`
     Tx = np.vstack(T)
-
+    
     #- solve s = Tx * a
     W = scipy.sparse.dia_matrix((weights, 0), (nflux, nflux))
     a = np.linalg.solve(Tx.T.dot(W.dot(Tx)), Tx.T.dot(W.dot(flux)))
