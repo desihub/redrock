@@ -45,16 +45,18 @@ def pickz(zchi2, redshifts, spectra, template):
     if zmin < redshifts[1] or zmin > redshifts[-2]:
         zwarn |= ZW.Z_FITLIMIT
         
-    #- parabola minimum outside fit range
+    #- parabola minimum outside fit range; replace with min of scan
     if zbest < zz[0] or zbest > zz[-1]:
         zwarn |= ZW.BAD_MINFIT
+        imin = np.where(zbest == np.min(zbest))[0][0]
+        zbest = zz[zbest]
        
     #- Parabola fit considerably different than minimum of scan 
     #- (somewhat arbitrary cutoff)
     if abs(zbest - zmin) > 0.01:
         zwarn |= ZW.BAD_MINFIT
     
-    #- chi2 at zbest    
+    #- chi2 at zbest
     chi2min = redrock.zscan.calc_zchi2([zbest,], spectra, template)[0]
     
     return zbest, zerr, zwarn, chi2min
