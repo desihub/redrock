@@ -30,7 +30,7 @@ if len(brickfiles) == 0:
 targets = desi.read_bricks(brickfiles)
 templates = redrock.io.read_templates(opts.templates)
 results = redrock.zfind(targets, templates[0:1])
-redrock.io.write_zscan(opts.output, results)
+redrock.io.write_zscan(opts.output, results, clobber=True)
 
 if opts.debug:
     import IPython

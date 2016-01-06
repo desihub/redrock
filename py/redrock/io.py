@@ -82,7 +82,7 @@ def read_templates(template_list=None, template_dir=None):
     
     return templates
     
-def write_zscan(filename, results):
+def write_zscan(filename, results, clobber=False):
     '''
     Writes redrock.zfind results to filename
     
@@ -90,8 +90,13 @@ def write_zscan(filename, results):
     group structure of the HDF5 file:
     
     {targetid}/{templatetype}/[z|zchi2|zbest|minchi2|zerr|zwarn]
+    
+    if clobber=True, replace pre-existing file
     '''
     import h5py
+    if clobber and os.path.exists(filename):
+        os.remove(filename)
+        
     fx = h5py.File(filename)
     for targetid in results:
         for ttype in results[targetid]:

@@ -27,8 +27,7 @@ def zfind(targets, templates):
         - zwarn: 0=good, non-0 is a warning flag    
     '''
     redshifts = dict(
-        ELG  = 10**np.arange(np.log10(0.1), np.log10(1.8), 4e-4),
-        LRG  = 10**np.arange(np.log10(0.1), np.log10(1.3), 4e-4),
+        GALAXY  = 10**np.arange(np.log10(0.1), np.log10(2.0), 4e-4),
         STAR = np.arange(-0.001, 0.00101, 0.0001),
         #'QSO'...
     )
@@ -38,17 +37,12 @@ def zfind(targets, templates):
     for targetid, spectra in targets:
         results[targetid] = dict()
         for t in templates:
-            ttype = t['type']+t['subtype']
-            if t['type'] == 'GALAXY':  #- clumsy...
-                zz = redshifts[t['subtype']]   #- ELG or LRG
-            else:
-                zz = redshifts[t['type']]
-            
+            zz = redshifts[t['type']]
             zchi2 = redrock.zscan.calc_zchi2(zz, spectra, t)
         
             zbest, zerr, zwarn, minchi2 = redrock.pickz.pickz(zchi2, zz, spectra, t)
         
-            results[targetid][ttype] = dict(
+            results[targetid][t['type']] = dict(
                 z=zz, zchi2=zchi2, zbest=zbest, zerr=zerr, zwarn=zwarn, minchi2=minchi2
             )
         
