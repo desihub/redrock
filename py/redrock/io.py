@@ -82,4 +82,48 @@ def read_templates(template_list=None, template_dir=None):
     
     return templates
     
+def write_zscan(filename, results):
+    '''
+    Writes redrock.zfind results to filename
+    
+    The nested dictionary structure of results is mapped into a nested
+    group structure of the HDF5 file:
+    
+    {targetid}/{templatetype}/[z|zchi2|zbest|minchi2|zerr|zwarn]
+    '''
+    import h5py
+    fx = h5py.File(filename)
+    for targetid in results:
+        for ttype in results[targetid]:
+            for key in results[targetid][ttype]:
+                name = '{}/{}/{}'.format(targetid, ttype, key)
+                fx[name] = results[targetid][ttype][key]
+    fx.close()
+    
+def read_zscan(filename):
+    '''Return redrock.zfind results stored in hdf5 file as written
+    by write_zscan
+    
+    Returns nested dictionary results[targetid][templatetype] with keys
+        - z: array of redshifts scanned
+        - zchi2: array of chi2 fit at each z
+        - zbest: best fit redshift (finer resolution fit around zchi2 minimum)
+        - minchi2: chi2 at zbest
+        - zerr: uncertainty on zbest
+        - zwarn: 0=good, non-0 is a warning flag    
+    '''
+    import h5py
+    fx = h5py.File(filename, mode='r')
+    results = dict()
+    #- NOTE: this is clumsy iteration
+    for targetid in fx.keys():
+        results[int(targetid)] = dict()
+        for ttype in fx[targetid].keys():
+            results[int(targetid)][ttype] = dict()
+            for dataname in fx[targetid+'/'+ttype].keys():
+                results[int(targetid)][ttype][dataname] = fx[targetid+'/'+ttype+'/'+dataname].value
+                
+    return results
+                
+            
     

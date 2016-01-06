@@ -1,0 +1,80 @@
+#!/usr/bin/env python
+
+"""
+Make a redrock template
+"""
+from __future__ import absolute_import, division, print_function
+
+import sys, os
+import random
+import optparse
+
+import numpy as np
+from astropy.io import fits
+from empca import empca
+import redrock
+
+parser = optparse.OptionParser(usage = "%prog archetypes.fits [options]")
+parser.add_option("-t", "--type", type=str,  help="Template type")
+parser.add_option("-s", "--subtype", type=str,  help="Template subtype", default='')
+parser.add_option("-n", "--numinputs", type=int,  help="Number of input archetypes to use")
+parser.add_option("-o", "--outfile", type=str,  help="Output filename")
+parser.add_option("-i", "--infile", type=str,  help="Input filename")
+parser.add_option("--niter", type=int,  help="Number of EMPCA iterations to run [%default]", default=5)
+parser.add_option("--nvec", type=int,  help="Number of basis vectors to generate [%default]", default=5)
+
+opts, args = parser.parse_args()
+
+#- Check inputs before doing anything else
+badopts = False
+for optname in ('type', 'infile', 'outfile'):
+    if opts.__dict__[optname] is None:
+        print('ERROR: Must provide --'+optname)
+        badopts = True
+        
+if badopts:
+    print('ERROR: Missing required input; exiting')
+    parser.print_help()
+    sys.exit(1)
+
+#- Read and subselect data
+data, header = fits.getdata(opts.infile, header=True)
+if opts.numinputs is not None:
+    ii = np.arange(data.shape[0])
+    random.shuffle(ii)
+    fitdata = data[ii[0:opts.numinputs]]
+else:
+    fitdata = data
+    
+#- EMPCA fit
+print('RR: Fitting for basis vectors')
+model = empca(fitdata, niter=opts.niter, nvec=opts.nvec)
+
+#- Determine normalized coefficients for all inputs
+print('RR: Fitting coefficients for all inputs')
+model.set_data(data, weights=np.ones_like(data))
+for i in range(model.coeff.shape[0]):
+    model.coeff[i] /= np.linalg.norm(model.coeff[i])
+    
+#- Write output
+#- TODO: move to redrock.io.write_template
+header['RRTYPE']   = opts.type
+header['RRSUBTYP'] = opts.subtype
+header['RRINPUT'] = opts.infile
+header['RRVER'] = redrock.__version__
+header['EXTNAME'] = 'BASIS_VECTORS'
+
+hdus = fits.HDUList()
+hdus.append(fits.PrimaryHDU(model.eigvec, header=header))
+hdus.append(fits.ImageHDU(model.coeff, name='ARCHETYPE_COEFF'))
+
+hdus.writeto(opts.outfile, clobber=True)
+print('RR: Wrote '+opts.outfile)
+
+
+
+
+
+
+
+
