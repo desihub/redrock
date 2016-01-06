@@ -16,20 +16,27 @@ def pickz(zchi2, redshifts, spectra, template):
 
     #- Fit a parabola to that finder resolution chi2 vs. z scan
     zmin = zz[np.argmin(zzchi2)]
-    jj = (zzchi2 < np.min(zzchi2)+50)
-    p = np.polyfit(zz[jj], zzchi2[jj], 2)
+    while True:
+        dchi2 = 50
+        jj = (zzchi2 < np.min(zzchi2)+dchi2)
+        if len(jj) >= 3:
+            break
+        else:
+            dchi2 *= 2
+
+    p = np.polyfit(zz[jj]-zmin, zzchi2[jj], 2)
 
     #- For zwarning mask bits
     zwarn = 0
 
     #- Get minimum and error from the parabola fit parameters
     a, b, c = p
-    zbest = -b/(2*a)
+    zbest = -b/(2*a) + zmin
     chi2min = c - b**2/(4*a)
     blat = b**2 - 4*a*(c-1-chi2min)
     if blat >= 0:
         zp = (-b + np.sqrt(blat)) / (2*a)
-        zerr = zp-zbest
+        zerr = zp-(zbest-zmin)
     else:
         zerr = -1
         zwarn |= ZW.BAD_MINFIT
