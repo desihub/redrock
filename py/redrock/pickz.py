@@ -9,8 +9,8 @@ def pickz(zchi2, redshifts, spectra, template):
     '''
     #- Scan at a finer resolution around the initial minimum
     zmin = redshifts[np.argmin(zchi2)]
-    dz = 0.001
-    zz = np.linspace(zmin-dz, zmin+dz, 21)
+    dz = 0.003
+    zz = np.linspace(zmin-dz, zmin+dz, 31)
     zzchi2 = redrock.zscan.calc_zchi2(zz, spectra, template)
     chi2min = np.min(zzchi2)
 
