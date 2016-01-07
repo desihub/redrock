@@ -46,7 +46,7 @@ def zfind(targets, templates):
                 z=zz, zchi2=zchi2, zbest=zbest, zerr=zerr, zwarn=zwarn, minchi2=minchi2
             )
         
-            print('{} {:6s} {:4s} {:.6f} {:.6f} {:6d} {:.2f}'.format(
+            print('{:20} {:6s} {:4s} {:.6f} {:.6f} {:6d} {:.2f}'.format(
                 targetid, t['type'], t['subtype'], zbest, zerr, zwarn, minchi2))
                 
     return results

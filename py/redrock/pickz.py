@@ -16,10 +16,10 @@ def pickz(zchi2, redshifts, spectra, template):
 
     #- Fit a parabola to that finder resolution chi2 vs. z scan
     zmin = zz[np.argmin(zzchi2)]
+    dchi2 = 50
     while True:
-        dchi2 = 50
         jj = (zzchi2 < np.min(zzchi2)+dchi2)
-        if len(jj) >= 3:
+        if np.count_nonzero(jj) >= 3:
             break
         else:
             dchi2 *= 2
