@@ -89,7 +89,7 @@ def template_fit(z, spectra, template, flux=None, weights=None):
     for s in spectra:
         Ti = np.zeros((len(s['wave']), nbasis))
         for j in range(nbasis):
-            t = rebin.trapz_rebin((1+z)*template['wave'], template['flux'][j], s['wave'])                    
+            t = rebin.trapz_rebin((1+z)*template['wave'], template['flux'][j], s['wave'])
             Ti[:,j] = s['R'].dot(t)
         
         T.append(Ti)

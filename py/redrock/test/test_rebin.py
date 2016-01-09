@@ -1,3 +1,4 @@
+import os
 import unittest
 import numpy as np
 
@@ -6,6 +7,9 @@ from redrock import rebin
 class TestBlat(unittest.TestCase):
     
     def setUp(self):
+        pass
+
+    def tearDown(self):
         pass
             
     def test_centers2edges(self):
