@@ -15,6 +15,7 @@ import optparse
 parser = optparse.OptionParser(usage = "%prog [options] brickfile1 brickfile2...")
 parser.add_option("-t", "--templates", type="string",  help="template directory")
 parser.add_option("-o", "--output", type="string",  help="output file")
+parser.add_option("-n", "--ntargets", type=int,  help="number of targets to process")
 parser.add_option("--debug", help="debug with ipython", action="store_true")
 
 opts, brickfiles = parser.parse_args()
@@ -28,6 +29,9 @@ if len(brickfiles) == 0:
     sys.exit(1)
 
 targets = desi.read_bricks(brickfiles)
+if opts.ntargets is not None:
+    targets = targets[0:opts.ntargets]
+
 templates = redrock.io.read_templates(opts.templates)
 results = redrock.zfind(targets, templates[0:1])
 redrock.io.write_zscan(opts.output, results, clobber=True)
