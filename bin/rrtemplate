@@ -1,0 +1,93 @@
+#!/usr/bin/env python
+
+"""
+Make a redrock template
+
+This code uses DESI templates and code from
+
+https://github.com/desihub/desispec
+https://github.com/desihub/desisim
+https://github.com/sbailey/empca
+
+"""
+from __future__ import absolute_import, division, print_function
+
+import sys, os
+import random
+import optparse
+
+import numpy as np
+from astropy.io import fits
+from empca import empca
+import redrock
+
+from desisim.templates import ELG, LRG
+from desispec.interpolation import resample_flux
+
+parser = optparse.OptionParser(usage = "%prog [options]")
+parser.add_option("-o", "--outfile", type=str,  help="Output filename")
+parser.add_option("--niter", type=int,  help="Number of EMPCA iterations to run [%default]", default=5)
+parser.add_option("--nvec", type=int,  help="Number of basis vectors to generate [%default]", default=5)
+
+opts, args = parser.parse_args()
+
+#- Check inputs before doing anything else
+if opts.outfile is None:
+    print('ERROR: Must provide -o/--outfile')
+    parser.print_help()
+    sys.exit(1)
+
+#- Generate templates and resample to 0.2A grid that covers
+#- z=0 to 2 for obsframe wavelengths 3500 to 10000
+dw = 0.1
+wave = np.arange(3500/3., 10000+dw/2, dw)
+nelg = 500
+nlrg = 250
+tflux, twave, tmeta = ELG().make_templates(nelg, restframe=True)
+elgflux = np.zeros((nelg, len(wave)))
+for i in range(nelg):
+    elgflux[i] = resample_flux(wave, twave, tflux[i])
+
+tflux, twave, tmeta = LRG().make_templates(nlrg, restframe=True)
+lrgflux = np.zeros((nlrg, len(wave)))
+for i in range(nlrg):
+    lrgflux[i] = resample_flux(wave, twave, tflux[i])
+    
+flux = np.vstack([elgflux, lrgflux])
+    
+#- EMPCA fit
+print('RR: Fitting for basis vectors')
+model = empca(flux, niter=opts.niter, nvec=opts.nvec)
+
+#- Determine normalized coefficients for all inputs
+print('RR: Normalizing coefficients for all inputs')
+# model.set_data(data, weights=np.ones_like(data))
+for i in range(model.coeff.shape[0]):
+    model.coeff[i] /= np.linalg.norm(model.coeff[i])
+    
+#- Write output
+#- TODO: move to redrock.io.write_template
+header = fits.Header()
+header['CRVAL1'] = (wave[0], 'restframe starting wavelength [Angstroms]')
+header['CDELT1'] = dw
+header['RRTYPE']   = 'GALAXY'
+header['RRSUBTYP'] = ''
+# header['RRINPUT'] = opts.infile
+header['RRVER'] = redrock.__version__
+header['INSPEC'] = os.environ['DESI_BASIS_TEMPLATES']
+header['EXTNAME'] = 'BASIS_VECTORS'
+
+hdus = fits.HDUList()
+hdus.append(fits.PrimaryHDU(model.eigvec, header=header))
+hdus.append(fits.ImageHDU(model.coeff, name='ARCHETYPE_COEFF'))
+
+hdus.writeto(opts.outfile, clobber=True)
+print('RR: Wrote '+opts.outfile)
+
+
+
+
+
+
+
+

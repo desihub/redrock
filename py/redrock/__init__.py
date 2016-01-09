@@ -9,3 +9,5 @@ from . import rebin
 from . import zscan
 from . import pickz
 from . import zwarning
+from . import io
+from .zfind import zfind

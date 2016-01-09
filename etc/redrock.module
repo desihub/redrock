@@ -24,7 +24,7 @@ if {{[info exists env(DESI_PRODUCT_ROOT)]}} {{
 }}
 set PRODUCT_DIR $PRODUCT_ROOT/$product/$version
 
-#- Set $REDZEPPELIN environment variable
+#- Set $REDROCK environment variable
 setenv [string toupper $product] $PRODUCT_DIR
 
 #- Update $PATH and $PYTHONPATH
