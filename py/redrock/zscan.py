@@ -47,6 +47,10 @@ def calc_zchi2(redshifts, spectra, template, rchi2=False):
     
     return zchi2        
 
+#- Cache templates rebinned onto particular wavelength grids since that is
+#- a computationally expensive operation
+_template_cache = dict()
+
 def template_fit(z, spectra, template, flux=None, weights=None):
     '''Fit a template to the data at a given redshift
     
@@ -89,7 +93,13 @@ def template_fit(z, spectra, template, flux=None, weights=None):
     for s in spectra:
         Ti = np.zeros((len(s['wave']), nbasis))
         for j in range(nbasis):
-            t = rebin.trapz_rebin((1+z)*template['wave'], template['flux'][j], s['wave'])
+            key = (z, id(template), j, len(s['wave']), s['wave'][0], s['wave'][-1])
+            if key not in _template_cache:
+                t = rebin.trapz_rebin((1+z)*template['wave'], template['flux'][j], s['wave'])
+                _template_cache[key] = t
+            else:
+                t = _template_cache[key]
+                
             Ti[:,j] = s['R'].dot(t)
         
         T.append(Ti)
