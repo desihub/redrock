@@ -66,5 +66,11 @@ def pickz(zchi2, redshifts, spectra, template):
     #- chi2 at zbest
     chi2min = redrock.zscan.calc_zchi2([zbest,], spectra, template)[0]
     
+    # if zwarn & ZW.BAD_MINFIT:
+    #     #--- DEBUG ---
+    #     import IPython
+    #     IPython.embed()
+    #     #--- DEBUG ---
+
     return zbest, zerr, zwarn, chi2min
 

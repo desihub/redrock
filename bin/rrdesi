@@ -33,7 +33,7 @@ if opts.ntargets is not None:
     targets = targets[0:opts.ntargets]
 
 templates = redrock.io.read_templates(opts.templates)
-results = redrock.zfind(targets, templates[0:1])
+results = redrock.zfind(targets, templates[1:2])
 redrock.io.write_zscan(opts.output, results, clobber=True)
 
 if opts.debug:

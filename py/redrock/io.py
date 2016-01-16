@@ -44,10 +44,12 @@ def read_template(filename):
     template = {
         'wave':  wave,
         'flux': native_endian(fx['BASIS_VECTORS'].data),
-        'archetype_coeff': native_endian(fx['ARCHETYPE_COEFF'].data),
         'type': hdr['RRTYPE'].strip(),
         'subtype': hdr['RRSUBTYP'].strip(),
         }
+
+    if 'ARCHETYPE_COEFF' in fx:
+        template['archetype_coeff'] = native_endian(fx['ARCHETYPE_COEFF'].data)
 
     return template
 

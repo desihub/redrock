@@ -1,0 +1,54 @@
+#!/usr/bin/env python
+
+"""
+QSO templates are based on BOSS QSO templates, so are handled a bit differently
+"""
+
+import sys, os
+import numpy as np
+from glob import glob
+import optparse
+import random
+
+from astropy.io import fits
+from empca import empca
+
+import redrock
+from desispec.interpolation import resample_flux
+
+parser = optparse.OptionParser(usage = "%prog [options]")
+parser.add_option("-i", "--infile", type="string",  help="input BOSS QSO eigenspectra")
+parser.add_option("-o", "--outfile", type="string",  help="output filename")
+
+opts, args = parser.parse_args()
+
+eigenboss, hdr = fits.getdata(opts.infile, 0, header=True)
+wave = 10**(hdr['COEFF0'] + np.arange(eigenboss.shape[1])*hdr['COEFF1'])
+
+#- Write output
+#- TODO: move to redrock.io.write_template
+header = fits.Header()
+header['CRVAL1'] = (hdr['COEFF0'], 'restframe starting wavelength [Angstroms]')
+header['CDELT1'] = hdr['COEFF1']
+header['LOGLAM'] = (1, 'wavelength grid sampled in log(lambda)')
+header['RRTYPE']   = 'QSO'
+header['RRSUBTYP'] = ''
+# header['RRINPUT'] = opts.infile
+header['RRVER'] = redrock.__version__
+header['INSPEC'] = opts.infile
+header['EXTNAME'] = 'BASIS_VECTORS'
+
+hdus = fits.HDUList()
+hdus.append(fits.PrimaryHDU(eigenboss, header=header))
+
+#- placeholder
+# c = np.zeros((10, eigenboss.shape[0]))
+# hdus.append(fits.ImageHDU(c, name='ARCHETYPE_COEFF'))
+
+hdus.writeto(opts.outfile, clobber=True)
+print('RR: Wrote '+opts.outfile)
+
+
+
+
+
