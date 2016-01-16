@@ -17,71 +17,36 @@ import redrock
 from desispec.interpolation import resample_flux
 
 parser = optparse.OptionParser(usage = "%prog [options]")
-parser.add_option("-i", "--infile", type="string",  help="input obsframe QSO templates filename")
+parser.add_option("-i", "--infile", type="string",  help="input BOSS QSO eigenspectra")
 parser.add_option("-o", "--outfile", type="string",  help="output filename")
 
 opts, args = parser.parse_args()
 
-if opts.infile is None:
-    x = os.path.join(os.environ['DESI_BASIS_TEMPLATES'], 'qso_templates*.fits')
-    opts.infile = glob(x)[0]
+eigenboss, hdr = fits.getdata(opts.infile, 0, header=True)
+wave = 10**(hdr['COEFF0'] + np.arange(eigenboss.shape[1])*hdr['COEFF1'])
 
-obsflux, hdr = fits.getdata(opts.infile, 0, header=True)
-meta = fits.getdata(opts.infile, 'METADATA')
-
-n = 2000
-random.seed(2)
-ii = random.sample(np.arange(obsflux.shape[0]), n)
-obsflux = obsflux[ii]
-meta = meta[ii]
-
-z = meta['Z']
-obswave = 10**(hdr['CRVAL1'] + np.arange(obsflux.shape[1])*hdr['CDELT1'])
-
-minwave = np.ceil(np.min(obswave)/(1+np.max(z)))
-maxwave = np.floor(max(obswave)/(1+np.min(z)))
-dw = 1.0
-restwave = np.arange(minwave, maxwave+dw/2, dw)
-restflux = np.zeros((n, len(restwave)))
-weights = np.zeros((n, len(restwave)))
-
-for i in range(n):
-    restflux[i] = resample_flux(restwave, obswave/(1+z[i]), obsflux[i])
-    ii = np.where(restflux[i] > 0)[0]
-    weights[ii[1]:ii[-1]] = 1.0
-    restflux[i] /= np.median(restflux[i, ii])
-
-model = empca(restflux, weights, niter=10, nvec=5)
-
-print('RR: Normalizing coefficients for all inputs')
-# model.set_data(data, weights=np.ones_like(data))
-for i in range(model.coeff.shape[0]):
-    model.coeff[i] /= np.linalg.norm(model.coeff[i])
-    
 #- Write output
 #- TODO: move to redrock.io.write_template
 header = fits.Header()
-header['CRVAL1'] = (restwave[0], 'restframe starting wavelength [Angstroms]')
-header['CDELT1'] = dw
+header['CRVAL1'] = (hdr['COEFF0'], 'restframe starting wavelength [Angstroms]')
+header['CDELT1'] = hdr['COEFF1']
+header['LOGLAM'] = (1, 'wavelength grid sampled in log(lambda)')
 header['RRTYPE']   = 'QSO'
 header['RRSUBTYP'] = ''
 # header['RRINPUT'] = opts.infile
 header['RRVER'] = redrock.__version__
-header['INSPEC'] = os.environ['DESI_BASIS_TEMPLATES']
+header['INSPEC'] = opts.infile
 header['EXTNAME'] = 'BASIS_VECTORS'
 
 hdus = fits.HDUList()
-hdus.append(fits.PrimaryHDU(model.eigvec, header=header))
-hdus.append(fits.ImageHDU(model.coeff, name='ARCHETYPE_COEFF'))
+hdus.append(fits.PrimaryHDU(eigenboss, header=header))
+
+#- placeholder
+# c = np.zeros((10, eigenboss.shape[0]))
+# hdus.append(fits.ImageHDU(c, name='ARCHETYPE_COEFF'))
 
 hdus.writeto(opts.outfile, clobber=True)
 print('RR: Wrote '+opts.outfile)
-
-#--- DEBUG ---
-import IPython
-IPython.embed()
-sys.exit(1)
-#--- DEBUG ---
 
 
 
