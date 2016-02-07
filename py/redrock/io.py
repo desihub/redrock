@@ -34,7 +34,14 @@ def read_template(filename):
         type : string descripting template type
         subtype : string describing template subtype
     '''
-    fx = fits.open(filename, memmap=False)
+    if os.path.exists(filename):
+        fx = fits.open(filename, memmap=False)
+    else:
+        xfilename = os.path.join(os.getenv('RR_TEMPLATE_DIR'), filename)
+        if os.path.exists(xfilename):
+            fx = fits.open(xfilename, memmap=False)
+        else:
+            raise IOError('unable to find '+filename)
 
     hdr = fx['BASIS_VECTORS'].header
     wave = hdr['CRVAL1'] + hdr['CDELT1']*np.arange(hdr['NAXIS1'])
