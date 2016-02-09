@@ -56,7 +56,7 @@ class TestZScan(unittest.TestCase):
             spectra.append( dict(wave=wave, flux=flux, ivar=ivar, R=R) )
 
         redshifts = np.linspace(0.3, 0.7, 200)
-        zchi2 = redrock.zscan.calc_zchi2(redshifts, spectra, template)
+        zchi2 = redrock.zscan.calc_zchi2(redshifts, spectra, template, npoly=2)
 
         zmin = redshifts[np.argmin(zchi2)]
 

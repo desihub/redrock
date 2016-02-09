@@ -4,14 +4,14 @@ import numpy as np
 import redrock
 from redrock.zwarning import ZWarningMask as ZW
 
-def pickz(zchi2, redshifts, spectra, template):
+def pickz(zchi2, redshifts, spectra, template, npoly=0):
     '''Refines redshift measurement
     '''
     #- Scan at a finer resolution around the initial minimum
     zmin = redshifts[np.argmin(zchi2)]
     dz = 0.003
     zz = np.linspace(zmin-dz, zmin+dz, 31)
-    zzchi2 = redrock.zscan.calc_zchi2(zz, spectra, template)
+    zzchi2 = redrock.zscan.calc_zchi2(zz, spectra, template, npoly=npoly)
     chi2min = np.min(zzchi2)
 
     #- Fit a parabola to that finder resolution chi2 vs. z scan
@@ -64,7 +64,7 @@ def pickz(zchi2, redshifts, spectra, template):
         zwarn |= ZW.BAD_MINFIT
     
     #- chi2 at zbest
-    chi2min = redrock.zscan.calc_zchi2([zbest,], spectra, template)[0]
+    chi2min = redrock.zscan.calc_zchi2([zbest,], spectra, template, npoly=npoly)[0]
     
     # if zwarn & ZW.BAD_MINFIT:
     #     #--- DEBUG ---

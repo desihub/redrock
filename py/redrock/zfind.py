@@ -3,7 +3,7 @@ import numpy as np
 import redrock.zscan
 import redrock.pickz
 
-def zfind(targets, templates):
+def zfind(targets, templates, npoly=0):
     '''
     Given a list of targets and a list of templates, find redshifts
     
@@ -18,6 +18,9 @@ def zfind(targets, templates):
             - wave : array of wavelengths [Angstroms]
             - flux[i,wave] : template basis vectors of flux densities
         
+    Optional:
+        npoly: number of background polynomial terms to include
+
     Returns nested dictionary results[targetid][templatetype] with keys
         - z: array of redshifts scanned
         - zchi2: array of chi2 fit at each z
@@ -38,9 +41,9 @@ def zfind(targets, templates):
         results[targetid] = dict()
         for t in templates:
             zz = redshifts[t['type']]
-            zchi2 = redrock.zscan.calc_zchi2(zz, spectra, t)
+            zchi2 = redrock.zscan.calc_zchi2(zz, spectra, t, npoly=npoly)
         
-            zbest, zerr, zwarn, minchi2 = redrock.pickz.pickz(zchi2, zz, spectra, t)
+            zbest, zerr, zwarn, minchi2 = redrock.pickz.pickz(zchi2, zz, spectra, t, npoly=npoly)
         
             results[targetid][t['type']] = dict(
                 z=zz, zchi2=zchi2, zbest=zbest, zerr=zerr, zwarn=zwarn, minchi2=minchi2
