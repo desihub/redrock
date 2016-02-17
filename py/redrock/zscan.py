@@ -94,8 +94,9 @@ def template_fit(z, spectra, template, flux=None, weights=None, npoly=0):
     #- Make a list of matrices that bin the template basis for each spectrum
     nbasis = template['flux'].shape[0]  #- number of template basis vectors
     T = list()
+    nspec = len(spectra)
     for i, s in enumerate(spectra):
-        Ti = np.zeros((len(s['wave']), nbasis+npoly))
+        Ti = np.zeros((len(s['wave']), nbasis+npoly*nspec))
         #- Template basis
         for j in range(nbasis):
             key = (z, id(template), j, len(s['wave']), s['wave'][0], s['wave'][-1])
@@ -113,7 +114,8 @@ def template_fit(z, spectra, template, flux=None, weights=None, npoly=0):
         for j in range(npoly):
             c = np.zeros(npoly)
             c[j] = 1.0
-            Ti[:, nbasis+j] = np.polynomial.legendre.legval(wx, c)
+            k = nbasis + i*npoly + j
+            Ti[:, k] = np.polynomial.legendre.legval(wx, c)
         
         T.append(Ti)
         
