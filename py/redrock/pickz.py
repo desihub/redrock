@@ -4,42 +4,48 @@ import numpy as np
 import redrock
 from redrock.zwarning import ZWarningMask as ZW
 
+def minfit(x, y):
+    '''
+    Fit a parabola to y(x) assuming that it contains an interior minimum
+
+    Returns coeff, xmin, ymin, sigma
+
+    coeff = np.polyfit(x, y, 2)
+    '''
+    imin = np.argmin(y)        
+    # assert imin != 0
+    # assert imin != len(y)-1
+    assert len(x) == len(y)
+
+    c = np.polyfit(x, y, 2)
+    d = np.polyder(c)
+    xmin = -d[1] / d[0]
+    ymin = np.polyval(c, xmin)
+
+    cx = c - [0, 0, ymin+1]
+    y1, y2 = np.roots(cx)
+    sigma = abs(y2-y1)/2.0
+
+    return c, xmin, ymin, sigma
+
 def pickz(zchi2, redshifts, spectra, template):
     '''Refines redshift measurement
     '''
+    assert len(zchi2) == len(redshifts)
+    
     #- Scan at a finer resolution around the initial minimum
-    zmin = redshifts[np.argmin(zchi2)]
-    dz = 0.003
-    zz = np.linspace(zmin-dz, zmin+dz, 31)
+    imin = np.argmin(zchi2)
+    ilo = max(0, imin-2)
+    ihi = min(imin+3, len(zchi2))
+
+    c, zmin, chi2min, sigma = minfit(redshifts[ilo:ihi], zchi2[ilo:ihi])
+    zz = np.linspace(zmin-2*sigma, zmin+2*sigma, 15)
     zzchi2 = redrock.zscan.calc_zchi2(zz, spectra, template)
-    chi2min = np.min(zzchi2)
 
-    #- Fit a parabola to that finder resolution chi2 vs. z scan
-    zmin = zz[np.argmin(zzchi2)]
-    dchi2 = 50
-    while True:
-        jj = (zzchi2 < np.min(zzchi2)+dchi2)
-        if np.count_nonzero(jj) >= 3:
-            break
-        else:
-            dchi2 *= 2
-
-    p = np.polyfit(zz[jj]-zmin, zzchi2[jj], 2)
+    c, zbest, chi2min, zerr = minfit(redshifts[ilo:ihi], zchi2[ilo:ihi])
 
     #- For zwarning mask bits
     zwarn = 0
-
-    #- Get minimum and error from the parabola fit parameters
-    a, b, c = p
-    zbest = -b/(2*a) + zmin
-    chi2min = c - b**2/(4*a)
-    blat = b**2 - 4*a*(c-1-chi2min)
-    if blat >= 0:
-        zp = (-b + np.sqrt(blat)) / (2*a)
-        zerr = zp-(zbest-zmin)
-    else:
-        zerr = -1
-        zwarn |= ZW.BAD_MINFIT
 
     #- Other minima are too similar
     #- TODO: tune exclusion of close values
@@ -59,18 +65,8 @@ def pickz(zchi2, redshifts, spectra, template):
         zbest = zz[zbest]
        
     #- Parabola fit considerably different than minimum of scan 
-    #- (somewhat arbitrary cutoff)
-    if abs(zbest - zmin) > 0.01:
+    if abs(zbest - zmin) > sigma:
         zwarn |= ZW.BAD_MINFIT
-    
-    #- chi2 at zbest
-    chi2min = redrock.zscan.calc_zchi2([zbest,], spectra, template)[0]
-    
-    # if zwarn & ZW.BAD_MINFIT:
-    #     #--- DEBUG ---
-    #     import IPython
-    #     IPython.embed()
-    #     #--- DEBUG ---
-
+        
     return zbest, zerr, zwarn, chi2min
 

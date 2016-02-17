@@ -29,7 +29,7 @@ def zfind(targets, templates):
     redshifts = dict(
         GALAXY  = 10**np.arange(np.log10(0.1), np.log10(2.0), 4e-4),
         STAR = np.arange(-0.001, 0.00101, 0.0001),
-        QSO  = 10**np.arange(np.log10(0.5), np.log10(3.5), 1e-3),
+        QSO  = 10**np.arange(np.log10(0.5), np.log10(4.0), 1e-3),
     )
 
     #- Try each template on the spectra for each target
