@@ -28,21 +28,23 @@ def minfit(x, y):
 
     return c, xmin, ymin, sigma
 
-def pickz(zchi2, redshifts, spectra, template):
+def pickz(zchi2, redshifts, spectra, template, npoly=0):
     '''Refines redshift measurement
     '''
     assert len(zchi2) == len(redshifts)
-    
+
     #- Scan at a finer resolution around the initial minimum
     imin = np.argmin(zchi2)
     ilo = max(0, imin-2)
     ihi = min(imin+3, len(zchi2))
 
+    #- first fit
     c, zmin, chi2min, sigma = minfit(redshifts[ilo:ihi], zchi2[ilo:ihi])
-    zz = np.linspace(zmin-2*sigma, zmin+2*sigma, 15)
-    zzchi2 = redrock.zscan.calc_zchi2(zz, spectra, template)
 
-    c, zbest, chi2min, zerr = minfit(redshifts[ilo:ihi], zchi2[ilo:ihi])
+    #- refit at higher sampling around +-2 sigma
+    zz = np.linspace(zmin-2*sigma, zmin+2*sigma, 15)
+    zzchi2 = redrock.zscan.calc_zchi2(zz, spectra, template, npoly=npoly)
+    c, zbest, chi2min, zerr = minfit(zz, zzchi2)
 
     #- For zwarning mask bits
     zwarn = 0
@@ -57,16 +59,17 @@ def pickz(zchi2, redshifts, spectra, template):
         zwarn |= ZW.Z_FITLIMIT
     if zmin < redshifts[1] or zmin > redshifts[-2]:
         zwarn |= ZW.Z_FITLIMIT
-        
+
     #- parabola minimum outside fit range; replace with min of scan
     if zbest < zz[0] or zbest > zz[-1]:
         zwarn |= ZW.BAD_MINFIT
         imin = np.where(zbest == np.min(zbest))[0][0]
-        zbest = zz[zbest]
-       
+        zbest = zz[imin]
+        chi2min = zzchi2[imin]
+
     #- Parabola fit considerably different than minimum of scan 
     if abs(zbest - zmin) > sigma:
         zwarn |= ZW.BAD_MINFIT
-        
+
     return zbest, zerr, zwarn, chi2min
 

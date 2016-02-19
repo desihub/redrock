@@ -4,7 +4,7 @@ import numpy as np
 import scipy.sparse
 from redrock import rebin
 
-def calc_zchi2(redshifts, spectra, template, rchi2=False):
+def calc_zchi2(redshifts, spectra, template, rchi2=False, npoly=0):
     '''Calculates chi2 vs. redshift for a given PCA template.
 
     Args:
@@ -20,6 +20,7 @@ def calc_zchi2(redshifts, spectra, template, rchi2=False):
 
     Optional:
         rchi2 : if True, return reduced chi2/dof instead of chi2
+        npoly : number if Legendre poly terms to add as nuisance background
 
     Returns:
         chi2 array with one element per input redshift
@@ -39,7 +40,7 @@ def calc_zchi2(redshifts, spectra, template, rchi2=False):
     
     #- Loop over redshifts, solving for template fit coefficients
     for i, z in enumerate(redshifts):
-        a, T = template_fit(z, spectra, template, flux=flux, weights=weights)
+        a, T = template_fit(z, spectra, template, flux=flux, weights=weights, npoly=npoly)
         Tx = np.vstack(T)
         zchi2[i] = np.sum( (flux - Tx.dot(a))**2 * weights )
         if rchi2:
@@ -51,7 +52,7 @@ def calc_zchi2(redshifts, spectra, template, rchi2=False):
 #- a computationally expensive operation
 _template_cache = dict()
 
-def template_fit(z, spectra, template, flux=None, weights=None):
+def template_fit(z, spectra, template, flux=None, weights=None, npoly=0):
     '''Fit a template to the data at a given redshift
     
     flux = sum_i a[i] template['flux'][i]
@@ -67,7 +68,10 @@ def template_fit(z, spectra, template, flux=None, weights=None):
             - wave : array of wavelengths [Angstroms]
             - flux[i,wave] : template basis vectors of flux densities
             
-    Optional (for efficiency, since they may be pre-calculated for all z):
+    Optional:
+        npoly: number of Legendre polynomial terms to add as nuisance background
+
+    Optional for efficiency, since they may be pre-calculated for all z:
         flux : precalculated np.concatenate( [s['flux'] for s in spectra] )
         weights : precalculated np.concatenate( [s['ivar'] for s in spectra] )
         
@@ -90,8 +94,10 @@ def template_fit(z, spectra, template, flux=None, weights=None):
     #- Make a list of matrices that bin the template basis for each spectrum
     nbasis = template['flux'].shape[0]  #- number of template basis vectors
     T = list()
-    for s in spectra:
-        Ti = np.zeros((len(s['wave']), nbasis))
+    nspec = len(spectra)
+    for i, s in enumerate(spectra):
+        Ti = np.zeros((len(s['wave']), nbasis+npoly*nspec))
+        #- Template basis
         for j in range(nbasis):
             key = (z, id(template), j, len(s['wave']), s['wave'][0], s['wave'][-1])
             if key not in _template_cache:
@@ -101,6 +107,15 @@ def template_fit(z, spectra, template, flux=None, weights=None):
                 t = _template_cache[key]
                 
             Ti[:,j] = s['R'].dot(t)
+
+        #- Add legendre background terms
+        w = s['wave']
+        wx = 2 * (w-w[0]) / (w[-1] - w[0]) - 1.0  #- Map wave -> [-1,1]
+        for j in range(npoly):
+            c = np.zeros(npoly)
+            c[j] = 1.0
+            k = nbasis + i*npoly + j
+            Ti[:, k] = np.polynomial.legendre.legval(wx, c)
         
         T.append(Ti)
         
