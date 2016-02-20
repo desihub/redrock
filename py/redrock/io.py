@@ -150,13 +150,15 @@ def read_zscan(filename):
     '''Return redrock.zfind results stored in hdf5 file as written
     by write_zscan
     
-    Returns nested dictionary results[targetid][templatetype] with keys
-        - z: array of redshifts scanned
-        - zchi2: array of chi2 fit at each z
-        - zbest: best fit redshift (finer resolution fit around zchi2 minimum)
-        - minchi2: chi2 at zbest
-        - zerr: uncertainty on zbest
-        - zwarn: 0=good, non-0 is a warning flag    
+    returns (zbest, results) tuple:
+        zbest is a Table with keys TARGETID, Z, ZERR, ZWARN
+        results is a nested dictionary results[targetid][templatetype] with keys
+            - z: array of redshifts scanned
+            - zchi2: array of chi2 fit at each z
+            - zbest: best fit redshift (finer resolution fit around zchi2 min)
+            - minchi2: chi2 at zbest
+            - zerr: uncertainty on zbest
+            - zwarn: 0=good, non-0 is a warning flag    
     '''
     import h5py
     zbest = Table.read(filename, format='hdf5', path='zbest')
