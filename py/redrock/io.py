@@ -159,17 +159,19 @@ def read_zscan(filename):
         - zwarn: 0=good, non-0 is a warning flag    
     '''
     import h5py
+    zbest = Table.read(filename, format='hdf5', path='zbest')
     fx = h5py.File(filename, mode='r')
     results = dict()
     #- NOTE: this is clumsy iteration
-    for targetid in fx.keys():
+    targets = fx['targets']
+    for targetid in targets.keys():
         results[int(targetid)] = dict()
-        for ttype in fx[targetid].keys():
+        for ttype in targets[targetid].keys():
             results[int(targetid)][ttype] = dict()
-            for dataname in fx[targetid+'/'+ttype].keys():
-                results[int(targetid)][ttype][dataname] = fx[targetid+'/'+ttype+'/'+dataname].value
+            for dataname in targets[targetid+'/'+ttype].keys():
+                results[int(targetid)][ttype][dataname] = targets[targetid+'/'+ttype+'/'+dataname].value
                 
-    return results
+    return zbest, results
                 
             
     

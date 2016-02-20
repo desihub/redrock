@@ -60,7 +60,10 @@ class TestIO(unittest.TestCase):
 
         io.write_zscan(self.testfile, z1)
         io.write_zscan(self.testfile, z1, clobber=True)
-        z2 = io.read_zscan(self.testfile)
+        zbest, z2 = io.read_zscan(self.testfile)
+        
+        for key in ('Z', 'ZERR', 'ZWARN', 'TARGETID'):
+            self.assertIn(key, zbest.dtype.names)
         
         for targetid in z1:
             for templatetype in z1[targetid]:
