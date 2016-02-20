@@ -4,6 +4,18 @@ import numpy as np
 import redrock
 from redrock.zwarning import ZWarningMask as ZW
 
+def find_minima(x):
+    '''
+    return indices of local minima of x, including edges
+    
+    Note: this is somewhat conservative in the case of repeated values:
+    
+    find_minima([1,1,1,2,2,2]) -> [0,1,2,4,5]
+    '''
+    x = np.asarray(x)
+    ii = np.where(np.r_[True, x[1:]<=x[:-1]] & np.r_[x[:-1]<=x[1:], True])
+    return ii
+
 def minfit(x, y):
     '''
     Fit a parabola to y(x) assuming that it contains an interior minimum
@@ -33,25 +45,32 @@ def pickz(zchi2, redshifts, spectra, template, npoly=0):
     '''
     assert len(zchi2) == len(redshifts)
 
-    #- Scan at a finer resolution around the initial minimum
+    #- first fit to the 5 points around the minimum
     imin = np.argmin(zchi2)
     ilo = max(0, imin-2)
     ihi = min(imin+3, len(zchi2))
-
-    #- first fit
     c, zmin, chi2min, sigma = minfit(redshifts[ilo:ihi], zchi2[ilo:ihi])
 
-    #- refit at higher sampling around +-2 sigma
-    zz = np.linspace(zmin-2*sigma, zmin+2*sigma, 15)
+    #- refit at higher sampling around +-5 sigma
+    zz = np.linspace(zmin-5*sigma, zmin+5*sigma, 11)
     zzchi2 = redrock.zscan.calc_zchi2(zz, spectra, template, npoly=npoly)
-    c, zbest, chi2min, zerr = minfit(zz, zzchi2)
+    c, zmin, chi2min, sigma = minfit(zz, zzchi2)
+
+    #- update fit around +-5 sigma
+    zz = np.linspace(zmin-5*sigma, zmin+5*sigma, 11)
+    zzchi2 = redrock.zscan.calc_zchi2(zz, spectra, template, npoly=npoly)
+    c, zmin, chi2min, sigma = minfit(zz, zzchi2)
+    
+    zbest = zmin
+    zerr = sigma
 
     #- For zwarning mask bits
     zwarn = 0
 
     #- Other minima are too similar
     #- TODO: tune exclusion of close values
-    if np.any((np.abs(redshifts-zbest)>5*zerr) & (zchi2 < chi2min + 9)):
+    ii = find_minima(zchi2)
+    if np.any((np.abs(redshifts-zbest)>5*zerr)[ii] & (zchi2 < chi2min + 9)[ii]):
         zwarn |= ZW.SMALL_DELTA_CHI2
 
     #- Initial minimum or best fit too close to edge of redshift range
@@ -66,10 +85,6 @@ def pickz(zchi2, redshifts, spectra, template, npoly=0):
         imin = np.where(zbest == np.min(zbest))[0][0]
         zbest = zz[imin]
         chi2min = zzchi2[imin]
-
-    #- Parabola fit considerably different than minimum of scan 
-    if abs(zbest - zmin) > sigma:
-        zwarn |= ZW.BAD_MINFIT
 
     return zbest, zerr, zwarn, chi2min
 
