@@ -20,11 +20,15 @@ source activate test
 # CORE DEPENDENCIES
 # conda install --yes pytest Cython jinja2 psutil pyyaml requests
 
-# NUMPY scipy
-conda install --yes numpy scipy astropy h5py numba
+# from the .travis.yml in https://github.com/numba
+conda install --yes -c numba llvmdev="3.7*"
+git clone git://github.com/numba/llvmlite.git -q
+cd llvmlite && python setup.py build && python setup.py install -q >/dev/null && cd ..
 
-# Get templates
+# numpy scipy etc.
+conda install --yes numpy scipy astropy h5py
 
+# Get redrock templates
 cd py/redrock
 RR_TEMPLATE_VER=0.2
 wget https://github.com/sbailey/redrock-templates/archive/${RR_TEMPLATE_VER}.tar.gz
