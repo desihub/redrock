@@ -4,7 +4,14 @@
 set -e
 
 # CONDA
-conda create --yes -n test -c astropy-ci-extras python=$PYTHON_VERSION pip
+# Install conda
+wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
+chmod +x miniconda.sh
+./miniconda.sh -b -p $HOME/miniconda
+export PATH=/home/travis/miniconda/bin:$PATH
+conda update --yes conda
+
+conda create --yes -n test -c python=$PYTHON_VERSION pip
 source activate test
 
 # CORE DEPENDENCIES
