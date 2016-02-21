@@ -21,12 +21,17 @@ source activate test
 # conda install --yes pytest Cython jinja2 psutil pyyaml requests
 
 # from the .travis.yml in https://github.com/numba
-conda install --yes -c numba llvmdev="3.7*"
-git clone git://github.com/numba/llvmlite.git -q
-cd llvmlite && python setup.py build && python setup.py install -q >/dev/null && cd ..
+# conda install --yes -c numba llvmdev="3.7*"
+# git clone git://github.com/numba/llvmlite.git -q
+# cd llvmlite && python setup.py build && python setup.py install -q >/dev/null && cd ..
 
 # numpy scipy etc.
-conda install --yes numpy scipy astropy h5py
+conda install --yes numpy scipy astropy h5py numba
+
+echo '----------------------------------------------------------------------'
+echo $PYTHONPATH
+which python
+echo '----------------------------------------------------------------------'
 
 # Get redrock templates
 cd py/redrock
