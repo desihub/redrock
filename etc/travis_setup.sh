@@ -31,6 +31,7 @@ conda install --yes numpy scipy astropy h5py numba
 echo '----------------------------------------------------------------------'
 echo $PYTHONPATH
 which python
+which nosetests
 echo '----------------------------------------------------------------------'
 
 # Get redrock templates

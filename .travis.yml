@@ -8,4 +8,5 @@ python:
 # command to install dependencies
 install: "source etc/travis_setup.sh"
 # command to run tests
-script: nosetests
+# script: nosetests
+script: python setup.py test
