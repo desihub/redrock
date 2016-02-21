@@ -11,7 +11,7 @@ chmod +x miniconda.sh
 export PATH=/home/travis/miniconda/bin:$PATH
 conda update --yes conda
 
-conda create --yes -n test -c python=$PYTHON_VERSION pip
+conda create --yes -n test -c python=$TRAVIS_PYTHON_VERSION pip
 source activate test
 
 # CORE DEPENDENCIES
