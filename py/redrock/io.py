@@ -63,16 +63,26 @@ def read_template(filename):
 
 def find_templates(template_dir=None):
     '''
-    Return list of redrock-*.fits template files found in either
-    template_dir or $RR_TEMPLATE_DIR
+    Return list of redrock-*.fits template files
+    
+    Search directories in this order, returning results from first one found:
+        * template_dir
+        * $RR_TEMPLATE_DIR
+        * {redrock_code}/templates/
     '''
     if template_dir is None:
-        template_dir = os.getenv('RR_TEMPLATE_DIR')
+        if 'RR_TEMPLATE_DIR' in os.environ:
+            template_dir = os.environ['RR_TEMPLATE_DIR']
+        else:
+            thisdir = os.path.dirname(os.__file__)
+            tempdir = os.path.join(os.path.abspath(thisdir), 'templates')
+            if os.path.exists(tempdir):
+                template_dir = tempdir
         
     if template_dir is None:
-        raise IOError('ERROR: must provide template_dir or $RR_TEMPLATE_DIR')
+        raise IOError("ERROR: can't find template_dir, $RR_TEMPLATE_DIR, or {rrcode}/templates/")
 
-    return glob(os.path.join(template_dir, 'redrock-*.fits'))
+    return glob(os.path.join(template_dir, 'rrtemplate-*.fits'))
 
 def read_templates(template_list=None, template_dir=None):
     '''
