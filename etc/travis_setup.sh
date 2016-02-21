@@ -29,7 +29,7 @@ source activate test
 conda install --yes numpy scipy astropy h5py numba
 
 echo '----------------------------------------------------------------------'
-echo $PYTHONPATH
+echo PYTHONPATH: $PYTHONPATH
 which python
 which nosetests
 echo '----------------------------------------------------------------------'
@@ -41,3 +41,5 @@ wget https://github.com/sbailey/redrock-templates/archive/${RR_TEMPLATE_VER}.tar
 tar -xzf ${RR_TEMPLATE_VER}.tar.gz
 mv redrock-templates-${RR_TEMPLATE_VER} templates
 rm ${RR_TEMPLATE_VER}.tar.gz
+cd ../../
+pwd
