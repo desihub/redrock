@@ -1,3 +1,5 @@
+from __future__ import division, print_function
+
 import os
 import unittest
 from uuid import uuid1
@@ -19,7 +21,7 @@ class TestIO(unittest.TestCase):
     
     def setUp(self):
         pass
-            
+
     def test_endian(self):
         x1 = np.arange(5, dtype='>f')
         x2 = np.arange(5, dtype='<f')

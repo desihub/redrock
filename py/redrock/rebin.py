@@ -56,7 +56,7 @@ def _trapz_rebin(x, y, edges):
         ValueError if len(x) != len(y)
     '''
     edges = np.asarray(edges)
-    
+
     nbin = len(edges)-1
     nx = len(x)
     results = np.zeros(nbin)

@@ -7,10 +7,13 @@ from redrock import rebin
 class TestBlat(unittest.TestCase):
     
     def setUp(self):
+        #- Supposed to turn off numba.jit of _trapz_rebin, but coverage
+        #- still doesn't see the function.  Leaving this here anyway.
+        os.environ['NUMBA_DISABLE_JIT'] = '1'
         pass
 
     def tearDown(self):
-        pass
+        del os.environ['NUMBA_DISABLE_JIT']
             
     def test_centers2edges(self):
         c2e = rebin.centers2edges  #- shorthand
