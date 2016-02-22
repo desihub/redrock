@@ -13,10 +13,10 @@ setup_keywords = dict()
 #
 setup_keywords['name'] = 'redrock'
 setup_keywords['description'] = 'Redrock redshift fitter'
-setup_keywords['author'] = 'DESI Collaboration'
-setup_keywords['author_email'] = 'desi-data@desi.lbl.gov'
+setup_keywords['author'] = 'Stephen Bailey'
+setup_keywords['author_email'] = 'StephenBailey@lbl.gov'
 setup_keywords['license'] = 'BSD'
-setup_keywords['url'] = 'https://github.com/desihub/redrock'
+setup_keywords['url'] = 'https://github.com/sbailey/redrock'
 #
 # END OF SETTINGS THAT NEED TO BE CHANGED.
 #
@@ -63,12 +63,25 @@ if os.path.isdir('bin'):
         if not os.path.basename(fname).endswith('.rst')]
 setup_keywords['provides'] = [setup_keywords['name']]
 setup_keywords['requires'] = ['Python (>2.7.0)']
-#setup_keywords['install_requires'] = ['Python (>2.6.0)']
 setup_keywords['zip_safe'] = False
 setup_keywords['use_2to3'] = True
 setup_keywords['packages'] = find_packages('py')
 setup_keywords['package_dir'] = {'':'py'}
 setup_keywords['test_suite'] = 'redrock.test.test_suite'
+
+#- Load requirements.txt
+# with open('requirements.txt') as fx:
+#     required = list()
+#     for line in fx:
+#         line = line.strip()
+#         if not line.startswith('#') and len(line) > 1:
+#             required.append(line)
+#             
+# setup_keywords['install_requires'] = required
+
+if not 'RR_TEMPLATE_DIR' in os.environ:
+    setup_keywords['package_data'] = {'redrock': ['templates/*.fits']}
+
 #
 # Run setup command.
 #
