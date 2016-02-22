@@ -30,7 +30,7 @@ class TestIO(unittest.TestCase):
         else:
             self.assertTrue(x2 is io.native_endian(x2))
                 
-    @unittest.skipIf('RR_TEMPLATE_DIR' not in os.environ, '$RR_TEMPLATE_DIR not set')
+    ### @unittest.skipIf('RR_TEMPLATE_DIR' not in os.environ, '$RR_TEMPLATE_DIR not set')
     def test_find_templates(self):
         templates = io.find_templates()
         self.assertTrue(len(templates) > 0)
@@ -38,7 +38,7 @@ class TestIO(unittest.TestCase):
         templates = io.find_templates(template_dir = template_dir)
         self.assertTrue(len(templates) > 0)
         
-    @unittest.skipIf('RR_TEMPLATE_DIR' not in os.environ, '$RR_TEMPLATE_DIR not set')
+    ### @unittest.skipIf('RR_TEMPLATE_DIR' not in os.environ, '$RR_TEMPLATE_DIR not set')
     def test_read_templates(self):
         for template in io.read_templates():
             self.assertIn('wave', template)

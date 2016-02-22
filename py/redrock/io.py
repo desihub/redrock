@@ -74,7 +74,7 @@ def find_templates(template_dir=None):
         if 'RR_TEMPLATE_DIR' in os.environ:
             template_dir = os.environ['RR_TEMPLATE_DIR']
         else:
-            thisdir = os.path.dirname(os.__file__)
+            thisdir = os.path.dirname(__file__)
             tempdir = os.path.join(os.path.abspath(thisdir), 'templates')
             if os.path.exists(tempdir):
                 template_dir = tempdir

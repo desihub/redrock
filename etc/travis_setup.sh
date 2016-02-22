@@ -17,22 +17,8 @@ conda update --yes conda
 conda create --yes -n test python=$TRAVIS_PYTHON_VERSION pip
 source activate test
 
-# CORE DEPENDENCIES
-# conda install --yes pytest Cython jinja2 psutil pyyaml requests
-
-# from the .travis.yml in https://github.com/numba
-# conda install --yes -c numba llvmdev="3.7*"
-# git clone git://github.com/numba/llvmlite.git -q
-# cd llvmlite && python setup.py build && python setup.py install -q >/dev/null && cd ..
-
 # numpy scipy etc.
 conda install --yes numpy scipy astropy h5py numba
-
-echo '----------------------------------------------------------------------'
-echo PYTHONPATH: $PYTHONPATH
-which python
-which nosetests
-echo '----------------------------------------------------------------------'
 
 # Get redrock templates
 cd py/redrock
@@ -42,4 +28,3 @@ tar -xzf ${RR_TEMPLATE_VER}.tar.gz
 mv redrock-templates-${RR_TEMPLATE_VER} templates
 rm ${RR_TEMPLATE_VER}.tar.gz
 cd ../../
-pwd
