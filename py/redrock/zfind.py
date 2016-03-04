@@ -3,6 +3,11 @@ import numpy as np
 import redrock.zscan
 import redrock.pickz
 
+import multiprocessing as mp
+
+def _wrap_calc_zchi2(args):
+    return redrock.zscan.calc_zchi2_targets(*args)
+
 def zfind(targets, templates):
     '''
     Given a list of targets and a list of templates, find redshifts
@@ -39,7 +44,21 @@ def zfind(targets, templates):
     for t in templates:
         zz = redshifts[t['type']]
         print('zchi2 scan for '+t['type'])
-        zchi2 = redrock.zscan.calc_zchi2_targets(zz, targets, t)
+        
+        ### 5:38 for 100 ELGs
+        ### zchi2 = redrock.zscan.calc_zchi2_targets(zz, targets, t)
+        
+        ncpu = mp.cpu_count() // 2
+        ntargets = len(targets)
+        chunksize = max(1, ntargets // ncpu)
+        args = list()
+        for i in range(0, ntargets, chunksize):
+            args.append( [zz, targets[i:i+chunksize], t] )
+        
+        pool = mp.Pool(ncpu)
+        zchi2 = pool.map(_wrap_calc_zchi2, args)
+        zchi2 = np.vstack(zchi2)
+        
         print('pickz')
         for i in range(len(targets)):
             targetid, spectra = targets[i]

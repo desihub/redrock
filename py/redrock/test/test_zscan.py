@@ -63,11 +63,11 @@ class TestZScan(unittest.TestCase):
         
         #- Test dimensions of template_fit return
         #- Too low S/N to reproducibly check afit values
-        afit, Tfit = redrock.zscan.template_fit(zmin, spectra, template)
-        self.assertEqual(len(afit), 2)
-        self.assertEqual(len(Tfit), 5)
-        for i in range(5):
-            self.assertEqual(Tfit[i].shape, (len(spectra[i]['flux']), 2))
+        # afit, Tfit = redrock.zscan.template_fit(zmin, spectra, template)
+        # self.assertEqual(len(afit), 2)
+        # self.assertEqual(len(Tfit), 5)
+        # for i in range(5):
+        #     self.assertEqual(Tfit[i].shape, (len(spectra[i]['flux']), 2))
             
         #- Also test pickz since we are here
         zbest, zerr, zwarn, chi2min = redrock.pickz.pickz(zchi2, redshifts, spectra, template)
