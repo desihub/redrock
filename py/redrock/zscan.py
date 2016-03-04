@@ -37,17 +37,29 @@ def calc_zchi2_targets(redshifts, targets, template):
     
     #- Regroup fluxes and ivars into 1D arrays per target
     fluxlist = list()
+    wfluxlist = list()
     weightslist = list()
+    Wlist = list()
     for targetid, spectra in targets:
-        fluxlist.append( np.concatenate( [s['flux'] for s in spectra] ) )
-        weightslist.append( np.concatenate( [s['ivar'] for s in spectra] ) )
+        weights = np.concatenate( [s['ivar'] for s in spectra] )
+        weightslist.append( weights )
+        nflux = len(weights)
+        Wlist.append( scipy.sparse.dia_matrix((weights, 0), (nflux, nflux)) )
+        flux = np.concatenate( [s['flux'] for s in spectra] )
+        fluxlist.append(flux)
+        wfluxlist.append(weights*flux)
     
     #- NOT GENERAL AT ALL:
     #- assume all targets have same number of spectra with same wavelengths,
     #- so we can just use the first target spectra to get wavelength grids
     #- for all of them
     refspectra = targets[0][1]
-        
+    
+    #- Pre-convert resolution matrices to csr for faster dot products
+    for targetid, spectra in targets:
+        for s in spectra:
+            s['R'] = s['R'].tocsr()
+    
     #- Loop over redshifts, solving for template fit coefficients
     nbasis = template['flux'].shape[0]
     nflux = len(fluxlist[0])
@@ -59,16 +71,17 @@ def calc_zchi2_targets(redshifts, targets, template):
         
         for j in range(ntargets):
             targetid, spectra = targets[j]
-            flux = fluxlist[j]
-            weights = weightslist[j]
             Tb = list()
             for k, s in enumerate(spectra):
                 Tb.append(s['R'].dot(Tx[k]))
-                
+                                
             Tb = np.vstack(Tb)
         
-            W = scipy.sparse.dia_matrix((weights, 0), (nflux, nflux))
-            a = np.linalg.solve(Tb.T.dot(W.dot(Tb)), Tb.T.dot(W.dot(flux)))
+            flux = fluxlist[j]
+            wflux = wfluxlist[j]
+            weights = weightslist[j]
+            W = Wlist[j]
+            a = np.linalg.solve(Tb.T.dot(W.dot(Tb)), Tb.T.dot(wflux))
         
             zchi2[j,i] = np.sum( (flux - Tb.dot(a))**2 * weights )
     
