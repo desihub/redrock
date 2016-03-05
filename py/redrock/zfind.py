@@ -3,7 +3,12 @@ import numpy as np
 import redrock.zscan
 import redrock.pickz
 
-def zfind(targets, templates, npoly=0):
+import multiprocessing as mp
+
+def _wrap_calc_zchi2(args):
+    return redrock.zscan.calc_zchi2_targets(*args)
+
+def zfind(targets, templates):
     '''
     Given a list of targets and a list of templates, find redshifts
     
@@ -17,9 +22,6 @@ def zfind(targets, templates, npoly=0):
         templates: list of dictionaries, each of which has keys
             - wave : array of wavelengths [Angstroms]
             - flux[i,wave] : template basis vectors of flux densities
-        
-    Optional:
-        npoly: number of background polynomial terms to include
 
     Returns nested dictionary results[targetid][templatetype] with keys
         - z: array of redshifts scanned
@@ -35,23 +37,33 @@ def zfind(targets, templates, npoly=0):
         QSO  = 10**np.arange(np.log10(0.5), np.log10(4.0), 1e-3),
     )
 
-    #- Try each template on the spectra for each target
-    results = dict()    
-    for i, (targetid, spectra) in enumerate(targets):
+    results = dict()
+    for targetid, spectra in targets:
         results[targetid] = dict()
-        for t in templates:
-            zz = redshifts[t['type']]
-            zchi2 = redrock.zscan.calc_zchi2(zz, spectra, t, npoly=npoly)
+    
+    for t in templates:
+        zz = redshifts[t['type']]
+        print('zchi2 scan for '+t['type'])
         
-            zbest, zerr, zwarn, minchi2 = redrock.pickz.pickz(zchi2, zz, spectra, t, npoly=npoly)
+        ncpu = mp.cpu_count() // 2
+        ntargets = len(targets)
+        chunksize = max(1, ntargets // ncpu)
+        args = list()
+        for i in range(0, ntargets, chunksize):
+            args.append( [zz, targets[i:i+chunksize], t] )
         
+        pool = mp.Pool(ncpu)
+        zchi2 = pool.map(_wrap_calc_zchi2, args)
+        zchi2 = np.vstack(zchi2)
+        
+        print('pickz')
+        for i in range(len(targets)):
+            targetid, spectra = targets[i]
+            zbest, zerr, zwarn, minchi2 = redrock.pickz.pickz(
+                zchi2[i], zz, spectra, t)
             results[targetid][t['type']] = dict(
-                z=zz, zchi2=zchi2, zbest=zbest, zerr=zerr, zwarn=zwarn, minchi2=minchi2
+                z=zz, zchi2=zchi2[i], zbest=zbest, zerr=zerr, zwarn=zwarn, minchi2=minchi2
             )
-        
-            print('{}/{} {:20} {:6s} {:4s} {:.6f} {:.6f} {:6d} {:.2f}'.format(
-                i, len(targets), targetid,
-                t['type'], t['subtype'], zbest, zerr, zwarn, minchi2))
                 
     return results
     

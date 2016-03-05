@@ -40,7 +40,7 @@ def minfit(x, y):
 
     return c, xmin, ymin, sigma
 
-def pickz(zchi2, redshifts, spectra, template, npoly=0):
+def pickz(zchi2, redshifts, spectra, template):
     '''Refines redshift measurement
     '''
     assert len(zchi2) == len(redshifts)
@@ -53,12 +53,12 @@ def pickz(zchi2, redshifts, spectra, template, npoly=0):
 
     #- refit at higher sampling around +-5 sigma
     zz = np.linspace(zmin-5*sigma, zmin+5*sigma, 11)
-    zzchi2 = redrock.zscan.calc_zchi2(zz, spectra, template, npoly=npoly)
+    zzchi2 = redrock.zscan.calc_zchi2(zz, spectra, template)
     c, zmin, chi2min, sigma = minfit(zz, zzchi2)
 
     #- update fit around +-5 sigma
     zz = np.linspace(zmin-5*sigma, zmin+5*sigma, 11)
-    zzchi2 = redrock.zscan.calc_zchi2(zz, spectra, template, npoly=npoly)
+    zzchi2 = redrock.zscan.calc_zchi2(zz, spectra, template)
     c, zmin, chi2min, sigma = minfit(zz, zzchi2)
     
     zbest = zmin

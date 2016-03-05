@@ -56,21 +56,18 @@ class TestZScan(unittest.TestCase):
             spectra.append( dict(wave=wave, flux=flux, ivar=ivar, R=R) )
 
         redshifts = np.linspace(0.3, 0.7, 200)
-        zchi2 = redrock.zscan.calc_zchi2(redshifts, spectra, template, npoly=2)
+        zchi2 = redrock.zscan.calc_zchi2(redshifts, spectra, template)
 
         zmin = redshifts[np.argmin(zchi2)]
-
-        #- Test rchi2
         self.assertAlmostEqual(zmin, z, delta=0.005)
-        zrchi2 = redrock.zscan.calc_zchi2(redshifts[::5], spectra, template, rchi2=True)
         
         #- Test dimensions of template_fit return
         #- Too low S/N to reproducibly check afit values
-        afit, Tfit = redrock.zscan.template_fit(zmin, spectra, template)
-        self.assertEqual(len(afit), 2)
-        self.assertEqual(len(Tfit), 5)
-        for i in range(5):
-            self.assertEqual(Tfit[i].shape, (len(spectra[i]['flux']), 2))
+        # afit, Tfit = redrock.zscan.template_fit(zmin, spectra, template)
+        # self.assertEqual(len(afit), 2)
+        # self.assertEqual(len(Tfit), 5)
+        # for i in range(5):
+        #     self.assertEqual(Tfit[i].shape, (len(spectra[i]['flux']), 2))
             
         #- Also test pickz since we are here
         zbest, zerr, zwarn, chi2min = redrock.pickz.pickz(zchi2, redshifts, spectra, template)
