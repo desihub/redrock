@@ -123,9 +123,7 @@ def write_zscan(filename, results, clobber=False):
     if clobber and os.path.exists(filename):
         os.remove(filename)
 
-    if zbest is None:
-        zbest = find_zbest(results)
-        
+    zbest = find_zbest(results)        
     zbest.write(filename, path='zbest', format='hdf5')
 
     fx = h5py.File(filename)
