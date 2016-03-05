@@ -1,5 +1,23 @@
+import numpy as np
 import desispec.io
 from desispec.resolution import Resolution
+
+def write_zbest(outfile, zbest):
+    '''
+    Write zbest Table to outfile
+    
+    Adds blank BRICKNAME and SUBTYPE columns if needed
+    Adds zbest.meta['EXTNAME'] = 'ZBEST'
+    '''
+    ntargets = len(zbest)
+    if 'BRICKNAME' not in zbest.colnames:
+        zbest['BRICKNAME'] = np.zeros(ntargets, dtype='S8')
+
+    if 'SUBTYPE' not in zbest.colnames:
+        zbest['SUBTYPE'] = np.zeros(ntargets, dtype='S8')
+
+    zbest.meta['EXTNAME'] = 'ZBEST'
+    zbest.write(outfile, overwrite=True)
 
 def read_simbricks(brickfiles):
     '''
@@ -25,8 +43,7 @@ def read_simbricks(brickfiles):
             targets[targetid].append(spectrum)
             
     return targets.keys(), targets.values()
-        
-    
+
 def read_bricks(brickfiles, trueflux=False):
     '''
     Read targets from a list of brickfiles

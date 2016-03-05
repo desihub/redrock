@@ -7,6 +7,8 @@ import numpy as np
 from astropy.io import fits
 from astropy.table import Table
 
+from redrock.zbest import find_zbest
+
 #- From https://github.com/desihub/desispec io.util.native_endian
 def native_endian(data):
     """Convert numpy array data to native endianness if needed.
@@ -121,31 +123,7 @@ def write_zscan(filename, results, clobber=False):
     if clobber and os.path.exists(filename):
         os.remove(filename)
 
-    n = len(results)
-    zbest = Table()
-    zbest['TARGETID'] = np.zeros(n, dtype='i8')
-    zbest['Z'] = np.zeros(n, dtype='f4')
-    zbest['ZERR'] = np.zeros(n, dtype='f4')
-    zbest['ZWARN'] = np.zeros(n, dtype='i8')
-    zbest['TYPE'] = np.zeros(n, dtype='S10')
-
-    for i, targetid in enumerate(results):
-        chi2min = 1e120
-        for ttype in results[targetid]:
-            rx = results[targetid][ttype]
-            if rx['minchi2'] < chi2min:
-                chi2min = rx['minchi2']
-                z = rx['zbest']
-                zerr = rx['zerr']
-                zwarn = rx['zwarn']
-                type_ = ttype
-        
-            zbest['TARGETID'][i] = targetid
-            zbest['Z'][i] = z
-            zbest['ZERR'][i] = zerr
-            zbest['ZWARN'][i] = zwarn
-            zbest['TYPE'][i] = type_
-
+    zbest = find_zbest(results)        
     zbest.write(filename, path='zbest', format='hdf5')
 
     fx = h5py.File(filename)
