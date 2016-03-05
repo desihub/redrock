@@ -45,9 +45,6 @@ def zfind(targets, templates):
         zz = redshifts[t['type']]
         print('zchi2 scan for '+t['type'])
         
-        ### 5:38 for 100 ELGs
-        ### zchi2 = redrock.zscan.calc_zchi2_targets(zz, targets, t)
-        
         ncpu = mp.cpu_count() // 2
         ntargets = len(targets)
         chunksize = max(1, ntargets // ncpu)
@@ -67,25 +64,6 @@ def zfind(targets, templates):
             results[targetid][t['type']] = dict(
                 z=zz, zchi2=zchi2[i], zbest=zbest, zerr=zerr, zwarn=zwarn, minchi2=minchi2
             )
-
-    #-------------------------------------------------------------------------
-    #- Try each template on the spectra for each target
-    # results = dict()
-    # for i, (targetid, spectra) in enumerate(targets):
-    #     results[targetid] = dict()
-    #     for t in templates:
-    #         zz = redshifts[t['type']]
-    #         zchi2 = redrock.zscan.calc_zchi2(zz, spectra, t, npoly=npoly)
-    #     
-    #         zbest, zerr, zwarn, minchi2 = redrock.pickz.pickz(zchi2, zz, spectra, t, npoly=npoly)
-    #     
-    #         results[targetid][t['type']] = dict(
-    #             z=zz, zchi2=zchi2, zbest=zbest, zerr=zerr, zwarn=zwarn, minchi2=minchi2
-    #         )
-    #     
-    #         print('{}/{} {:20} {:6s} {:4s} {:.6f} {:.6f} {:6d} {:.2f}'.format(
-    #             i, len(targets), targetid,
-    #             t['type'], t['subtype'], zbest, zerr, zwarn, minchi2))
                 
     return results
     
