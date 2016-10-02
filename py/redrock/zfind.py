@@ -10,7 +10,7 @@ import multiprocessing as mp
 def _wrap_calc_zchi2(args):
     try:
         return redrock.zscan.calc_zchi2_targets(*args)
-    except Exception, oops:
+    except Exception as oops:
         print('-'*60)
         print('ERROR: calc_zchi2_targets raised exception; original traceback:')
         import traceback
