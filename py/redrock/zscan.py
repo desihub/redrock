@@ -2,11 +2,12 @@ from __future__ import division, print_function
 
 import numpy as np
 import scipy.sparse
-from redrock import rebin
+
+from . import rebin, Spectrum, Target
 
 def calc_zchi2(redshifts, spectra, template):
-    target = (0, spectra)
-    zchi2, zcoeff = calc_zchi2_targets(redshifts, [target,], template)
+    targets = [Target(0, spectra), ]
+    zchi2, zcoeff = calc_zchi2_targets(redshifts, targets, template)
     return zchi2[0], zcoeff[0]
 
 def calc_zchi2_targets(redshifts, targets, template):
@@ -14,12 +15,7 @@ def calc_zchi2_targets(redshifts, targets, template):
 
     Args:
         redshifts: array of redshifts to evaluate
-        targets : list of (targetid, spectra), where spectra are a list of
-            dictionaries, each of which has keys
-            - wave : array of wavelengths [Angstroms]
-            - flux : array of flux densities [10e-17 erg/s/cm^2/Angstrom]
-            - ivar : inverse variances of flux
-            - R : spectro-perfectionism resolution matrix
+        targets : list of Target objects
         template: dictionary with keys
             - wave : array of wavelengths [Angstroms]
             - flux[i,wave] : template basis vectors of flux densities
@@ -29,13 +25,13 @@ def calc_zchi2_targets(redshifts, targets, template):
         zcoeff[ntargets, nz, ncoeff]
 
     Notes:
-        template['flux'] is a basis set; spectra will be modeled as
-        flux = sum_i a[i] template['flux'][i]
+        template.flux is a basis set; spectra will be modeled as
+        flux = sum_i a[i] template.flux[i]
         To use an archetype, provide a template with dimensions [1,nwave]
     '''
     nz = len(redshifts)
     ntargets = len(targets)
-    nbasis = template['flux'].shape[0]
+    nbasis = template.flux.shape[0]
     zchi2 = np.zeros( (ntargets, nz) )
     zcoeff = np.zeros( (ntargets, nz, nbasis) )
     
@@ -44,12 +40,12 @@ def calc_zchi2_targets(redshifts, targets, template):
     wfluxlist = list()
     weightslist = list()
     Wlist = list()
-    for targetid, spectra in targets:
-        weights = np.concatenate( [s['ivar'] for s in spectra] )
+    for t in targets:
+        weights = np.concatenate( [s.ivar for s in t.spectra] )
         weightslist.append( weights )
         nflux = len(weights)
         Wlist.append( scipy.sparse.dia_matrix((weights, 0), (nflux, nflux)) )
-        flux = np.concatenate( [s['flux'] for s in spectra] )
+        flux = np.concatenate( [s.flux for s in t.spectra] )
         fluxlist.append(flux)
         wfluxlist.append(weights*flux)
     
@@ -57,12 +53,7 @@ def calc_zchi2_targets(redshifts, targets, template):
     #- assume all targets have same number of spectra with same wavelengths,
     #- so we can just use the first target spectra to get wavelength grids
     #- for all of them
-    refspectra = targets[0][1]
-    
-    #- Pre-convert resolution matrices to csr for faster dot products
-    for targetid, spectra in targets:
-        for s in spectra:
-            s['Rcsr'] = s['R'].tocsr()
+    refspectra = targets[0].spectra
     
     #- Loop over redshifts, solving for template fit coefficients
     nflux = len(fluxlist[0])
@@ -73,11 +64,10 @@ def calc_zchi2_targets(redshifts, targets, template):
         #- That isn't general; this is an area for optimization.
         Tx = rebin_template(template, z, refspectra)
         for j in range(ntargets):
-            targetid, spectra = targets[j]
             Tb = list()
-            for k, s in enumerate(spectra):
-                key = _wavekey(s['wave'])
-                Tb.append(s['Rcsr'].dot(Tx[key]))
+            for k, s in enumerate(targets[j].spectra):
+                key = s.wavehash
+                Tb.append(s.Rcsr.dot(Tx[key]))
 
             Tb = np.vstack(Tb)
 
@@ -98,14 +88,14 @@ def template_fit(spectra, z, template):
     Tb = list()
     Tx = rebin_template(template, z, spectra)
     for k, s in enumerate(spectra):
-        key = _wavekey(s['wave'])
-        ### Tb.append(s['Rcsr'].dot(Tx[key]))
-        Tb.append(s['R'].dot(Tx[key]))
+        key = _wavekey(s.wave)
+        Tb.append(s.Rcsr.dot(Tx[key]))
+        ### Tb.append(s.R.dot(Tx[key]))
 
     Tbx = np.vstack(Tb)
 
-    weights = np.concatenate( [s['ivar'] for s in spectra] )
-    flux = np.concatenate( [s['flux'] for s in spectra] )
+    weights = np.concatenate( [s.ivar for s in spectra] )
+    flux = np.concatenate( [s.flux for s in spectra] )
     nflux = len(flux)
     wflux = weights * flux
     W = scipy.sparse.dia_matrix((weights, 0), (nflux, nflux))
@@ -113,23 +103,16 @@ def template_fit(spectra, z, template):
 
     return [T.dot(a) for T in Tb], a
 
-def _wavekey(wave):
-    '''
-    We need a quick way to convert a wavelength array into a key that can
-    be used for fast lookups in a dictionary.  This does that approximately.
-    '''
-    return (wave[0], wave[1], wave[-1])
-
 def rebin_template(template, z, spectra):
     '''rebin template to match the wavelengths of the input spectra'''
-    nbasis = template['flux'].shape[0]  #- number of template basis vectors
+    nbasis = template.flux.shape[0]  #- number of template basis vectors
     Tx = dict()
     for i, s in enumerate(spectra):
-        key = _wavekey(s['wave'])
+        key = s.wavehash
         if key not in Tx:
-            Ti = np.zeros((len(s['wave']), nbasis))
+            Ti = np.zeros((s.nwave, nbasis))
             for j in range(nbasis):
-                t = rebin.trapz_rebin((1+z)*template['wave'], template['flux'][j], s['wave'])
+                t = rebin.trapz_rebin((1+z)*template.wave, template.flux[j], s.wave)
                 Ti[:,j] = t
 
             Tx[key] = Ti
@@ -138,13 +121,13 @@ def rebin_template(template, z, spectra):
 
 def _orig_rebin_template(template, z, spectra):
     '''rebin template to match the wavelengths of the input spectra'''
-    nbasis = template['flux'].shape[0]  #- number of template basis vectors
+    nbasis = template.flux.shape[0]  #- number of template basis vectors
     Tx = list()
     nspec = len(spectra)
     for i, s in enumerate(spectra):
-        Ti = np.zeros((len(s['wave']), nbasis))
+        Ti = np.zeros((s.nwave, nbasis))
         for j in range(nbasis):
-            t = rebin.trapz_rebin((1+z)*template['wave'], template['flux'][j], s['wave'])
+            t = rebin.trapz_rebin((1+z)*template.wave, template.flux[j], s.wave)
             Ti[:,j] = t
 
         Tx.append(Ti)

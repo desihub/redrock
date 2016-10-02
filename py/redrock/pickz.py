@@ -13,7 +13,7 @@ def find_minima(x):
     find_minima([1,1,1,2,2,2]) -> [0,1,2,4,5]
     '''
     x = np.asarray(x)
-    ii = np.where(np.r_[True, x[1:]<=x[:-1]] & np.r_[x[:-1]<=x[1:], True])
+    ii = np.where(np.r_[True, x[1:]<=x[:-1]] & np.r_[x[:-1]<=x[1:], True])[0]
     return ii
 
 def minfit(x, y):

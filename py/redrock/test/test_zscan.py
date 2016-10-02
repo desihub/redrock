@@ -27,11 +27,12 @@ class TestZScan(unittest.TestCase):
             
     def test_zscan(self):
         #- Create 2 component template
-        template = dict()
-        template['wave'] = np.arange(100,900)
-        template['flux'] = np.zeros((2, len(template['wave'])))
-        template['flux'][0, 100] = 1
-        template['flux'][1, 120] = 1
+        wave = np.arange(100,900)
+        flux = np.zeros((2, len(wave)))
+        flux[0, 100] = 1
+        flux[1, 120] = 1
+        redshifts = np.linspace(0.3, 0.7, 200)
+        template = redrock.Template('BLAT', redshifts, wave, flux)
 
         z = 0.5       #- redshift to use
 
@@ -45,17 +46,16 @@ class TestZScan(unittest.TestCase):
             noise = 10.0
             flux = np.random.normal(scale=noise, size=nwave)
             R = getR(nwave, sigma=1.0+0.5*i)  #- different resolutions per spectra
-            Tx = np.zeros((template['flux'].shape[0], nwave))
+            Tx = np.zeros((template.flux.shape[0], nwave))
             for j in range(Tx.shape[0]):
-                Tx[j] = redrock.rebin.trapz_rebin((1+z)*template['wave'], template['flux'][j], wave)
+                Tx[j] = redrock.rebin.trapz_rebin((1+z)*template.wave, template.flux[j], wave)
 
             signal = R.dot(Tx.T.dot(a))
             flux += np.random.poisson(signal)
             ivar = np.ones(nwave) / (noise**2 + signal) 
             sn2 += np.sum(signal**2 * ivar)
-            spectra.append( dict(wave=wave, flux=flux, ivar=ivar, R=R) )
+            spectra.append( redrock.Spectrum(wave, flux, ivar, R) )
 
-        redshifts = np.linspace(0.3, 0.7, 200)
         zchi2, zcoeff = redrock.zscan.calc_zchi2(redshifts, spectra, template)
 
         zmin = redshifts[np.argmin(zchi2)]
