@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import sys
 from glob import glob
 import os.path
 
@@ -8,6 +9,10 @@ from astropy.io import fits
 from astropy.table import Table
 
 from redrock.zbest import find_zbest
+
+#- for python 3 compatibility
+if sys.version_info.major > 2:
+    basestring = str
 
 #- From https://github.com/desihub/desispec io.util.native_endian
 def native_endian(data):
@@ -97,7 +102,7 @@ def read_templates(template_list=None, template_dir=None):
         template_list = find_templates(template_dir)
 
     templates = list()
-    if isinstance(template_list, (unicode, str)) and os.path.isfile(template_list):
+    if isinstance(template_list, basestring) and os.path.isfile(template_list):
         templates.append(read_template(template_list))
     else:
         for tfile in template_list:
@@ -154,11 +159,11 @@ def read_zscan(filename):
     results = dict()
     #- NOTE: this is clumsy iteration
     targets = fx['targets']
-    for targetid in targets.keys():
+    for targetid in targets:
         results[int(targetid)] = dict()
-        for ttype in targets[targetid].keys():
+        for ttype in targets[targetid]:
             results[int(targetid)][ttype] = dict()
-            for dataname in targets[targetid+'/'+ttype].keys():
+            for dataname in targets[targetid+'/'+ttype]:
                 results[int(targetid)][ttype][dataname] = targets[targetid+'/'+ttype+'/'+dataname].value
                 
     return zbest, results

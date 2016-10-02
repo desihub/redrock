@@ -42,7 +42,7 @@ def read_simbricks(brickfiles):
             spectrum = dict(wave=wave, flux=flux[i], ivar=ivar[i], R=R)
             targets[targetid].append(spectrum)
             
-    return targets.keys(), targets.values()
+    return list(targets.keys()), list(targets.values())
 
 def read_bricks(brickfiles, trueflux=False):
     '''
@@ -80,4 +80,4 @@ def read_bricks(brickfiles, trueflux=False):
                 
         targets.append(spectra)
     
-    return zip(targetids, targets)
+    return list(zip(targetids, targets))
