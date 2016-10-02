@@ -6,7 +6,8 @@ from redrock import rebin
 
 def calc_zchi2(redshifts, spectra, template):
     target = (0, spectra)
-    return calc_zchi2_targets(redshifts, [target,], template)[0]
+    zchi2, zcoeff = calc_zchi2_targets(redshifts, [target,], template)
+    return zchi2[0], zcoeff[0]
 
 def calc_zchi2_targets(redshifts, targets, template):
     '''Calculates chi2 vs. redshift for a given PCA template.
@@ -23,8 +24,9 @@ def calc_zchi2_targets(redshifts, targets, template):
             - wave : array of wavelengths [Angstroms]
             - flux[i,wave] : template basis vectors of flux densities
 
-    Returns:
-        chi2 array with one element per input redshift
+    Returns: zchi2, zcoeff
+        zchi2[ntargets, nz] array with one element per target per redshift
+        zcoeff[ntargets, nz, ncoeff]
 
     Notes:
         template['flux'] is a basis set; spectra will be modeled as
@@ -33,7 +35,9 @@ def calc_zchi2_targets(redshifts, targets, template):
     '''
     nz = len(redshifts)
     ntargets = len(targets)
+    nbasis = template['flux'].shape[0]
     zchi2 = np.zeros( (ntargets, nz) )
+    zcoeff = np.zeros( (ntargets, nz, nbasis) )
     
     #- Regroup fluxes and ivars into 1D arrays per target
     fluxlist = list()
@@ -61,16 +65,19 @@ def calc_zchi2_targets(redshifts, targets, template):
             s['Rcsr'] = s['R'].tocsr()
     
     #- Loop over redshifts, solving for template fit coefficients
-    nbasis = template['flux'].shape[0]
     nflux = len(fluxlist[0])
     Tb = np.zeros( (nflux, nbasis) )
     for i, z in enumerate(redshifts):
-        Tx = rebin_template(template, z, refspectra)        
+        #- TODO: if all targets have the same number of spectra with the same
+        #- wavelength grids, we only need to calculate this once per redshift.
+        #- That isn't general; this is an area for optimization.
+        Tx = rebin_template(template, z, refspectra)
         for j in range(ntargets):
             targetid, spectra = targets[j]
             Tb = list()
             for k, s in enumerate(spectra):
-                Tb.append(s['Rcsr'].dot(Tx[k]))
+                key = _wavekey(s['wave'])
+                Tb.append(s['Rcsr'].dot(Tx[key]))
 
             Tb = np.vstack(Tb)
 
@@ -81,10 +88,55 @@ def calc_zchi2_targets(redshifts, targets, template):
             a = np.linalg.solve(Tb.T.dot(W.dot(Tb)), Tb.T.dot(wflux))
 
             zchi2[j,i] = np.sum( (flux - Tb.dot(a))**2 * weights )
+            zcoeff[j,i] = a
 
-    return zchi2        
+    return zchi2, zcoeff
+
+#- DEBUG: duplicated code, but provide a direct way to fit a template to a
+#- set of spectra at a given redshift
+def template_fit(spectra, z, template):
+    Tb = list()
+    Tx = rebin_template(template, z, spectra)
+    for k, s in enumerate(spectra):
+        key = _wavekey(s['wave'])
+        ### Tb.append(s['Rcsr'].dot(Tx[key]))
+        Tb.append(s['R'].dot(Tx[key]))
+
+    Tbx = np.vstack(Tb)
+
+    weights = np.concatenate( [s['ivar'] for s in spectra] )
+    flux = np.concatenate( [s['flux'] for s in spectra] )
+    nflux = len(flux)
+    wflux = weights * flux
+    W = scipy.sparse.dia_matrix((weights, 0), (nflux, nflux))
+    a = np.linalg.solve(Tbx.T.dot(W.dot(Tbx)), Tbx.T.dot(wflux))
+
+    return [T.dot(a) for T in Tb], a
+
+def _wavekey(wave):
+    '''
+    We need a quick way to convert a wavelength array into a key that can
+    be used for fast lookups in a dictionary.  This does that approximately.
+    '''
+    return (wave[0], wave[1], wave[-1])
 
 def rebin_template(template, z, spectra):
+    '''rebin template to match the wavelengths of the input spectra'''
+    nbasis = template['flux'].shape[0]  #- number of template basis vectors
+    Tx = dict()
+    for i, s in enumerate(spectra):
+        key = _wavekey(s['wave'])
+        if key not in Tx:
+            Ti = np.zeros((len(s['wave']), nbasis))
+            for j in range(nbasis):
+                t = rebin.trapz_rebin((1+z)*template['wave'], template['flux'][j], s['wave'])
+                Ti[:,j] = t
+
+            Tx[key] = Ti
+
+    return Tx
+
+def _orig_rebin_template(template, z, spectra):
     '''rebin template to match the wavelengths of the input spectra'''
     nbasis = template['flux'].shape[0]  #- number of template basis vectors
     Tx = list()
@@ -96,5 +148,5 @@ def rebin_template(template, z, spectra):
             Ti[:,j] = t
 
         Tx.append(Ti)
-    
+
     return Tx

@@ -53,12 +53,12 @@ def pickz(zchi2, redshifts, spectra, template):
 
     #- refit at higher sampling around +-5 sigma
     zz = np.linspace(zmin-5*sigma, zmin+5*sigma, 11)
-    zzchi2 = redrock.zscan.calc_zchi2(zz, spectra, template)
+    zzchi2, zzcoeff = redrock.zscan.calc_zchi2(zz, spectra, template)
     c, zmin, chi2min, sigma = minfit(zz, zzchi2)
 
     #- update fit around +-5 sigma
     zz = np.linspace(zmin-5*sigma, zmin+5*sigma, 11)
-    zzchi2 = redrock.zscan.calc_zchi2(zz, spectra, template)
+    zzchi2, zzcoeff = redrock.zscan.calc_zchi2(zz, spectra, template)
     c, zmin, chi2min, sigma = minfit(zz, zzchi2)
     
     zbest = zmin
