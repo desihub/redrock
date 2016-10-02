@@ -18,6 +18,7 @@ parser.add_option("-o", "--output", type="string",  help="output file")
 parser.add_option("--zbest", type="string",  help="output zbest fits file")
 parser.add_option("-n", "--ntargets", type=int,  help="number of targets to process")
 parser.add_option("--mintarget", type=int,  help="first target to include", default=0)
+parser.add_option("--ncpu", type=int,  help="number of cpu cores for multiprocessing", default=None)
 parser.add_option("--debug", help="debug with ipython", action="store_true")
 
 opts, brickfiles = parser.parse_args()
@@ -35,7 +36,7 @@ if opts.ntargets is not None:
     targets = targets[opts.mintarget:opts.mintarget+opts.ntargets]
 
 templates = redrock.io.read_templates(opts.templates)
-results = redrock.zfind(targets, templates)
+results = redrock.zfind(targets, templates, ncpu=opts.ncpu)
 
 if opts.output:
     redrock.io.write_zscan(opts.output, results, clobber=True)
