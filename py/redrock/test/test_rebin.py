@@ -4,7 +4,7 @@ import numpy as np
 
 from redrock import rebin
 
-class TestBlat(unittest.TestCase):
+class TestRebin(unittest.TestCase):
     
     def setUp(self):
         #- Supposed to turn off numba.jit of _trapz_rebin, but coverage

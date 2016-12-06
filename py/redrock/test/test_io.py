@@ -43,11 +43,11 @@ class TestIO(unittest.TestCase):
     ### @unittest.skipIf('RR_TEMPLATE_DIR' not in os.environ, '$RR_TEMPLATE_DIR not set')
     def test_read_templates(self):
         for template in io.read_templates():
-            self.assertIn('wave', template)
-            self.assertIn('flux', template)
-            self.assertIn('type', template)
-            wave = template['wave']
-            flux = template['flux']
+            self.assertIn('wave', template.__dict__)
+            self.assertIn('flux', template.__dict__)
+            self.assertIn('type', template.__dict__)
+            wave = template.wave
+            flux = template.flux
             self.assertEqual(wave.shape[0], flux.shape[1])
             self.assertEqual(wave.ndim, 1)
             self.assertEqual(flux.ndim, 2)

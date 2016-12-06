@@ -8,7 +8,8 @@ import numpy as np
 from astropy.io import fits
 from astropy.table import Table
 
-from redrock.zbest import find_zbest
+from .zbest import find_zbest
+from . import Template
 
 #- for python 3 compatibility
 if sys.version_info.major > 2:
@@ -56,17 +57,19 @@ def read_template(filename):
     if 'LOGLAM' in hdr and hdr['LOGLAM'] != 0:
         wave = 10**wave
 
-    template = {
-        'wave':  wave,
-        'flux': native_endian(fx['BASIS_VECTORS'].data),
-        'type': hdr['RRTYPE'].strip(),
-        'subtype': hdr['RRSUBTYP'].strip(),
-        }
+    flux = native_endian(fx['BASIS_VECTORS'].data)
 
-    if 'ARCHETYPE_COEFF' in fx:
-        template['archetype_coeff'] = native_endian(fx['ARCHETYPE_COEFF'].data)
+    rrtype = hdr['RRTYPE'].strip().upper()
+    if rrtype == 'GALAXY':
+        redshifts = 10**np.arange(np.log10(0.1), np.log10(2.0), 4e-4)
+    elif rrtype == 'STAR':
+        redshifts = np.arange(-0.001, 0.00101, 0.0001)
+    elif rrtype == 'QSO':
+        redshifts = 10**np.arange(np.log10(0.5), np.log10(4.0), 5e-4)
+    else:
+        raise ValueError('Unknown redshift range to use for template type {}'.format(rrtype))
 
-    return template
+    return Template(rrtype, redshifts, wave, flux)
 
 def find_templates(template_dir=None):
     '''

@@ -24,15 +24,8 @@ def zfind(targets, templates, ncpu=None):
     Given a list of targets and a list of templates, find redshifts
     
     Args:
-        targets : list of (targetid, spectra), where spectra are a list of
-            dictionaries, each of which has keys
-            - wave : array of wavelengths [Angstroms]
-            - flux : array of flux densities [10e-17 erg/s/cm^2/Angstrom]
-            - ivar : inverse variances of flux
-            - R : spectro-perfectionism resolution matrix
-        templates: list of dictionaries, each of which has keys
-            - wave : array of wavelengths [Angstroms]
-            - flux[i,wave] : template basis vectors of flux densities
+        targets : list of Target objects
+        templates: list of Template objects
         ncpu: number of CPU cores to use for multiprocessing
 
     Returns nested dictionary results[targetid][templatetype] with keys
@@ -43,28 +36,27 @@ def zfind(targets, templates, ncpu=None):
         - zerr: uncertainty on zbest
         - zwarn: 0=good, non-0 is a warning flag    
     '''
-    redshifts = dict(
-        GALAXY  = 10**np.arange(np.log10(0.1), np.log10(2.0), 4e-4),
-        STAR = np.arange(-0.001, 0.00101, 0.0001),
-        QSO  = 10**np.arange(np.log10(0.5), np.log10(4.0), 5e-4),
-    )
+    # redshifts = dict(
+    #     GALAXY  = 10**np.arange(np.log10(0.1), np.log10(2.0), 4e-4),
+    #     STAR = np.arange(-0.001, 0.00101, 0.0001),
+    #     QSO  = 10**np.arange(np.log10(0.5), np.log10(4.0), 5e-4),
+    # )
 
     results = dict()
-    for targetid, spectra in targets:
-        results[targetid] = dict()
+    for target in targets:
+        results[target.id] = dict()
 
     if ncpu is None:
         ncpu = max(mp.cpu_count() // 2, 1)
     
     for t in templates:
-        zz = redshifts[t['type']]
-        print('zchi2 scan for '+t['type'])
+        print('zchi2 scan for '+t.type)
         
         ntargets = len(targets)
         chunksize = max(1, ntargets // ncpu)
         args = list()
         for i in range(0, ntargets, chunksize):
-            args.append( [zz, targets[i:i+chunksize], t] )
+            args.append( [t.redshifts, targets[i:i+chunksize], t] )
         
         if ncpu > 1:
             pool = mp.Pool(ncpu)
@@ -79,11 +71,10 @@ def zfind(targets, templates, ncpu=None):
 
         print('pickz')
         for i in range(len(targets)):
-            targetid, spectra = targets[i]
             zbest, zerr, zwarn, minchi2 = redrock.pickz.pickz(
-                zchi2[i], zz, spectra, t)
-            results[targetid][t['type']] = dict(
-                z=zz, zchi2=zchi2[i], zbest=zbest, zerr=zerr, zwarn=zwarn,
+                zchi2[i], t.redshifts, targets[i].spectra, t)
+            results[targetid][t.type] = dict(
+                z=t.redshifts, zchi2=zchi2[i], zbest=zbest, zerr=zerr, zwarn=zwarn,
                 minchi2=minchi2, zcoeff=zcoeff[i],
             )
                 

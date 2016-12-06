@@ -2,6 +2,9 @@ import numpy as np
 import desispec.io
 from desispec.resolution import Resolution
 
+from .. import Target
+from .. import Spectrum
+
 def write_zbest(outfile, zbest):
     '''
     Write zbest Table to outfile
@@ -19,31 +22,6 @@ def write_zbest(outfile, zbest):
     zbest.meta['EXTNAME'] = 'ZBEST'
     zbest.write(outfile, overwrite=True)
 
-def read_simbricks(brickfiles):
-    '''
-    Read targets from a list of simulated brickfiles, replacing the flux
-    with the _TRUEFLUX HDU, and the ivar with ones.
-    '''
-    targets = dict()
-    for filename in brickfiles:
-        fx = open(filename)
-        fibermap = fx['FIBERMAP']        
-        wave = fx['WAVELENGTH'].astype(float)
-        flux = fx['_TRUEFLUX'].astype(float)
-        ivar = np.ones_like(flux)
-        Rdata = fx['RESOLUTION'].astype(float)
-
-        for i in range(flux.shape[0]):
-            targetid = fibermap['TARGETID'][i]
-            if targetid not in targets:
-                targets[targetid] = list()
-
-            R = Resolution(Rdata[i])
-            spectrum = dict(wave=wave, flux=flux[i], ivar=ivar[i], R=R)
-            targets[targetid].append(spectrum)
-            
-    return list(targets.keys()), list(targets.values())
-
 def read_bricks(brickfiles, trueflux=False):
     '''
     Read targets from a list of brickfiles
@@ -51,9 +29,7 @@ def read_bricks(brickfiles, trueflux=False):
     Args:
         brickfiles : list of input brick files
         
-    Returns list of (targetid, spectra) where spectra are a list of
-        dictionaries with keys 'wave', 'flux', 'ivar', 'R'
-        
+    Returns list of Target objects
     '''
     bricks = list()
     targetids = set()
@@ -76,8 +52,8 @@ def read_bricks(brickfiles, trueflux=False):
             
             for i in range(flux.shape[0]):
                 R = Resolution(Rdata[i])
-                spectra.append(dict(wave=wave, flux=flux[i], ivar=ivar[i], R=R))
+                spectra.append(Spectrum(wave, flux[i], ivar[i], R))
                 
-        targets.append(spectra)
+        targets.append(Target(targetid, spectra))
     
-    return list(zip(targetids, targets))
+    return targets
