@@ -6,6 +6,9 @@ import scipy.sparse
 from . import rebin, Spectrum, Target
 
 def calc_zchi2(redshifts, spectra, template):
+    '''
+    TODO: document
+    '''
     targets = [Target(0, spectra), ]
     zchi2, zcoeff = calc_zchi2_targets(redshifts, targets, template)
     return zchi2[0], zcoeff[0]

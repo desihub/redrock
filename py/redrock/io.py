@@ -35,13 +35,7 @@ def read_template(filename):
     '''
     Read template from filename
     
-    Returns dictionary with keys:
-        wave : restframe wavelength array [Angstroms]
-        flux : 2D basis set template flux[i, jwave]
-        archetype_coeff : 2D[narchetypes, ncoeff] coefficients describing a
-            set of archetypes
-        type : string descripting template type
-        subtype : string describing template subtype
+    Returns a Template object
     '''
     if os.path.exists(filename):
         fx = fits.open(filename, memmap=False)
