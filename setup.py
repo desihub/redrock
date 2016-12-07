@@ -38,7 +38,7 @@ except ImportError:
             setup_keywords['long_description'] = readme.read()
     else:
         setup_keywords['long_description'] = ''
-    setup_keywords['version'] = '0.0.1.dev'
+    setup_keywords['version'] = '0.2.dev1'
 #
 # Indicates if this version is a release version.
 #
