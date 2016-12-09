@@ -80,8 +80,12 @@ def calc_zchi2_targets(redshifts, targets, template):
             W = Wlist[j]
             a = np.linalg.solve(Tb.T.dot(W.dot(Tb)), Tb.T.dot(wflux))
 
-            zchi2[j,i] = np.sum( (flux - Tb.dot(a))**2 * weights )
+            model = Tb.dot(a)
+            zchi2[j,i] = np.sum( (flux - model)**2 * weights )
             zcoeff[j,i] = a
+            
+            # bad = (model < 0)
+            # zchi2[j,i] += np.sum(np.exp(-model[bad]))
 
     return zchi2, zcoeff
 

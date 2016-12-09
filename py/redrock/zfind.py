@@ -73,7 +73,7 @@ def zfind(targets, templates, ncpu=None):
         for i in range(len(targets)):
             zbest, zerr, zwarn, minchi2 = redrock.pickz.pickz(
                 zchi2[i], t.redshifts, targets[i].spectra, t)
-            results[targetid][t.type] = dict(
+            results[targets[i].id][t.type] = dict(
                 z=t.redshifts, zchi2=zchi2[i], zbest=zbest, zerr=zerr, zwarn=zwarn,
                 minchi2=minchi2, zcoeff=zcoeff[i],
             )
