@@ -18,7 +18,7 @@ conda create --yes -n test python=$TRAVIS_PYTHON_VERSION pip
 source activate test
 
 # numpy scipy etc.
-conda install --yes numpy scipy astropy h5py numba
+conda install --yes numpy scipy astropy h5py numba=0.28
 
 # Get redrock templates
 cd py/redrock
