@@ -32,8 +32,31 @@ if len(brickfiles) == 0:
     sys.exit(1)
 
 targets = desi.read_bricks(brickfiles)
+
 if opts.ntargets is not None:
     targets = targets[opts.mintarget:opts.mintarget+opts.ntargets]
+
+#- Sanity check on target contents
+goodtargets = list()
+for tx in targets:
+    goodspectra = list()
+    for i, spec in enumerate(list(tx.spectra)):
+        if np.any(spec.flux != 0.0):
+            goodspectra.append(spec)
+        else:
+            print('WARNING: dropping all-zero spectrum {} from target {}'.format(i, tx.id))
+
+    if len(goodspectra) == 0:
+        print('ERROR: no good spectra for target {}'.format(tx.id))
+        continue
+    elif len(goodspectra) < len(tx.spectra):
+        print('INFO: trimming target {} to {}/{} good spectra'.format(
+            tx.id, len(goodspectra), len(tx.spectra)) )
+        tx.spectra = goodspectra
+
+    goodtargets.append(tx)
+
+targets = goodtargets
 
 templates = redrock.io.read_templates(opts.templates)
 results = redrock.zfind(targets, templates, ncpu=opts.ncpu)

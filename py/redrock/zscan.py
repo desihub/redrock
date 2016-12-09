@@ -83,9 +83,6 @@ def calc_zchi2_targets(redshifts, targets, template):
             model = Tb.dot(a)
             zchi2[j,i] = np.sum( (flux - model)**2 * weights )
             zcoeff[j,i] = a
-            
-            # bad = (model < 0)
-            # zchi2[j,i] += np.sum(np.exp(-model[bad]))
 
     return zchi2, zcoeff
 
