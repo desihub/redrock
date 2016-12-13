@@ -55,11 +55,11 @@ def read_template(filename):
 
     rrtype = hdr['RRTYPE'].strip().upper()
     if rrtype == 'GALAXY':
-        redshifts = 10**np.arange(np.log10(0.1), np.log10(2.0), 4e-4)
+        redshifts = 10**np.arange(np.log10(1+0.005), np.log10(1+1.65), 1.5e-4) - 1
     elif rrtype == 'STAR':
         redshifts = np.arange(-0.001, 0.00101, 0.0001)
     elif rrtype == 'QSO':
-        redshifts = 10**np.arange(np.log10(0.5), np.log10(4.0), 5e-4)
+        redshifts = 10**np.arange(np.log10(1+0.5), np.log10(1+4.0), 5e-4) - 1
     else:
         raise ValueError('Unknown redshift range to use for template type {}'.format(rrtype))
 

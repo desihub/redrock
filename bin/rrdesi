@@ -57,6 +57,7 @@ for tx in targets:
     goodtargets.append(tx)
 
 targets = goodtargets
+print('INFO: fitting {} targets'.format(len(targets)))
 
 templates = redrock.io.read_templates(opts.templates)
 results = redrock.zfind(targets, templates, ncpu=opts.ncpu)

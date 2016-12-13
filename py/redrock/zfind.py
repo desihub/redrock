@@ -56,7 +56,8 @@ def zfind(targets, templates, ncpu=None):
         chunksize = max(1, ntargets // ncpu)
         args = list()
         for i in range(0, ntargets, chunksize):
-            args.append( [t.redshifts, targets[i:i+chunksize], t] )
+            verbose = (i==0)
+            args.append( [t.redshifts, targets[i:i+chunksize], t, verbose] )
         
         if ncpu > 1:
             pool = mp.Pool(ncpu)
@@ -71,11 +72,11 @@ def zfind(targets, templates, ncpu=None):
 
         print('pickz')
         for i in range(len(targets)):
-            zbest, zerr, zwarn, minchi2 = redrock.pickz.pickz(
+            zbest, zerr, zwarn, minchi2, deltachi2 = redrock.pickz.pickz(
                 zchi2[i], t.redshifts, targets[i].spectra, t)
             results[targets[i].id][t.type] = dict(
                 z=t.redshifts, zchi2=zchi2[i], zbest=zbest, zerr=zerr, zwarn=zwarn,
-                minchi2=minchi2, zcoeff=zcoeff[i],
+                minchi2=minchi2, zcoeff=zcoeff[i], deltachi2=deltachi2,
             )
                 
     return results

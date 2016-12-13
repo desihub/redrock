@@ -86,5 +86,10 @@ def pickz(zchi2, redshifts, spectra, template):
         zbest = zz[imin]
         chi2min = zzchi2[imin]
 
-    return zbest, zerr, zwarn, chi2min
+    #- Delta chi2 to next best fit
+    dz = np.abs(redshifts-zbest)
+    jj = (dz>5*zerr) & (3e5*dz/(1+redshifts) > 1000)
+    deltachi2 = np.min(zchi2[jj]) - chi2min
+
+    return zbest, zerr, zwarn, chi2min, deltachi2
 
