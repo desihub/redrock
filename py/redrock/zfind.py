@@ -4,6 +4,7 @@ import numpy as np
 
 import redrock.zscan
 import redrock.pickz
+from redrock.zwarning import ZWarningMask as ZW
 
 import multiprocessing as mp
 
@@ -48,7 +49,12 @@ def zfind(targets, templates, ncpu=None):
 
     if ncpu is None:
         ncpu = max(mp.cpu_count() // 2, 1)
-    
+
+    if ncpu > 1:
+        print("INFO: using multiprocessing with {} cores".format(ncpu))
+    else:
+        print("INFO: not using multiprocessing")
+
     for t in templates:
         print('zchi2 scan for '+t.type)
         
@@ -72,8 +78,14 @@ def zfind(targets, templates, ncpu=None):
 
         print('pickz')
         for i in range(len(targets)):
-            zbest, zerr, zwarn, minchi2, deltachi2 = redrock.pickz.pickz(
-                zchi2[i], t.redshifts, targets[i].spectra, t)
+            try:
+                zbest, zerr, zwarn, minchi2, deltachi2 = redrock.pickz.pickz(
+                    zchi2[i], t.redshifts, targets[i].spectra, t)
+            except ValueError:
+                print('ERROR: pickz failed for target {} id {}'.format(i, targets[i].id))
+                zbest = zerr = minchi2 = deltachi2 = -1.0
+                zwarn = ZW.BAD_MINFIT
+
             results[targets[i].id][t.type] = dict(
                 z=t.redshifts, zchi2=zchi2[i], zbest=zbest, zerr=zerr, zwarn=zwarn,
                 minchi2=minchi2, zcoeff=zcoeff[i], deltachi2=deltachi2,
