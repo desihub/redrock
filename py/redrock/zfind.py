@@ -53,13 +53,15 @@ def zfind(targets, templates, ncpu=None):
         print('zchi2 scan for '+t.type)
         
         ntargets = len(targets)
-        chunksize = max(1, ntargets // ncpu)
+        chunksize = min(20, max(1, ntargets // ncpu))
+
         args = list()
         for i in range(0, ntargets, chunksize):
             verbose = (i==0)
             args.append( [t.redshifts, targets[i:i+chunksize], t, verbose] )
         
         if ncpu > 1:
+            print("DEBUG: multiprocessing with {} chunks of {} targets each".format(len(args), chunksize))
             pool = mp.Pool(ncpu)
             zchi2_results = pool.map(_wrap_calc_zchi2, args)
             pool.close()
