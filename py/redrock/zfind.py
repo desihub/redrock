@@ -1,4 +1,5 @@
 from __future__ import division, print_function
+import time
 
 import numpy as np
 
@@ -64,7 +65,8 @@ def zfind(targets, templates, ncpu=None):
         for i in range(0, ntargets, chunksize):
             verbose = (i==0)
             args.append( [t.redshifts, targets[i:i+chunksize], t, verbose] )
-        
+   
+        print('{} starting calc_zchi2 map'.format(time.asctime()))
         if ncpu > 1:
             pool = mp.Pool(ncpu)
             zchi2_results = pool.map(_wrap_calc_zchi2, args)

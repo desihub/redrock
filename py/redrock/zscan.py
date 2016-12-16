@@ -1,4 +1,5 @@
 from __future__ import division, print_function
+import time
 
 import numpy as np
 import scipy.sparse
@@ -64,7 +65,7 @@ def calc_zchi2_targets(redshifts, targets, template, verbose=False):
     istatus = np.linspace(0, len(redshifts)-1, 6, dtype=int)
     for i, z in enumerate(redshifts):
         if verbose and i in istatus:
-            print('{:d}% done'.format(round(100.0*i/len(redshifts))))
+            print('{} {:d}% done'.format(time.asctime(), round(100.0*i/len(redshifts))))
         #- TODO: if all targets have the same number of spectra with the same
         #- wavelength grids, we only need to calculate this once per redshift.
         #- That isn't general; this is an area for optimization.
