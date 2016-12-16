@@ -44,16 +44,27 @@ def read_bricks(brickfiles, trueflux=False):
         for brick in bricks:
             wave = brick.get_wavelength_grid()
             flux, ivar, Rdata, info = brick.get_target(targetid)
-            
+
             #- work around desispec.io.Brick returning 32-bit non-native endian
             flux = flux.astype(float)
             ivar = ivar.astype(float)
             Rdata = Rdata.astype(float)
-            
+
             for i in range(flux.shape[0]):
+                if np.all(flux[i] == 0):
+                    print('WARNING: Skipping spectrum {} of target {} on brick {} with flux=0'.format(i, targetid, brick.brickname))
+                    continue
+
+                if np.all(ivar[i] == 0):
+                    print('WARNING: Skipping spectrum {} of target {} on brick {} with ivar=0'.format(i, targetid, brick.brickname))
+                    continue
+
                 R = Resolution(Rdata[i])
                 spectra.append(Spectrum(wave, flux[i], ivar[i], R))
-                
-        targets.append(Target(targetid, spectra))
+
+        if len(spectra) > 0:
+            targets.append(Target(targetid, spectra))
+        else:
+            print('ERROR: Target {} on brick {} has no good spectra'.format(targetid, brick.brickname))
     
     return targets
