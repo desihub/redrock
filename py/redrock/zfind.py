@@ -3,7 +3,7 @@ from __future__ import division, print_function
 import numpy as np
 
 import redrock.zscan
-import redrock.pickz
+import redrock.fitz
 from redrock.zwarning import ZWarningMask as ZW
 
 import multiprocessing as mp
@@ -46,7 +46,9 @@ def zfind(targets, templates, ncpu=None):
     results = dict()
     for target in targets:
         results[target.id] = dict()
-
+        for t in templates:
+            results[target.id][t.type] = dict()
+            
     if ncpu is None:
         ncpu = max(mp.cpu_count() // 2, 1)
 
@@ -78,20 +80,12 @@ def zfind(targets, templates, ncpu=None):
         zchi2 = np.vstack([x[0] for x in zchi2_results])
         zcoeff = np.vstack([x[1] for x in zchi2_results])
 
-        print('pickz')
+        print('fitz')
         for i in range(len(targets)):
-            try:
-                zbest, zerr, zwarn, minchi2, deltachi2 = redrock.pickz.pickz(
-                    zchi2[i], t.redshifts, targets[i].spectra, t)
-            except ValueError:
-                print('ERROR: pickz failed for target {} id {}'.format(i, targets[i].id))
-                zbest = zerr = minchi2 = deltachi2 = -1.0
-                zwarn = ZW.BAD_MINFIT
-
-            results[targets[i].id][t.type] = dict(
-                z=t.redshifts, zchi2=zchi2[i], zbest=zbest, zerr=zerr, zwarn=zwarn,
-                minchi2=minchi2, zcoeff=zcoeff[i], deltachi2=deltachi2,
-            )
+            results[targets[i].id][t.type]['redshifts'] = t.redshifts
+            results[targets[i].id][t.type]['zchi2'] = zchi2[i]
+            results[targets[i].id][t.type]['minima'] = \
+                redrock.fitz.fitz(zchi2[i], t.redshifts, targets[i].spectra, t)
                 
     return results
     

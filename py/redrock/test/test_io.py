@@ -84,7 +84,8 @@ def _random_zscan(n=10):
     zerr = np.random.uniform()
     zwarn = np.random.randint(100)
     deltachi2 = np.random.uniform(1000)
-    return dict(z=z, zchi2=zchi2, zbest=zbest, minchi2=minchi2, zerr=zerr, zwarn=zwarn, deltachi2=deltachi2)
+    r = dict(z=z, zchi2=zchi2, zbest=zbest, minchi2=minchi2, zerr=zerr, zwarn=zwarn, deltachi2=deltachi2)
+    return [r,r,r]
                 
 if __name__ == '__main__':
     unittest.main()

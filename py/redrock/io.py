@@ -117,7 +117,7 @@ def write_zscan(filename, results, clobber=False):
     The nested dictionary structure of results is mapped into a nested
     group structure of the HDF5 file:
     
-    {targetid}/{templatetype}/[z|zchi2|zbest|minchi2|zerr|zwarn]
+    {targetid}/{templatetype}/{i}/[z|zchi2|zbest|minchi2|zerr|zwarn]
     
     if clobber=True, replace pre-existing file
     '''
@@ -128,12 +128,16 @@ def write_zscan(filename, results, clobber=False):
     zbest = find_zbest(results)        
     zbest.write(filename, path='zbest', format='hdf5')
 
+
     fx = h5py.File(filename)
+    fx['targetids'] = np.array(list(results.keys()))
+
     for targetid in results:
-        for ttype in results[targetid]:
-            for key in results[targetid][ttype]:
-                name = 'targets/{}/{}/{}'.format(targetid, ttype, key)
-                fx[name] = results[targetid][ttype][key]
+        for spectype in results[targetid]:
+            fx['{}/{}/redshifts'.format(targetid, spectype)] = results[targetid][spectype]['redshifts']
+            fx['{}/{}/zchi2'.format(targetid, spectype)] = results[targetid][spectype]['zchi2']
+            fx['{}/{}/minima'.format(targetid, spectype)] = Table(results[targetid][spectype]['minima']).as_array()
+
     fx.close()
     
 def read_zscan(filename):
@@ -158,11 +162,12 @@ def read_zscan(filename):
     targets = fx['targets']
     for targetid in targets:
         results[int(targetid)] = dict()
-        for ttype in targets[targetid]:
-            results[int(targetid)][ttype] = dict()
-            for dataname in targets[targetid+'/'+ttype]:
-                results[int(targetid)][ttype][dataname] = targets[targetid+'/'+ttype+'/'+dataname].value
-                
+        for spectype in targets[targetid]:
+            results[int(targetid)][spectype] = dict()
+            for dataname in targets[targetid+'/'+spectype]:
+                results[int(targetid)][spectype][dataname] = targets[targetid+'/'+spectype+'/'+dataname].value
+    
+    fx.close()
     return zbest, results
                 
             

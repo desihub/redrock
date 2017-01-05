@@ -69,8 +69,8 @@ class TestZScan(unittest.TestCase):
         # for i in range(5):
         #     self.assertEqual(Tfit[i].shape, (len(spectra[i]['flux']), 2))
             
-        #- Also test pickz since we are here
-        zbest, zerr, zwarn, chi2min, deltachi2 = redrock.pickz.pickz(zchi2, redshifts, spectra, template)
+        #- Also test fitz since we are here
+        zbest, zerr, zwarn, chi2min, deltachi2 = redrock.fitz.fitz(zchi2, redshifts, spectra, template)
         self.assertAlmostEqual(zbest, z, delta=0.01)
         self.assertLess(zerr, 0.01)
         self.assertEqual(zwarn, 0)
@@ -78,7 +78,7 @@ class TestZScan(unittest.TestCase):
         
         #- Test zwarning
         zchi2[0] = 0
-        zbest, zerr, zwarn, chi2min, deltachi2 = redrock.pickz.pickz(zchi2, redshifts, spectra, template)
+        zbest, zerr, zwarn, chi2min, deltachi2 = redrock.fitz.fitz(zchi2, redshifts, spectra, template)
         self.assertNotEqual(zwarn, 0)
         
                 

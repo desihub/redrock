@@ -24,11 +24,11 @@ def find_zbest(results):
     for i, targetid in enumerate(results):
         chi2min = 1e120
         for ttype in results[targetid]:
-            rx = results[targetid][ttype]
-            if rx['minchi2'] < chi2min:
-                deltachi2 = min(rx['deltachi2'], chi2min-rx['minchi2'])
-                chi2min = rx['minchi2']
-                z = rx['zbest']
+            rx = results[targetid][ttype]['minima'][0]  #- best fit from each target class                    
+            if rx['chi2'] < chi2min:
+                ### deltachi2 = min(rx['deltachi2'], chi2min-rx['minchi2'])
+                chi2min = rx['chi2']
+                z = rx['z']
                 zerr = rx['zerr']
                 zwarn = rx['zwarn']
                 type_ = ttype
@@ -38,6 +38,6 @@ def find_zbest(results):
         zbest['ZERR'][i] = zerr
         zbest['ZWARN'][i] = zwarn
         zbest['SPECTYPE'][i] = type_
-        zbest['DELTACHI2'][i] = deltachi2
+        ### zbest['DELTACHI2'][i] = deltachi2
     
     return zbest
