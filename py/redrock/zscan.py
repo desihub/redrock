@@ -13,6 +13,33 @@ def calc_zchi2(redshifts, spectra, template):
     zchi2, zcoeff = calc_zchi2_targets(redshifts, targets, template)
     return zchi2[0], zcoeff[0]
 
+def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, ncpu=None):
+
+    if ncpu is None:
+        ncpu = mp.cpu_count()
+    
+    def foo(i, qin, qout):
+        zz = qin.get()
+        print('Process {}: {} redshifts from {:.4f} to {:.4f}'.format(i, len(zz), zz[0], zz[-1]))
+        qout.put(redrock.zscan.calc_zchi2_targets(zz, targets, template, verbose=verbose))
+
+    ii = np.linspace(0, len(redshifts), ncpu+1).astype(int)
+    qin = mp.Queue()
+    qout = mp.Queue()
+    for i in range(len(ii)-1):
+        qin.put(template.redshifts[ii[i]:ii[i+1]])
+
+    for i in range(ncpu):
+        mp.Process(target=foo, args=(i, qin, qout)).start()
+
+    results = list()
+    for i in range(ncpu):
+        results.append(qout.get())
+    
+    zchi2 = np.hstack([r[0] for r in results])
+    zcoeff = np.hstack([r[0] for r in results])
+    return zchi2, zcoeff
+
 def calc_zchi2_targets(redshifts, targets, template, verbose=False):
     '''Calculates chi2 vs. redshift for a given PCA template.
 
@@ -61,10 +88,7 @@ def calc_zchi2_targets(redshifts, targets, template, verbose=False):
     #- Loop over redshifts, solving for template fit coefficients
     nflux = len(fluxlist[0])
     Tb = np.zeros( (nflux, nbasis) )
-    istatus = np.linspace(0, len(redshifts)-1, 6, dtype=int)
     for i, z in enumerate(redshifts):
-        if verbose and i in istatus:
-            print('{:d}% done'.format(round(100.0*i/len(redshifts))))
         #- TODO: if all targets have the same number of spectra with the same
         #- wavelength grids, we only need to calculate this once per redshift.
         #- That isn't general; this is an area for optimization.

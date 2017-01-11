@@ -76,7 +76,7 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3):
 
         #- Sample more finely around the minimum
         ilo = max(0, imin-1)
-        ihi = min(imin+1, len(zchi2))
+        ihi = min(imin+1, len(zchi2)-1)
         zz = np.linspace(redshifts[ilo], redshifts[ihi], 15)
         zzchi2, zzcoeff = redrock.zscan.calc_zchi2(zz, spectra, template)
 
@@ -114,6 +114,10 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3):
     #- Sort results by chi2min; detailed fits may have changed order
     ii = np.argsort([tmp['chi2'] for tmp in results])
     results = [results[i] for i in ii]
+
+    #- Convert list of dicts -> Table
+    from astropy.table import Table
+    results = Table(results)
     
     assert len(results) > 0
     

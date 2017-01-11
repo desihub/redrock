@@ -2,6 +2,8 @@ from __future__ import absolute_import, division, print_function
 
 import numpy as np
 
+from redrock.rebin import trapz_rebin
+
 class Template(object):
     def __init__(self, template_type, redshifts, wave, flux):
         '''
@@ -24,6 +26,26 @@ class Template(object):
         self.flux = flux
         self.nbasis = flux.shape[0]
         self.nwave = flux.shape[1]
+        
+    def eval(self, coeff, wave, z):
+        '''
+        Return template for given coefficients, wavelengths, and redshift
+        
+        Args:
+            coeff : array of coefficients length self.nbasis
+            wave : wavelengths at which to evaluate template flux
+            z : redshift at which to evaluate template flux
+        
+        Returns:
+            template flux array
+        
+        Notes:
+            A single factor of (1+z)^-1 is applied to the resampled flux
+            to conserve integrated flux after redshifting.
+        '''
+        assert len(coeff) == self.nbasis
+        flux = self.flux.T.dot(coeff).T / (1+z)
+        return trapz_rebin(self.wave*(1+z), flux, wave)
 
 class Spectrum(object):
     def __init__(self, wave, flux, ivar, R):

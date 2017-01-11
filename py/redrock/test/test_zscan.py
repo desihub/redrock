@@ -3,6 +3,7 @@ import numpy as np
 import scipy.sparse
 
 import redrock
+import redrock.test.util
 
 #- Return a normalized sampled Gaussian (no integration, just sampling)
 def norm_gauss(x, sigma):
@@ -26,40 +27,14 @@ class TestZScan(unittest.TestCase):
         pass
             
     def test_zscan(self):
-        #- Create 2 component template
-        wave = np.arange(100,900)
-        flux = np.zeros((2, len(wave)))
-        flux[0, 100] = 1
-        flux[1, 120] = 1
-        redshifts = np.linspace(0.3, 0.7, 200)
-        template = redrock.Template('BLAT', redshifts, wave, flux)
-
-        z = 0.5       #- redshift to use
-
-        #- Create some noisy spectra on different wavelength grids
-        spectra = list()
-        sn2 = 0.0;
-        a = [200, 200]
-        for i in range(5):
-            wave = np.arange(210+10*i, 400+10*i, 2.1)
-            nwave = len(wave)
-            noise = 10.0
-            flux = np.random.normal(scale=noise, size=nwave)
-            R = getR(nwave, sigma=1.0+0.5*i)  #- different resolutions per spectra
-            Tx = np.zeros((template.flux.shape[0], nwave))
-            for j in range(Tx.shape[0]):
-                Tx[j] = redrock.rebin.trapz_rebin((1+z)*template.wave, template.flux[j], wave)
-
-            signal = R.dot(Tx.T.dot(a))
-            flux += np.random.poisson(signal)
-            ivar = np.ones(nwave) / (noise**2 + signal) 
-            sn2 += np.sum(signal**2 * ivar)
-            spectra.append( redrock.Spectrum(wave, flux, ivar, R) )
-
-        zchi2, zcoeff = redrock.zscan.calc_zchi2(redshifts, spectra, template)
-
-        zmin = redshifts[np.argmin(zchi2)]
-        self.assertAlmostEqual(zmin, z, delta=0.005)
+        z1 = 0.2
+        z2 = 0.5
+        t1 = redrock.test.util.get_target(z1); t1.id = 111
+        t2 = redrock.test.util.get_target(z2); t2.id = 222
+        template = redrock.test.util.get_template()
+        zscan, zfit = redrock.zfind([t1,t2], [template,], ncpu=1)
+        
+        self.assertAlmostEqual(zfit['z'][0], z1, delta=0.005)
         
         #- Test dimensions of template_fit return
         #- Too low S/N to reproducibly check afit values
@@ -70,16 +45,16 @@ class TestZScan(unittest.TestCase):
         #     self.assertEqual(Tfit[i].shape, (len(spectra[i]['flux']), 2))
             
         #- Also test fitz since we are here
-        zbest, zerr, zwarn, chi2min, deltachi2 = redrock.fitz.fitz(zchi2, redshifts, spectra, template)
-        self.assertAlmostEqual(zbest, z, delta=0.01)
-        self.assertLess(zerr, 0.01)
-        self.assertEqual(zwarn, 0)
-        self.assertGreater(deltachi2, 0)
-        
-        #- Test zwarning
-        zchi2[0] = 0
-        zbest, zerr, zwarn, chi2min, deltachi2 = redrock.fitz.fitz(zchi2, redshifts, spectra, template)
-        self.assertNotEqual(zwarn, 0)
+        # results = redrock.fitz.fitz(zchi2, redshifts, spectra, template)
+        # self.assertGreater(len(results), 1)
+        # self.assertAlmostEqual(results[0]['z'], z, delta=0.01)
+        # self.assertLess(results[0]['zerr'], 0.01)
+        # self.assertEqual(results[0]['zwarn'], 0)
+        #
+        # #- Test zwarning
+        # zchi2[0] = 0
+        # results = redrock.fitz.fitz(zchi2, redshifts, spectra, template)
+        # self.assertNotEqual(results[0]['zwarn'], 0)
         
                 
 if __name__ == '__main__':

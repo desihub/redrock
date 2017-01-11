@@ -43,11 +43,11 @@ def zfind(targets, templates, ncpu=None):
     #     QSO  = 10**np.arange(np.log10(0.5), np.log10(4.0), 5e-4),
     # )
 
-    results = dict()
+    zscan = dict()
     for target in targets:
-        results[target.id] = dict()
+        zscan[target.id] = dict()
         for t in templates:
-            results[target.id][t.type] = dict()
+            zscan[target.id][t.type] = dict()
             
     if ncpu is None:
         ncpu = max(mp.cpu_count() // 2, 1)
@@ -82,10 +82,39 @@ def zfind(targets, templates, ncpu=None):
 
         print('fitz')
         for i in range(len(targets)):
-            results[targets[i].id][t.type]['redshifts'] = t.redshifts
-            results[targets[i].id][t.type]['zchi2'] = zchi2[i]
-            results[targets[i].id][t.type]['minima'] = \
+            zscan[targets[i].id][t.type]['redshifts'] = t.redshifts
+            zscan[targets[i].id][t.type]['zchi2'] = zchi2[i]
+            zscan[targets[i].id][t.type]['zcoeff'] = zcoeff[i]
+            zscan[targets[i].id][t.type]['zfit'] = \
                 redrock.fitz.fitz(zchi2[i], t.redshifts, targets[i].spectra, t)
-                
-    return results
+
+    #- Convert individual zfit results into a zall array
+    import astropy.table
+    zfit = list() 
+    for target in targets:
+        tzfit = list()
+        for spectype in zscan[target.id]:
+            tmp = zscan[target.id][spectype]['zfit']
+            tmp['spectype'] = spectype
+            tzfit.append(tmp)
+
+        maxncoeff = max([tmp['coeff'].shape[1] for tmp in tzfit])
+        for tmp in tzfit:
+            if tmp['coeff'].shape[1] < maxncoeff:
+                n = maxncoeff - tmp['coeff'].shape[1]
+                c = np.append(tmp['coeff'], np.zeros((len(tmp), n)), axis=1)
+                tmp.replace_column('coeff', c)
+
+        tzfit = astropy.table.vstack(tzfit)
+        ii = np.argsort(tzfit['chi2'])
+        tzfit = tzfit[ii]
+        tzfit['targetid'] = target.id
+        tzfit['znum'] = np.arange(len(tzfit))
+        tzfit['deltachi2'] = np.ediff1d(tzfit['chi2'], to_end=0.0)
+        ii = np.where(tzfit['deltachi2'] < 9)[0]
+        tzfit['zwarn'][ii] |= ZW.SMALL_DELTA_CHI2
+        zfit.append(tzfit)
+
+    zfit = astropy.table.vstack(zfit)
+    return zscan, zfit
     

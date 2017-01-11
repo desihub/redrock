@@ -39,10 +39,10 @@ if opts.ntargets is not None:
 print('INFO: fitting {} targets'.format(len(targets)))
 
 templates = redrock.io.read_templates(opts.templates)
-results = redrock.zfind(targets, templates, ncpu=opts.ncpu)
+zscan, zfit = redrock.zfind(targets, templates, ncpu=opts.ncpu)
 
 if opts.output:
-    redrock.io.write_zscan(opts.output, results, clobber=True)
+    redrock.io.write_zscan(opts.output, zscan, zfit, clobber=True)
 
 if opts.zbest:
     zbest = redrock.zbest.find_zbest(results)
