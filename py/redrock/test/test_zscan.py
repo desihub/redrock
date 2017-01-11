@@ -28,34 +28,49 @@ class TestZScan(unittest.TestCase):
             
     def test_zscan(self):
         z1 = 0.2
-        z2 = 0.5
+        z2 = 0.25
+        seed = np.random.randint(2**31)
+        print('TEST: Using random seed {}'.format(seed))
+        np.random.seed(seed)
         t1 = redrock.test.util.get_target(z1); t1.id = 111
         t2 = redrock.test.util.get_target(z2); t2.id = 222
         template = redrock.test.util.get_template()
+        template.redshifts = np.linspace(0.15, 0.3, 50)
         zscan, zfit = redrock.zfind([t1,t2], [template,], ncpu=1)
-        
-        self.assertAlmostEqual(zfit['z'][0], z1, delta=0.005)
+
+        zx1 = zfit[zfit['targetid'] == 111][0]
+        zx2 = zfit[zfit['targetid'] == 222][0]
+        self.assertLess(np.abs(zx1['z'] - z1)/zx1['zerr'], 5)
+        self.assertLess(np.abs(zx2['z'] - z2)/zx2['zerr'], 5)
+        self.assertLess(zx1['zerr'], 0.002)
+        self.assertLess(zx2['zerr'], 0.002)
         
         #- Test dimensions of template_fit return
-        #- Too low S/N to reproducibly check afit values
-        # afit, Tfit = redrock.zscan.template_fit(zmin, spectra, template)
-        # self.assertEqual(len(afit), 2)
-        # self.assertEqual(len(Tfit), 5)
-        # for i in range(5):
-        #     self.assertEqual(Tfit[i].shape, (len(spectra[i]['flux']), 2))
-            
-        #- Also test fitz since we are here
-        # results = redrock.fitz.fitz(zchi2, redshifts, spectra, template)
-        # self.assertGreater(len(results), 1)
-        # self.assertAlmostEqual(results[0]['z'], z, delta=0.01)
-        # self.assertLess(results[0]['zerr'], 0.01)
-        # self.assertEqual(results[0]['zwarn'], 0)
-        #
-        # #- Test zwarning
-        # zchi2[0] = 0
-        # results = redrock.fitz.fitz(zchi2, redshifts, spectra, template)
-        # self.assertNotEqual(results[0]['zwarn'], 0)
+        zmin = zx1['z']
+        fitflux, fitcoeff = redrock.zscan.template_fit(t1.spectra, zmin, template)
+
+        self.assertEqual(len(fitcoeff), template.nbasis)
+        self.assertEqual(len(fitflux), len(t1.spectra))
+        for i in range(len(fitflux)):
+            self.assertEqual(len(fitflux[i]), len(t1.spectra[i].flux))
+    
+    def test_parallel_zscan(self):
+        z1 = 0.2
+        z2 = 0.25
+        seed = np.random.randint(2**31)
+        print('TEST: Using random seed {}'.format(seed))
+        np.random.seed(seed)
+        t1 = redrock.test.util.get_target(z1); t1.id = 111
+        t2 = redrock.test.util.get_target(z2); t2.id = 222
+        template = redrock.test.util.get_template()
+        redshifts = np.linspace(0.15, 0.3, 25)
+        zchi2a, zcoeffa = redrock.zscan.calc_zchi2_targets(redshifts, [t1,t2], template)
+        zchi2b, zcoeffb = redrock.zscan.parallel_calc_zchi2_targets(redshifts, [t1,t2], template, ncpu=2)
         
+        self.assertEqual(zchi2a.shape, zchi2b.shape)
+        self.assertEqual(zcoeffa.shape, zcoeffb.shape)
+        self.assertTrue(np.all(zchi2a == zchi2b))
+        self.assertTrue(np.all(zcoeffa == zcoeffb))
                 
 if __name__ == '__main__':
     unittest.main()

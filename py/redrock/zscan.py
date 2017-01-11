@@ -4,6 +4,7 @@ import numpy as np
 import scipy.sparse
 
 from . import rebin, Spectrum, Target
+import redrock
 
 def calc_zchi2(redshifts, spectra, template):
     '''
@@ -14,7 +15,10 @@ def calc_zchi2(redshifts, spectra, template):
     return zchi2[0], zcoeff[0]
 
 def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, ncpu=None):
-
+    '''
+    Parallel version of calc_zchi2_targets; see that docstring for details
+    '''
+    import multiprocessing as mp
     if ncpu is None:
         ncpu = mp.cpu_count()
     
@@ -26,18 +30,20 @@ def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, ncp
     ii = np.linspace(0, len(redshifts), ncpu+1).astype(int)
     qin = mp.Queue()
     qout = mp.Queue()
-    for i in range(len(ii)-1):
-        qin.put(template.redshifts[ii[i]:ii[i+1]])
+    for i in range(ncpu):
+        qin.put(redshifts[ii[i]:ii[i+1]])
 
     for i in range(ncpu):
-        mp.Process(target=foo, args=(i, qin, qout)).start()
+        p = mp.Process(target=foo, args=(i, qin, qout))
+        p.start()
 
+    #- TODO: how to handle processes that raise an exception?
     results = list()
     for i in range(ncpu):
         results.append(qout.get())
     
     zchi2 = np.hstack([r[0] for r in results])
-    zcoeff = np.hstack([r[0] for r in results])
+    zcoeff = np.hstack([r[1] for r in results])
     return zchi2, zcoeff
 
 def calc_zchi2_targets(redshifts, targets, template, verbose=False):
@@ -93,6 +99,7 @@ def calc_zchi2_targets(redshifts, targets, template, verbose=False):
         #- wavelength grids, we only need to calculate this once per redshift.
         #- That isn't general; this is an area for optimization.
         Tx = rebin_template(template, z, refspectra)
+            
         for j in range(ntargets):
             Tb = list()
             for k, s in enumerate(targets[j].spectra):
@@ -119,8 +126,7 @@ def template_fit(spectra, z, template):
     Tb = list()
     Tx = rebin_template(template, z, spectra)
     for k, s in enumerate(spectra):
-        key = _wavekey(s.wave)
-        Tb.append(s.Rcsr.dot(Tx[key]))
+        Tb.append(s.Rcsr.dot(Tx[s.wavehash]))
         ### Tb.append(s.R.dot(Tx[key]))
 
     Tbx = np.vstack(Tb)

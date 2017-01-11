@@ -82,8 +82,18 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3):
 
         #- fit parabola to 3 points around minimum
         i = min(max(np.argmin(zzchi2),1), len(zz)-1)
-        zmin, sigma, chi2min, zwarn = minfit(zz[i-1:i+2], zzchi2[i-1:i+2])    
-        coeff = redrock.zscan.calc_zchi2([zmin,], spectra, template)[1][0]
+        zmin, sigma, chi2min, zwarn = minfit(zz[i-1:i+2], zzchi2[i-1:i+2])
+        try:
+            coeff = redrock.zscan.calc_zchi2([zmin,], spectra, template)[1][0]
+        except ValueError as err:
+            if zmin<redshifts[0] or redshifts[-1]<zmin:
+                #- beyond redshift range can be invalid for template
+                coeff = np.zeros(template.nbasis)
+                zwarn |= ZW.Z_FITLIMIT
+                zwarn |= ZW.BAD_MINFIT
+            else:
+                #- Unknown problem; re-raise error
+                raise err
 
         zbest = zmin
         zerr = sigma
