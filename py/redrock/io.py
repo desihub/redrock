@@ -8,7 +8,6 @@ import numpy as np
 from astropy.io import fits
 from astropy.table import Table
 
-from .zbest import find_zbest
 from . import Template
 
 #- for python 3 compatibility
@@ -102,7 +101,7 @@ def read_templates(template_list=None, template_dir=None):
         template_list = find_templates(template_dir)
 
     templates = list()
-    if isinstance(template_list, basestring) and os.path.isfile(template_list):
+    if isinstance(template_list, basestring):
         templates.append(read_template(template_list))
     else:
         for tfile in template_list:
@@ -202,7 +201,7 @@ def read_zscan(filename):
                 zscan[targetid][spectype]['zchi2'] = zchi2[i]
                 zscan[targetid][spectype]['zcoeff'] = zcoeff[i]
                 thiszfit = fx['/zfit/{}/zfit'.format(targetid)].value
-                ii = (thiszfit['spectype'] == bytes(spectype, encoding='ascii'))
+                ii = (thiszfit['spectype'].astype('U') == spectype)
                 thiszfit = Table(thiszfit[ii])
                 thiszfit.remove_columns(['targetid', 'znum', 'deltachi2'])
                 thiszfit.replace_column('spectype', _encode_column(thiszfit['spectype']))

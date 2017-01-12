@@ -60,25 +60,30 @@ def zfind(targets, templates, ncpu=None):
     for t in templates:
         print('zchi2 scan for '+t.type)
         
-        ntargets = len(targets)
-        chunksize = min(20, max(1, ntargets // ncpu))
-
-        args = list()
-        for i in range(0, ntargets, chunksize):
-            verbose = (i==0)
-            args.append( [t.redshifts, targets[i:i+chunksize], t, verbose] )
+        # ntargets = len(targets)
+        # chunksize = min(20, max(1, ntargets // ncpu))
+        #
+        # args = list()
+        # for i in range(0, ntargets, chunksize):
+        #     verbose = (i==0)
+        #     args.append( [t.redshifts, targets[i:i+chunksize], t, verbose] )
+        #
+        # if ncpu > 1:
+        #     print("DEBUG: multiprocessing with {} chunks of {} targets each".format(len(args), chunksize))
+        #     pool = mp.Pool(ncpu)
+        #     zchi2_results = pool.map(_wrap_calc_zchi2, args)
+        #     pool.close()
+        #     pool.join()
+        # else:
+        #     zchi2_results = [_wrap_calc_zchi2(x) for x in args]
+        #
+        # zchi2 = np.vstack([x[0] for x in zchi2_results])
+        # zcoeff = np.vstack([x[1] for x in zchi2_results])
         
         if ncpu > 1:
-            print("DEBUG: multiprocessing with {} chunks of {} targets each".format(len(args), chunksize))
-            pool = mp.Pool(ncpu)
-            zchi2_results = pool.map(_wrap_calc_zchi2, args)
-            pool.close()
-            pool.join()
+            zchi2, zcoeff = redrock.zscan.parallel_calc_zchi2_targets(t.redshifts, targets, t, ncpu=ncpu)
         else:
-            zchi2_results = [_wrap_calc_zchi2(x) for x in args]
-
-        zchi2 = np.vstack([x[0] for x in zchi2_results])
-        zcoeff = np.vstack([x[1] for x in zchi2_results])
+            zchi2, zcoeff = redrock.zscan.calc_zchi2_targets(t.redshifts, targets, t)
 
         print('fitz')
         for i in range(len(targets)):

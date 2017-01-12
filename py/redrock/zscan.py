@@ -1,5 +1,6 @@
 from __future__ import division, print_function
 
+import os
 import numpy as np
 import scipy.sparse
 
@@ -22,10 +23,16 @@ def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, ncp
     if ncpu is None:
         ncpu = mp.cpu_count()
     
+    if ('OMP_NUM_THREADS' not in os.environ) and \
+       ('MKL_NUM_THREADS' not in os.environ):
+        n = max(mp.cpu_count() // ncpu, 1)
+        os.environ['OMP_NUM_THREADS'] = n
+        os.environ['MKL_NUM_THREADS'] = n
+
     def foo(i, qin, qout):
         zz = qin.get()
         print('Process {}: {} redshifts from {:.4f} to {:.4f}'.format(i, len(zz), zz[0], zz[-1]))
-        qout.put(redrock.zscan.calc_zchi2_targets(zz, targets, template, verbose=verbose))
+        qout.put((zz[0], redrock.zscan.calc_zchi2_targets(zz, targets, template, verbose=verbose)))
 
     ii = np.linspace(0, len(redshifts), ncpu+1).astype(int)
     qin = mp.Queue()
@@ -41,9 +48,21 @@ def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, ncp
     results = list()
     for i in range(ncpu):
         results.append(qout.get())
-    
-    zchi2 = np.hstack([r[0] for r in results])
-    zcoeff = np.hstack([r[1] for r in results])
+
+    #- Figure out what order the results arrived in the output queue
+    z0 = [r[0] for r in results]
+    izsort = np.argsort(z0)
+
+    zchi2 = list()
+    zcoeff = list()
+    for i in izsort:
+        tmpzchi2, tmpzcoeff = results[i][1]
+        zchi2.append(tmpzchi2)
+        zcoeff.append(tmpzcoeff)
+        
+    zchi2 = np.hstack(zchi2)
+    zcoeff = np.hstack(zcoeff)
+
     return zchi2, zcoeff
 
 def calc_zchi2_targets(redshifts, targets, template, verbose=False):
@@ -95,9 +114,9 @@ def calc_zchi2_targets(redshifts, targets, template, verbose=False):
     nflux = len(fluxlist[0])
     Tb = np.zeros( (nflux, nbasis) )
     for i, z in enumerate(redshifts):
-        #- TODO: if all targets have the same number of spectra with the same
+        #- If all targets have the same number of spectra with the same
         #- wavelength grids, we only need to calculate this once per redshift.
-        #- That isn't general; this is an area for optimization.
+        #- TODO: That isn't general; this is an area for optimization.
         Tx = rebin_template(template, z, refspectra)
             
         for j in range(ntargets):
@@ -156,17 +175,17 @@ def rebin_template(template, z, spectra):
 
     return Tx
 
-def _orig_rebin_template(template, z, spectra):
-    '''rebin template to match the wavelengths of the input spectra'''
-    nbasis = template.flux.shape[0]  #- number of template basis vectors
-    Tx = list()
-    nspec = len(spectra)
-    for i, s in enumerate(spectra):
-        Ti = np.zeros((s.nwave, nbasis))
-        for j in range(nbasis):
-            t = rebin.trapz_rebin((1+z)*template.wave, template.flux[j], s.wave)
-            Ti[:,j] = t
-
-        Tx.append(Ti)
-
-    return Tx
+# def _orig_rebin_template(template, z, spectra):
+#     '''rebin template to match the wavelengths of the input spectra'''
+#     nbasis = template.flux.shape[0]  #- number of template basis vectors
+#     Tx = list()
+#     nspec = len(spectra)
+#     for i, s in enumerate(spectra):
+#         Ti = np.zeros((s.nwave, nbasis))
+#         for j in range(nbasis):
+#             t = rebin.trapz_rebin((1+z)*template.wave, template.flux[j], s.wave)
+#             Ti[:,j] = t
+#
+#         Tx.append(Ti)
+#
+#     return Tx
