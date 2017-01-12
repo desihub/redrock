@@ -26,8 +26,8 @@ def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, ncp
     if ('OMP_NUM_THREADS' not in os.environ) and \
        ('MKL_NUM_THREADS' not in os.environ):
         n = max(mp.cpu_count() // ncpu, 1)
-        os.environ['OMP_NUM_THREADS'] = n
-        os.environ['MKL_NUM_THREADS'] = n
+        os.environ['OMP_NUM_THREADS'] = str(n)
+        os.environ['MKL_NUM_THREADS'] = str(n)
 
     def foo(i, qin, qout):
         zz = qin.get()
