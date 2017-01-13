@@ -31,7 +31,8 @@ def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, ncp
 
     def foo(i, qin, qout):
         zz = qin.get()
-        print('Process {}: {} redshifts from {:.4f} to {:.4f}'.format(i, len(zz), zz[0], zz[-1]))
+        if verbose:
+            print('Process {}: {} redshifts from {:.4f} to {:.4f}'.format(i, len(zz), zz[0], zz[-1]))
         qout.put((zz[0], redrock.zscan.calc_zchi2_targets(zz, targets, template, verbose=verbose)))
 
     ii = np.linspace(0, len(redshifts), ncpu+1).astype(int)

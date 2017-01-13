@@ -7,26 +7,27 @@ import scipy.sparse
 
 from redrock.dataobj import Template, Spectrum, Target
 
-def get_template():
+def get_template(wavemin=100, wavemax=9000, wavestep=5):
     '''
     Returns fake template PCA eigenvectors to use for testing
     '''
     redshifts = np.linspace(0, 1, 20)
-    wave = np.arange(1000, 9001, 5)
+    wave = np.arange(wavemin, wavemax + wavestep/2.0, wavestep)
     flux = np.zeros((3, len(wave)))
+    wavemid = (wavemin + wavemax) / 2.0
     flux[0] = 1.0
     flux[1] = np.arange(len(wave)) / len(wave)
-    flux[2] = np.exp(-(wave-4000)**2/(2*20**2))
+    flux[2] = np.exp(-(wave-wavemid)**2/(2*20**2))
     
     return Template('test', redshifts, wave, flux)
     
-def get_target(z=0.5):
+def get_target(z=0.5, wavestep=5):
     '''Returns a fake target at redshift z to use for testing'''
     template = get_template()
     c = np.random.normal(size=template.nbasis)
     c = [1,2,3]
     spectra = list()
-    for wave in [np.arange(4000, 6700, 5), np.arange(6502, 9001, 5)]:
+    for wave in [np.arange(4000, 6700, wavestep), np.arange(6502, 9001, wavestep)]:
         flux = template.eval(c, wave, z)
         sigma = np.random.normal(loc=1, scale=0.1, size=len(wave)).clip(0.5, 1.5)
         ivar = 1/sigma**2
