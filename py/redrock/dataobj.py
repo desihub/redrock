@@ -120,10 +120,9 @@ class Target(object):
                     W = scipy.sparse.dia_matrix((s.ivar, [0,]), (n,n))
                     weightedR += W * s.R
 
-            flux = weightedflux / weights
-            # ivar = ?
-            Winv = scipy.sparse.dia_matrix((1/(weights+1e-16), [0,]), (n,n))
+            isbad = (weights == 0)
+            flux = weightedflux / (weights + isbad)
+            flux[isbad] = unweightedflux[isbad] / nspec
+            Winv = scipy.sparse.dia_matrix((1/(weights+isbad), [0,]), (n,n))
             R = Winv * weightedR
-            iibad = (weights == 0)
-            flux[iibad] = unweightedflux[iibad] / nspec
             self.coadd.append(Spectrum(wave, flux, weights, R))
