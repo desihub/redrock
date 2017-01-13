@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import numpy as np
+import scipy.sparse
 
 from redrock.rebin import trapz_rebin
 
@@ -90,3 +91,39 @@ class Target(object):
         """
         self.id = targetid
         self.spectra = spectra
+
+        #- Make a basic coadd
+        self.coadd = list()
+        for key in set([s.wavehash for s in spectra]):
+            wave = None
+            unweightedflux = None
+            weightedflux = None
+            weights = None
+            R = None
+            nspec = 0
+            for s in spectra:
+                if s.wavehash != key: continue
+                nspec += 1
+                if weightedflux is None:
+                    wave = s.wave
+                    unweightedflux = s.flux
+                    weightedflux = s.flux * s.ivar
+                    weights = s.ivar.copy()
+                    n = len(s.ivar)
+                    W = scipy.sparse.dia_matrix((s.ivar, [0,]), (n,n))
+                    weightedR = W * s.R
+                else:
+                    assert len(s.ivar) == n
+                    unweightedflux += s.flux
+                    weightedflux += s.flux * s.ivar
+                    weights += s.ivar
+                    W = scipy.sparse.dia_matrix((s.ivar, [0,]), (n,n))
+                    weightedR += W * s.R
+
+            flux = weightedflux / weights
+            # ivar = ?
+            Winv = scipy.sparse.dia_matrix((1/(weights+1e-16), [0,]), (n,n))
+            R = Winv * weightedR
+            iibad = (weights == 0)
+            flux[iibad] = unweightedflux[iibad] / nspec
+            self.coadd.append(Spectrum(wave, flux, weights, R))

@@ -20,6 +20,7 @@ parser.add_option("-n", "--ntargets", type=int,  help="number of targets to proc
 parser.add_option("--mintarget", type=int,  help="first target to include", default=0)
 parser.add_option("--ncpu", type=int,  help="number of cpu cores for multiprocessing", default=None)
 parser.add_option("--debug", help="debug with ipython", action="store_true")
+parser.add_option("--coadd", help="use coadd instead of individual spectra", action="store_true")
 
 opts, brickfiles = parser.parse_args()
 
@@ -32,6 +33,11 @@ if len(brickfiles) == 0:
     sys.exit(1)
 
 targets = desi.read_bricks(brickfiles)
+
+if opts.coadd:
+    for t in targets:
+        ### t.individual_spectra = t.spectra
+        t.spectra = t.coadd
 
 if opts.ntargets is not None:
     targets = targets[opts.mintarget:opts.mintarget+opts.ntargets]
