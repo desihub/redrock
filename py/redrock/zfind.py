@@ -1,5 +1,6 @@
 from __future__ import division, print_function
 
+import time
 import numpy as np
 
 import redrock.zscan
@@ -79,11 +80,14 @@ def zfind(targets, templates, ncpu=None):
         #
         # zchi2 = np.vstack([x[0] for x in zchi2_results])
         # zcoeff = np.vstack([x[1] for x in zchi2_results])
-        
+
+        t0 = time.time()
         if ncpu > 1:
             zchi2, zcoeff = redrock.zscan.parallel_calc_zchi2_targets(t.redshifts, targets, t, ncpu=ncpu)
         else:
             zchi2, zcoeff = redrock.zscan.calc_zchi2_targets(t.redshifts, targets, t)
+        t1 = time.time()
+        print('DEBUG: zscan in {:.1f} seconds'.format(t1-t0))
 
         print('fitz')
         for i in range(len(targets)):
