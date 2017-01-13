@@ -22,12 +22,14 @@ def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, ncp
     import multiprocessing as mp
     if ncpu is None:
         ncpu = mp.cpu_count()
-    
+
     if ('OMP_NUM_THREADS' not in os.environ) and \
        ('MKL_NUM_THREADS' not in os.environ):
         n = max(mp.cpu_count() // ncpu, 1)
         os.environ['OMP_NUM_THREADS'] = str(n)
         os.environ['MKL_NUM_THREADS'] = str(n)
+        if verbose:
+            print('DEBUG: setting OMP_NUM_THREADS={}'.format(n))
 
     def foo(i, qin, qout):
         zz = qin.get()
