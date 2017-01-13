@@ -15,21 +15,31 @@ def calc_zchi2(redshifts, spectra, template):
     zchi2, zcoeff = calc_zchi2_targets(redshifts, targets, template)
     return zchi2[0], zcoeff[0]
 
-def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, ncpu=None):
+def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
+    ncpu=None, numthreads=-1):
     '''
     Parallel version of calc_zchi2_targets; see that docstring for details
+
+    TODO: document ncpu and numthreads
     '''
     import multiprocessing as mp
     if ncpu is None:
         ncpu = mp.cpu_count()
 
-    if ('OMP_NUM_THREADS' not in os.environ) and \
-       ('MKL_NUM_THREADS' not in os.environ):
+    if numthreads == 0:
         n = max(mp.cpu_count() // ncpu, 1)
         os.environ['OMP_NUM_THREADS'] = str(n)
         os.environ['MKL_NUM_THREADS'] = str(n)
         if verbose:
             print('DEBUG: setting OMP_NUM_THREADS={}'.format(n))
+            print('DEBUG: setting MKL_NUM_THREADS={}'.format(n))
+    elif numthreads > 0:
+        os.environ['OMP_NUM_THREADS'] = str(numthreads)
+        os.environ['MKL_NUM_THREADS'] = str(numthreads)
+
+    if verbose:
+        print('DEBUG: $OMP_NUM_THREADS={}'.format(os.getenv('OMP_NUM_THREADS')))
+        print('DEBUG: $MKL_NUM_THREADS={}'.format(os.getenv('MKL_NUM_THREADS')))
 
     def foo(i, qin, qout):
         zz = qin.get()
