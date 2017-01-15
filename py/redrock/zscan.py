@@ -26,6 +26,10 @@ def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
     if ncpu is None:
         ncpu = mp.cpu_count()
 
+    if ncpu > len(redshifts):
+        ncpu = len(redshifts)
+        print('WARNING: Using {} cores for {} redshifts'.format(ncpu, ncpu))
+
     if numthreads == 0:
         n = max(mp.cpu_count() // ncpu, 1)
         os.environ['OMP_NUM_THREADS'] = str(n)
@@ -51,7 +55,9 @@ def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
     qin = mp.Queue()
     qout = mp.Queue()
     for i in range(ncpu):
-        qin.put(redshifts[ii[i]:ii[i+1]])
+        tmpz = redshifts[ii[i]:ii[i+1]]
+        assert len(tmpz) > 0
+        qin.put(tmpz)
 
     for i in range(ncpu):
         p = mp.Process(target=foo, args=(i, qin, qout))
