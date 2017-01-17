@@ -46,10 +46,17 @@ def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
         print('DEBUG: $MKL_NUM_THREADS={}'.format(os.getenv('MKL_NUM_THREADS')))
 
     def foo(i, qin, qout):
-        zz = qin.get()
-        if verbose:
-            print('Process {}: {} redshifts from {:.4f} to {:.4f}'.format(i, len(zz), zz[0], zz[-1]))
-        qout.put((zz[0], redrock.zscan.calc_zchi2_targets(zz, targets, template, verbose=verbose)))
+        try:
+            zz = qin.get()
+            if verbose:
+                print('Process {}: {} redshifts from {:.4f} to {:.4f}'.format(i, len(zz), zz[0], zz[-1]))
+            results = redrock.zscan.calc_zchi2_targets(zz, targets, template, verbose=verbose)
+        except Exception as err:
+            import traceback, sys
+            message = "".join(traceback.format_exception(*sys.exc_info()))
+            results = (err, message)
+
+        qout.put((zz[0], results))
 
     ii = np.linspace(0, len(redshifts), ncpu+1).astype(int)
     qin = mp.Queue()
@@ -63,10 +70,22 @@ def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
         p = mp.Process(target=foo, args=(i, qin, qout))
         p.start()
 
-    #- TODO: how to handle processes that raise an exception?
     results = list()
     for i in range(ncpu):
         results.append(qout.get())
+
+    #- Check for any errors
+    mpfail = False
+    message = 'ok'
+    for i, (z0, r) in enumerate(results):
+        if isinstance(r[0], Exception):
+            err, message = r
+            print("ERROR: result {} starting z={} generated an exception".format(i, z0))
+            print(message)
+            mpfail = True
+    
+    if mpfail:
+        raise RuntimeError(message)
 
     #- Figure out what order the results arrived in the output queue
     z0 = [r[0] for r in results]
