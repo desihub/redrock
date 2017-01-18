@@ -12,8 +12,8 @@ def calc_zchi2(redshifts, spectra, template):
     TODO: document
     '''
     targets = [Target(0, spectra), ]
-    zchi2, zcoeff = calc_zchi2_targets(redshifts, targets, template)
-    return zchi2[0], zcoeff[0]
+    zchi2, zcoeff, penalty = calc_zchi2_targets(redshifts, targets, template)
+    return zchi2[0], zcoeff[0], penalty[0]
 
 def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
     ncpu=None, numthreads=-1):
@@ -93,15 +93,18 @@ def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
 
     zchi2 = list()
     zcoeff = list()
+    zchi2penalty = list()
     for i in izsort:
-        tmpzchi2, tmpzcoeff = results[i][1]
+        tmpzchi2, tmpzcoeff, tmpzchi2penalty = results[i][1]
         zchi2.append(tmpzchi2)
         zcoeff.append(tmpzcoeff)
+        zchi2penalty.append(tmpzchi2penalty)
         
     zchi2 = np.hstack(zchi2)
     zcoeff = np.hstack(zcoeff)
+    zchi2penalty = np.hstack(zchi2penalty)
 
-    return zchi2, zcoeff
+    return zchi2, zcoeff, zchi2penalty
 
 def calc_zchi2_targets(redshifts, targets, template, verbose=False):
     '''Calculates chi2 vs. redshift for a given PCA template.
@@ -126,6 +129,7 @@ def calc_zchi2_targets(redshifts, targets, template, verbose=False):
     ntargets = len(targets)
     nbasis = template.flux.shape[0]
     zchi2 = np.zeros( (ntargets, nz) )
+    zchi2penalty = np.zeros( (ntargets, nz) )
     zcoeff = np.zeros( (ntargets, nz, nbasis) )
     
     #- Regroup fluxes and ivars into 1D arrays per target
@@ -148,6 +152,10 @@ def calc_zchi2_targets(redshifts, targets, template, verbose=False):
     #- for all of them
     refspectra = targets[0].spectra
     
+    #- Redshifts near [OII]; used only for galaxy templates
+    isOII = (3724 <= template.wave) & (template.wave <= 3733)
+    OIItemplate = template.flux[:,isOII].T
+
     #- Loop over redshifts, solving for template fit coefficients
     nflux = len(fluxlist[0])
     Tb = np.zeros( (nflux, nbasis) )
@@ -175,7 +183,13 @@ def calc_zchi2_targets(redshifts, targets, template, verbose=False):
             zchi2[j,i] = np.sum( (flux - model)**2 * weights )
             zcoeff[j,i] = a
 
-    return zchi2, zcoeff
+            #- Penalize chi2 for negative [OII] flux; ad-hoc
+            if template.type == 'GALAXY':
+                OIIflux = np.sum( OIItemplate.dot(a) )
+                if OIIflux < 0:
+                    zchi2penalty[j,i] = -OIIflux
+
+    return zchi2, zcoeff, zchi2penalty
 
 #- DEBUG: duplicated code, but provide a direct way to fit a template to a
 #- set of spectra at a given redshift

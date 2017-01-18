@@ -19,7 +19,7 @@ def get_template(wavemin=100, wavemax=9000, wavestep=5):
     flux[1] = np.arange(len(wave)) / len(wave)
     flux[2] = np.exp(-(wave-wavemid)**2/(2*20**2))
     
-    return Template('test', redshifts, wave, flux)
+    return Template('GALAXY', redshifts, wave, flux)
     
 def get_target(z=0.5, wavestep=5):
     '''Returns a fake target at redshift z to use for testing'''

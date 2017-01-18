@@ -78,7 +78,7 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3):
         ilo = max(0, imin-1)
         ihi = min(imin+1, len(zchi2)-1)
         zz = np.linspace(redshifts[ilo], redshifts[ihi], 15)
-        zzchi2, zzcoeff = redrock.zscan.calc_zchi2(zz, spectra, template)
+        zzchi2, zzcoeff, zzpenalty = redrock.zscan.calc_zchi2(zz, spectra, template)
 
         #- fit parabola to 3 points around minimum
         i = min(max(np.argmin(zzchi2),1), len(zz)-1)

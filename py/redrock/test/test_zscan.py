@@ -64,8 +64,8 @@ class TestZScan(unittest.TestCase):
         t2 = redrock.test.util.get_target(z2); t2.id = 222
         template = redrock.test.util.get_template()
         redshifts = np.linspace(0.15, 0.3, 25)
-        zchi2a, zcoeffa = redrock.zscan.calc_zchi2_targets(redshifts, [t1,t2], template)
-        zchi2b, zcoeffb = redrock.zscan.parallel_calc_zchi2_targets(redshifts, [t1,t2], template, ncpu=2)
+        zchi2a, zcoeffa, penaltya = redrock.zscan.calc_zchi2_targets(redshifts, [t1,t2], template)
+        zchi2b, zcoeffb, penaltyb = redrock.zscan.parallel_calc_zchi2_targets(redshifts, [t1,t2], template, ncpu=2)
         
         self.assertEqual(zchi2a.shape, zchi2b.shape)
         self.assertEqual(zcoeffa.shape, zcoeffb.shape)

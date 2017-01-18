@@ -83,9 +83,9 @@ def zfind(targets, templates, ncpu=None):
 
         t0 = time.time()
         if ncpu > 1:
-            zchi2, zcoeff = redrock.zscan.parallel_calc_zchi2_targets(t.redshifts, targets, t, ncpu=ncpu)
+            zchi2, zcoeff, penalty = redrock.zscan.parallel_calc_zchi2_targets(t.redshifts, targets, t, ncpu=ncpu)
         else:
-            zchi2, zcoeff = redrock.zscan.calc_zchi2_targets(t.redshifts, targets, t)
+            zchi2, zcoeff, penalty = redrock.zscan.calc_zchi2_targets(t.redshifts, targets, t)
         t1 = time.time()
         print('DEBUG: zscan in {:.1f} seconds'.format(t1-t0))
 
@@ -93,9 +93,10 @@ def zfind(targets, templates, ncpu=None):
         for i in range(len(targets)):
             zscan[targets[i].id][t.type]['redshifts'] = t.redshifts
             zscan[targets[i].id][t.type]['zchi2'] = zchi2[i]
+            zscan[targets[i].id][t.type]['penalty'] = penalty[i]
             zscan[targets[i].id][t.type]['zcoeff'] = zcoeff[i]
             zscan[targets[i].id][t.type]['zfit'] = \
-                redrock.fitz.fitz(zchi2[i], t.redshifts, targets[i].spectra, t)
+                redrock.fitz.fitz(zchi2[i]+penalty[i], t.redshifts, targets[i].spectra, t)
 
     #- Convert individual zfit results into a zall array
     import astropy.table

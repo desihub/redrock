@@ -106,7 +106,7 @@ class Target(object):
                 nspec += 1
                 if weightedflux is None:
                     wave = s.wave
-                    unweightedflux = s.flux
+                    unweightedflux = s.flux.copy()
                     weightedflux = s.flux * s.ivar
                     weights = s.ivar.copy()
                     n = len(s.ivar)
