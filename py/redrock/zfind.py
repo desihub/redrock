@@ -59,7 +59,7 @@ def zfind(targets, templates, ncpu=None):
         print("INFO: not using multiprocessing")
 
     for t in templates:
-        print('zchi2 scan for '+t.type)
+        print('Starting zchi2 scan for '+t.type)
         
         # ntargets = len(targets)
         # chunksize = min(20, max(1, ntargets // ncpu))
@@ -86,19 +86,27 @@ def zfind(targets, templates, ncpu=None):
             zchi2, zcoeff, penalty = redrock.zscan.parallel_calc_zchi2_targets(t.redshifts, targets, t, ncpu=ncpu)
         else:
             zchi2, zcoeff, penalty = redrock.zscan.calc_zchi2_targets(t.redshifts, targets, t)
-        t1 = time.time()
-        print('DEBUG: zscan in {:.1f} seconds'.format(t1-t0))
+        dt = time.time() - t0
+        print('DEBUG: {} zscan in {:.1f} seconds'.format(t.type, dt))
 
-        print('fitz')
+        t0 = time.time()
+        print('Starting fitz')
+        for i, zfit in enumerate(redrock.fitz.parallel_fitz_targets(zchi2+penalty, t.redshifts, targets, t, ncpu=ncpu, verbose=True)):
+            zscan[targets[i].id][t.type]['zfit'] = zfit
+        
         for i in range(len(targets)):
             zscan[targets[i].id][t.type]['redshifts'] = t.redshifts
             zscan[targets[i].id][t.type]['zchi2'] = zchi2[i]
             zscan[targets[i].id][t.type]['penalty'] = penalty[i]
             zscan[targets[i].id][t.type]['zcoeff'] = zcoeff[i]
-            zscan[targets[i].id][t.type]['zfit'] = \
-                redrock.fitz.fitz(zchi2[i]+penalty[i], t.redshifts, targets[i].spectra, t)
+            # zscan[targets[i].id][t.type]['zfit_orig'] = \
+            #     redrock.fitz.fitz(zchi2[i]+penalty[i], t.redshifts, targets[i].spectra, t)
+        dt = time.time() - t0
+        print('DEBUG: {} fitz in {:.1f} seconds'.format(t.type, dt))            
 
     #- Convert individual zfit results into a zall array
+    t0 = time.time()
+    print('Making zall')
     import astropy.table
     zfit = list() 
     for target in targets:
@@ -126,5 +134,8 @@ def zfind(targets, templates, ncpu=None):
         zfit.append(tzfit)
 
     zfit = astropy.table.vstack(zfit)
+    dt = time.time() - t0
+    print('DEBUG: zall in {:.1f} seconds'.format(dt))
+
     return zscan, zfit
     

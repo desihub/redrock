@@ -53,6 +53,65 @@ def minfit(x,y):
     return (x0, xerr, y0, zwarn)
 
 
+def parallel_fitz_targets(zchi2, redshifts, targets, template, nminima=3, ncpu=None, verbose=False):
+    '''
+    TODO: document
+    '''
+    assert zchi2.shape == (len(targets), len(redshifts))
+    
+    import multiprocessing as mp
+    if ncpu is None:
+        ncpu = mp.cpu_count() // 2
+    
+    def foo(i, qin, qout):
+        try:
+            start, n = qin.get()
+            if verbose:
+                print('Process {}: targets {} to {}'.format(i, start, start+n-1))
+            for j in range(start, start+n):
+                results = fitz(zchi2[j], redshifts, targets[j].spectra, template, nminima=nminima)
+                qout.put( (j, results) )
+        except Exception as err:
+            import traceback, sys
+            message = "".join(traceback.format_exception(*sys.exc_info()))
+            qout.put( (i, err, message) )
+    
+    ii = np.linspace(0, len(targets), ncpu+1).astype(int)
+    qin = mp.Queue()
+    qout = mp.Queue()
+    for i in range(ncpu):
+        start = ii[i]
+        n = ii[i+1] - ii[i]
+        qin.put( (start, n) )
+
+    for i in range(ncpu):
+        p = mp.Process(target=foo, args=(i, qin, qout))
+        p.start()
+
+    results = list()
+    for i in range(len(targets)):
+        results.append(qout.get())
+
+    #- Check for any errors
+    mpfail = False
+    message = 'ok'
+    for r in results:
+        if isinstance(r[1], Exception):
+            i, err, message = r
+            print("ERROR: result {} generated an exception".format(i))
+            print(message)
+            mpfail = True
+    
+    if mpfail:
+        print("ERROR: Raising the last of the exceptions")
+        raise RuntimeError(message)
+    
+    #- Sort results
+    isort = np.argsort([r[0] for r in results])
+    results = [results[i][1] for i in isort]
+    
+    return results
+
 def fitz(zchi2, redshifts, spectra, template, nminima=3):
     '''Refines redshift measurement around up to nminima minima
     
