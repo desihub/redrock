@@ -91,7 +91,7 @@ def zfind(targets, templates, ncpu=None):
 
         t0 = time.time()
         print('Starting fitz')
-        for i, zfit in enumerate(redrock.fitz.parallel_fitz_targets(zchi2+penalty, t.redshifts, targets, t, ncpu=ncpu, verbose=True)):
+        for i, zfit in enumerate(redrock.fitz.parallel_fitz_targets(zchi2+penalty, t.redshifts, targets, t, ncpu=ncpu, verbose=False)):
             zscan[targets[i].id][t.type]['zfit'] = zfit
         
         for i in range(len(targets)):

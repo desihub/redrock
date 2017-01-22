@@ -157,12 +157,6 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3):
         zbest = zmin
         zerr = sigma
 
-        #- Other minima are too similar (within 3 sigma significance)
-        #- TODO: tune exclusion of close values
-        ii = find_minima(zchi2)
-        if np.any((np.abs(redshifts-zbest)>5*zerr)[ii] & (zchi2 < chi2min + 9)[ii]):
-            zwarn |= ZW.SMALL_DELTA_CHI2
-
         #- Initial minimum or best fit too close to edge of redshift range
         if zbest < redshifts[1] or zbest > redshifts[-2]:
             zwarn |= ZW.Z_FITLIMIT
