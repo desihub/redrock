@@ -26,6 +26,8 @@ def centers2edges(centers):
 def trapz_rebin(x, y, xnew=None, edges=None):
     if edges is None:
         edges = centers2edges(xnew)
+    else:
+        edges = np.asarray(edges)    
 
     if edges[0] < x[0] or x[-1] < edges[-1]:
         raise ValueError('edges must be within input x range')
@@ -55,8 +57,6 @@ def _trapz_rebin(x, y, edges):
         ValueError if edges are outside the range of x
         ValueError if len(x) != len(y)
     '''
-    edges = np.asarray(edges)
-
     nbin = len(edges)-1
     nx = len(x)
     results = np.zeros(nbin)

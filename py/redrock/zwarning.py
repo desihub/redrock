@@ -23,3 +23,14 @@ class ZWarningMask(object):
     NODATA            = 2**9  #- No data for this fiber, e.g. because spectrograph was broken during this exposure (ivar=0 for all pixels)
     BAD_MINFIT        = 2**10 #- Bad parabola fit to the chi2 minimum
 
+    @classmethod
+    def flags(cls):
+        flagmask = list()
+        for key, value in cls.__dict__.items():
+            if not key.startswith('_') and key.isupper():
+                flagmask.append((key, value))
+
+        import numpy as np
+        isort = np.argsort([x[1] for x in flagmask])
+        flagmask = [flagmask[i] for i in isort]
+        return flagmask

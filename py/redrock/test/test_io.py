@@ -5,6 +5,7 @@ import unittest
 from uuid import uuid1
 import numpy as np
 from redrock import io
+import redrock.test.util
 
 class TestIO(unittest.TestCase):
     
@@ -53,38 +54,26 @@ class TestIO(unittest.TestCase):
             self.assertEqual(flux.ndim, 2)
         
     def test_zscan_io(self):
-        #- setup fake zscan results dictionary
-        z1 = {123: dict(), 456: dict()}
-        z1[123]['GALAXY'] = _random_zscan()
-        z1[123]['STAR'] = _random_zscan()
-        z1[456]['GALAXY'] = _random_zscan()
-        z1[456]['STAR'] = _random_zscan()
+        t1 = redrock.test.util.get_target(0.2)
+        t1.id = 111
+        t2 = redrock.test.util.get_target(0.5)
+        t2.id = 222
+        template = redrock.test.util.get_template()
+        zscan1, zfit1 = redrock.zfind([t1,t2], [template,], ncpu=1)
 
-        io.write_zscan(self.testfile, z1)
-        io.write_zscan(self.testfile, z1, clobber=True)
-        zbest, z2 = io.read_zscan(self.testfile)
-        
-        for key in ('Z', 'ZERR', 'ZWARN', 'TARGETID'):
-            self.assertIn(key, zbest.dtype.names)
-        
-        for targetid in z1:
-            for templatetype in z1[targetid]:
-                for key in z1[targetid][templatetype]:
-                    x1 = z1[targetid][templatetype][key]
-                    x2 = z2[targetid][templatetype][key]
-                    self.assertTrue(np.all(x1 == x2))
-                
-            
-def _random_zscan(n=10):
-    '''Returns random zscan result dictionary'''
-    z = np.arange(n, dtype=float) + np.random.uniform()
-    zchi2 = np.random.uniform(size=n)
-    zbest = np.random.uniform()
-    minchi2 = np.random.uniform()
-    zerr = np.random.uniform()
-    zwarn = np.random.randint(100)
-    deltachi2 = np.random.uniform(1000)
-    return dict(z=z, zchi2=zchi2, zbest=zbest, minchi2=minchi2, zerr=zerr, zwarn=zwarn, deltachi2=deltachi2)
+        io.write_zscan(self.testfile, zscan1, zfit1)
+        io.write_zscan(self.testfile, zscan1, zfit1, clobber=True)
+        zscan2, zfit2 = io.read_zscan(self.testfile)
+
+        self.assertEqual(zfit1.colnames, zfit2.colnames)
+        self.assertTrue(np.all(zfit1 == zfit2))
+
+        for targetid in zscan1:
+            for spectype in zscan1[targetid]:
+                for key in zscan1[targetid][spectype]:
+                    d1 = zscan1[targetid][spectype][key]
+                    d2 = zscan2[targetid][spectype][key]
+                    self.assertTrue(np.all(d1==d2), 'data mismatch {}/{}/{}'.format(targetid, spectype, key))
                 
 if __name__ == '__main__':
     unittest.main()

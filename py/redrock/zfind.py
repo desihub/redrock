@@ -1,9 +1,10 @@
 from __future__ import division, print_function
 
+import time
 import numpy as np
 
 import redrock.zscan
-import redrock.pickz
+import redrock.fitz
 from redrock.zwarning import ZWarningMask as ZW
 
 import multiprocessing as mp
@@ -43,10 +44,12 @@ def zfind(targets, templates, ncpu=None):
     #     QSO  = 10**np.arange(np.log10(0.5), np.log10(4.0), 5e-4),
     # )
 
-    results = dict()
+    zscan = dict()
     for target in targets:
-        results[target.id] = dict()
-
+        zscan[target.id] = dict()
+        for t in templates:
+            zscan[target.id][t.type] = dict()
+            
     if ncpu is None:
         ncpu = max(mp.cpu_count() // 2, 1)
 
@@ -56,42 +59,62 @@ def zfind(targets, templates, ncpu=None):
         print("INFO: not using multiprocessing")
 
     for t in templates:
-        print('zchi2 scan for '+t.type)
+        print('Starting zchi2 scan for '+t.type)
         
-        ntargets = len(targets)
-        chunksize = min(20, max(1, ntargets // ncpu))
-
-        args = list()
-        for i in range(0, ntargets, chunksize):
-            verbose = (i==0)
-            args.append( [t.redshifts, targets[i:i+chunksize], t, verbose] )
-        
+        t0 = time.time()
         if ncpu > 1:
-            print("DEBUG: multiprocessing with {} chunks of {} targets each".format(len(args), chunksize))
-            pool = mp.Pool(ncpu)
-            zchi2_results = pool.map(_wrap_calc_zchi2, args)
-            pool.close()
-            pool.join()
+            zchi2, zcoeff, penalty = redrock.zscan.parallel_calc_zchi2_targets(t.redshifts, targets, t, ncpu=ncpu)
         else:
-            zchi2_results = [_wrap_calc_zchi2(x) for x in args]
+            zchi2, zcoeff, penalty = redrock.zscan.calc_zchi2_targets(t.redshifts, targets, t)
+        dt = time.time() - t0
+        print('DEBUG: {} zscan in {:.1f} seconds'.format(t.type, dt))
 
-        zchi2 = np.vstack([x[0] for x in zchi2_results])
-        zcoeff = np.vstack([x[1] for x in zchi2_results])
-
-        print('pickz')
+        t0 = time.time()
+        print('Starting fitz')
+        for i, zfit in enumerate(redrock.fitz.parallel_fitz_targets(zchi2+penalty, t.redshifts, targets, t, ncpu=ncpu, verbose=False)):
+            zscan[targets[i].id][t.type]['zfit'] = zfit
+        
         for i in range(len(targets)):
-            try:
-                zbest, zerr, zwarn, minchi2, deltachi2 = redrock.pickz.pickz(
-                    zchi2[i], t.redshifts, targets[i].spectra, t)
-            except ValueError:
-                print('ERROR: pickz failed for target {} id {}'.format(i, targets[i].id))
-                zbest = zerr = minchi2 = deltachi2 = -1.0
-                zwarn = ZW.BAD_MINFIT
+            zscan[targets[i].id][t.type]['redshifts'] = t.redshifts
+            zscan[targets[i].id][t.type]['zchi2'] = zchi2[i]
+            zscan[targets[i].id][t.type]['penalty'] = penalty[i]
+            zscan[targets[i].id][t.type]['zcoeff'] = zcoeff[i]
+        dt = time.time() - t0
+        print('DEBUG: {} fitz in {:.1f} seconds'.format(t.type, dt))            
 
-            results[targets[i].id][t.type] = dict(
-                z=t.redshifts, zchi2=zchi2[i], zbest=zbest, zerr=zerr, zwarn=zwarn,
-                minchi2=minchi2, zcoeff=zcoeff[i], deltachi2=deltachi2,
-            )
-                
-    return results
+    #- Convert individual zfit results into a zall array
+    t0 = time.time()
+    print('Making zall')
+    import astropy.table
+    zfit = list() 
+    for target in targets:
+        tzfit = list()
+        for spectype in zscan[target.id]:
+            tmp = zscan[target.id][spectype]['zfit']
+            tmp['spectype'] = spectype
+            tzfit.append(tmp)
+            del zscan[target.id][spectype]['zfit']
+
+        maxncoeff = max([tmp['coeff'].shape[1] for tmp in tzfit])
+        for tmp in tzfit:
+            if tmp['coeff'].shape[1] < maxncoeff:
+                n = maxncoeff - tmp['coeff'].shape[1]
+                c = np.append(tmp['coeff'], np.zeros((len(tmp), n)), axis=1)
+                tmp.replace_column('coeff', c)
+
+        tzfit = astropy.table.vstack(tzfit)
+        ii = np.argsort(tzfit['chi2'])
+        tzfit = tzfit[ii]
+        tzfit['targetid'] = target.id
+        tzfit['znum'] = np.arange(len(tzfit))
+        tzfit['deltachi2'] = np.ediff1d(tzfit['chi2'], to_end=0.0)
+        ii = np.where(tzfit['deltachi2'] < 9)[0]
+        tzfit['zwarn'][ii] |= ZW.SMALL_DELTA_CHI2
+        zfit.append(tzfit)
+
+    zfit = astropy.table.vstack(zfit)
+    dt = time.time() - t0
+    print('DEBUG: zall in {:.1f} seconds'.format(dt))
+
+    return zscan, zfit
     
