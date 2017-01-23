@@ -93,6 +93,7 @@ def zfind(targets, templates, ncpu=None):
             tmp = zscan[target.id][spectype]['zfit']
             tmp['spectype'] = spectype
             tzfit.append(tmp)
+            del zscan[target.id][spectype]['zfit']
 
         maxncoeff = max([tmp['coeff'].shape[1] for tmp in tzfit])
         for tmp in tzfit:
