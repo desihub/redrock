@@ -1,12 +1,17 @@
 import numpy as np
-from scipy.signal import medfilt
-import matplotlib.pyplot as plt
 
 import redrock.io
 import time
 
 class PlotSpec(object):
     def __init__(self, targets, templates, zscan, zfit):
+        '''
+        TODO: document
+        '''
+
+        #- Isolate imports of optional dependencies
+        import matplotlib.pyplot as plt
+
         self.targets = targets
         self.templates = templates
         self.zscan = zscan
@@ -67,6 +72,11 @@ class PlotSpec(object):
             print(zfit['znum', 'spectype', 'z', 'zerr', 'zwarn', 'chi2'])
 
     def plot(self, keepzoom=False):
+
+        #- Isolate imports of optional dependencies
+        from scipy.signal import medfilt
+        import matplotlib.pyplot as plt
+        
         target = self.targets[self.itarget]    
         zfit = self.zfit[self.zfit['targetid'] == target.id]
         self.nznum = len(zfit)
