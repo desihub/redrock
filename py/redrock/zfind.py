@@ -79,8 +79,6 @@ def zfind(targets, templates, ncpu=None):
             zscan[targets[i].id][t.type]['zchi2'] = zchi2[i]
             zscan[targets[i].id][t.type]['penalty'] = penalty[i]
             zscan[targets[i].id][t.type]['zcoeff'] = zcoeff[i]
-            # zscan[targets[i].id][t.type]['zfit_orig'] = \
-            #     redrock.fitz.fitz(zchi2[i]+penalty[i], t.redshifts, targets[i].spectra, t)
         dt = time.time() - t0
         print('DEBUG: {} fitz in {:.1f} seconds'.format(t.type, dt))            
 

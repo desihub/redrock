@@ -67,7 +67,7 @@ class TestIO(unittest.TestCase):
 
         self.assertEqual(zfit1.colnames, zfit2.colnames)
         self.assertTrue(np.all(zfit1 == zfit2))
-        
+
         for targetid in zscan1:
             for spectype in zscan1[targetid]:
                 for key in zscan1[targetid][spectype]:
