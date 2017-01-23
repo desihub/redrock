@@ -63,19 +63,31 @@ def parallel_fitz_targets(zchi2, redshifts, targets, template, nminima=3, ncpu=N
     if ncpu is None:
         ncpu = mp.cpu_count() // 2
     
-    def foo(i, qin, qout):
+    #- Wrapper function for fitz.  This can use targets, template, etc. without
+    #- copying them.  multiprocessing.Queue is used for I/O to know which
+    #- targets to process.
+    def wrap_fitz(i, qin, qout):
+        '''
+        i: process number
+        qin, qout: input and output multiprocessing.Queue
+
+        qin sends (start_index, number_of_targets_to_process)
+        qout receives (target_index, fitz_results)
+        '''
         try:
             start, n = qin.get()
             if verbose:
-                print('Process {}: targets {} to {}'.format(i, start, start+n-1))
+                print('Process {} targets[]{}:{}]'.format(i, start, start+n))
             for j in range(start, start+n):
                 results = fitz(zchi2[j], redshifts, targets[j].spectra, template, nminima=nminima)
+                #- return index with results so that they can be sorted
                 qout.put( (j, results) )
         except Exception as err:
             import traceback, sys
             message = "".join(traceback.format_exception(*sys.exc_info()))
             qout.put( (i, err, message) )
-    
+
+    #- Load Queue with start,n indices of targets to process
     ii = np.linspace(0, len(targets), ncpu+1).astype(int)
     qin = mp.Queue()
     qout = mp.Queue()
@@ -84,10 +96,12 @@ def parallel_fitz_targets(zchi2, redshifts, targets, template, nminima=3, ncpu=N
         n = ii[i+1] - ii[i]
         qin.put( (start, n) )
 
+    #- Start processes to run wrap_fitz
     for i in range(ncpu):
-        p = mp.Process(target=foo, args=(i, qin, qout))
+        p = mp.Process(target=wrap_fitz, args=(i, qin, qout))
         p.start()
 
+    #- Pull results from queue
     results = list()
     for i in range(len(targets)):
         results.append(qout.get())
@@ -106,7 +120,7 @@ def parallel_fitz_targets(zchi2, redshifts, targets, template, nminima=3, ncpu=N
         print("ERROR: Raising the last of the exceptions")
         raise RuntimeError(message)
     
-    #- Sort results
+    #- Sort results into original order of targets
     isort = np.argsort([r[0] for r in results])
     results = [results[i][1] for i in isort]
     
