@@ -3,7 +3,7 @@ Redrock redshift fitter
 '''
 from __future__ import absolute_import, division, print_function
 
-__version__ = '0.2.dev1'
+__version__ = '0.3'
 
 from .dataobj import Target, Spectrum, Template
 from . import rebin
@@ -12,3 +12,4 @@ from . import fitz
 from . import zwarning
 from . import io
 from .zfind import zfind
+from .plotspec import PlotSpec
