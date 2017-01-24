@@ -5,7 +5,7 @@ Redrock change log
 0.3.1 (unreleased)
 ------------------
 
-* No changes yet
+* Fix bug when first target is missing a channel of data
 
 0.3 (2016-01-23)
 ----------------
