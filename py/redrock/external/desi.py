@@ -52,11 +52,11 @@ def read_bricks(brickfiles, trueflux=False):
 
             for i in range(flux.shape[0]):
                 if np.all(flux[i] == 0):
-                    print('WARNING: Skipping spectrum {} of target {} on brick {} with flux=0'.format(i, targetid, brick.brickname))
+                    # print('WARNING: Skipping spectrum {} of target {} on brick {} with flux=0'.format(i, targetid, brick.brickname))
                     continue
 
                 if np.all(ivar[i] == 0):
-                    print('WARNING: Skipping spectrum {} of target {} on brick {} with ivar=0'.format(i, targetid, brick.brickname))
+                    # print('WARNING: Skipping spectrum {} of target {} on brick {} with ivar=0'.format(i, targetid, brick.brickname))
                     continue
 
                 R = Resolution(Rdata[i])

@@ -4,7 +4,7 @@ import redrock.io
 import time
 
 class PlotSpec(object):
-    def __init__(self, targets, templates, zscan, zfit):
+    def __init__(self, targets, templates, zscan, zfit, truth=None):
         '''
         TODO: document
         '''
@@ -19,6 +19,7 @@ class PlotSpec(object):
         self.itarget = 0
         self.znum = 0
         self.smooth = 1
+        self.truth = truth
         
         self.fig = plt.figure()
         self.ax1 = self.fig.add_subplot(211)
@@ -106,6 +107,14 @@ class PlotSpec(object):
         self.ax1.plot(zfit['z'], zfit['chi2'], 'r.', label='_none_')
         for row in zfit:
             self.ax1.text(row['z'], row['chi2'], str(row['znum']), verticalalignment='top')
+
+        if self.truth is not None:
+            i = np.where(self.truth['targetid'] == target.id)[0]
+            if len(i) > 0:
+                ztrue = self.truth['ztrue'][i[0]]
+                self.ax1.axvline(ztrue, color='g', alpha=0.5)
+            else:
+                print('WARNING: target id {} not in truth table'.format(target.id))
 
         self.ax1.axvline(zz['z'], color='k', alpha=0.1)
         self.ax1.axhline(zz['chi2'], color='k', alpha=0.1)
