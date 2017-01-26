@@ -5,7 +5,7 @@ Redrock change log
 0.3.1 (unreleased)
 ------------------
 
-* No changes yet
+* add optional truth input to plotspec
 
 0.3 (2016-01-23)
 ----------------
