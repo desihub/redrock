@@ -6,6 +6,7 @@ Redrock change log
 ------------------
 
 * add optional truth input to plotspec
+* Fix bug when first target is missing a channel of data
 
 0.3 (2016-01-23)
 ----------------

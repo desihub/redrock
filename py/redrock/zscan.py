@@ -145,12 +145,15 @@ def calc_zchi2_targets(redshifts, targets, template, verbose=False):
         flux = np.concatenate( [s.flux for s in t.spectra] )
         fluxlist.append(flux)
         wfluxlist.append(weights*flux)
-    
-    #- NOT GENERAL AT ALL:
-    #- assume all targets have same number of spectra with same wavelengths,
-    #- so we can just use the first target spectra to get wavelength grids
-    #- for all of them
-    refspectra = targets[0].spectra
+
+    #- Gather reference spectra for projecting templates to data wavelengths
+    refspectra = dict()
+    for t in targets:
+        for s in t.spectra:
+            if s.wavehash not in refspectra:
+                refspectra[s.wavehash] = s
+
+    refspectra = list(refspectra.values())
     
     #- Redshifts near [OII]; used only for galaxy templates
     isOII = (3724 <= template.wave) & (template.wave <= 3733)
@@ -169,7 +172,14 @@ def calc_zchi2_targets(redshifts, targets, template, verbose=False):
             Tb = list()
             for k, s in enumerate(targets[j].spectra):
                 key = s.wavehash
-                Tb.append(s.Rcsr.dot(Tx[key]))
+                try:
+                    Tb.append(s.Rcsr.dot(Tx[key]))
+                except KeyError as err:
+                    #--- DEBUG ---
+                    import IPython
+                    IPython.embed()
+                    #--- DEBUG ---
+                    raise err
 
             Tb = np.vstack(Tb)
 
