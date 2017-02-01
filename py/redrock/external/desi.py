@@ -1,3 +1,7 @@
+import sys
+if sys.version_info[0] > 2:
+    basestring = str
+
 import numpy as np
 import desispec.io
 from desispec.resolution import Resolution
@@ -27,10 +31,14 @@ def read_bricks(brickfiles, trueflux=False):
     Read targets from a list of brickfiles
     
     Args:
-        brickfiles : list of input brick files
+        brickfiles : list of input brick files, or string glob to match
         
     Returns list of Target objects
     '''
+    if isinstance(brickfiles, basestring):
+        import glob
+        brickfiles = glob.glob(brickfiles)
+
     bricks = list()
     targetids = set()
     for infile in brickfiles:
