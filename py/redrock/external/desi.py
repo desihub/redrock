@@ -1,4 +1,5 @@
 import sys
+import warnings
 if sys.version_info[0] > 2:
     basestring = str
 
@@ -26,7 +27,7 @@ def write_zbest(outfile, zbest):
     zbest.meta['EXTNAME'] = 'ZBEST'
     zbest.write(outfile, overwrite=True)
 
-def read_bricks(brickfiles, trueflux=False):
+def read_bricks(brickfiles, trueflux=False, targetids=None):
     '''
     Read targets from a list of brickfiles
     
@@ -39,12 +40,21 @@ def read_bricks(brickfiles, trueflux=False):
         import glob
         brickfiles = glob.glob(brickfiles)
 
+    assert len(brickfiles) > 0
+
     bricks = list()
-    targetids = set()
-    for infile in brickfiles:
-        b = desispec.io.Brick(infile)
-        bricks.append(b)
-        targetids.update(b.get_target_ids())
+    brick_targetids = set()
+
+    #- Ignore warnings about zdc2 bricks lacking bricknames in header
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        for infile in brickfiles:
+            b = desispec.io.Brick(infile)
+            bricks.append(b)
+            brick_targetids.update(b.get_target_ids())
+
+    if targetids is None:
+        targetids = brick_targetids
 
     targets = list()
     for targetid in targetids:
@@ -75,4 +85,7 @@ def read_bricks(brickfiles, trueflux=False):
         else:
             print('ERROR: Target {} on brick {} has no good spectra'.format(targetid, brick.brickname))
     
+    for brick in bricks:
+        brick.close()
+
     return targets

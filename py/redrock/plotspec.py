@@ -20,12 +20,12 @@ class PlotSpec(object):
         self.znum = 0
         self.smooth = 1
         self.truth = truth
-        
-        self.fig = plt.figure()
-        self.ax1 = self.fig.add_subplot(211)
-        self.ax2 = self.fig.add_subplot(212)
 
-        self.cid = self.fig.canvas.mpl_connect('key_press_event', self.onkeypress)
+        self._fig = plt.figure()
+        self._ax1 = self._fig.add_subplot(211)
+        self._ax2 = self._fig.add_subplot(212)
+
+        self._cid = self._fig.canvas.mpl_connect('key_press_event', self._onkeypress)
 
         #- Instructions
         print("-------------------------------------------------------------------------")
@@ -44,7 +44,7 @@ class PlotSpec(object):
         self.plot()
         plt.show()
 
-    def onkeypress(self, event):
+    def _onkeypress(self, event):
         ### print('key', event.key)
         if event.key == 'right':
             self.znum = (self.znum + 1) % self.nznum
@@ -91,47 +91,47 @@ class PlotSpec(object):
         if tp.type != zz['spectype']:
             raise ValueError('spectype {} not in templates'.format(zz['spectype']))
 
-        #- zscan plot
+        #----- zscan plot
         if keepzoom:
-            force_xlim = self.ax1.get_xlim()
-            force_ylim = self.ax1.get_ylim()
+            force_xlim = self._ax1.get_xlim()
+            force_ylim = self._ax1.get_ylim()
 
-        self.ax1.clear()
+        self._ax1.clear()
         for spectype, fmt in [('STAR', 'k-'), ('GALAXY', 'b-'), ('QSO', 'g-')]:
             if spectype in self.zscan[target.id]:
                 zx = self.zscan[target.id][spectype]
-                self.ax1.plot(zx['redshifts'], zx['zchi2'], fmt, alpha=0.2, label='_none_')
-                self.ax1.plot(zx['redshifts'], zx['zchi2']+zx['penalty'], fmt, label=spectype)
+                self._ax1.plot(zx['redshifts'], zx['zchi2'], fmt, alpha=0.2, label='_none_')
+                self._ax1.plot(zx['redshifts'], zx['zchi2']+zx['penalty'], fmt, label=spectype)
 
     
-        self.ax1.plot(zfit['z'], zfit['chi2'], 'r.', label='_none_')
+        self._ax1.plot(zfit['z'], zfit['chi2'], 'r.', label='_none_')
         for row in zfit:
-            self.ax1.text(row['z'], row['chi2'], str(row['znum']), verticalalignment='top')
+            self._ax1.text(row['z'], row['chi2'], str(row['znum']), verticalalignment='top')
 
         if self.truth is not None:
             i = np.where(self.truth['targetid'] == target.id)[0]
             if len(i) > 0:
                 ztrue = self.truth['ztrue'][i[0]]
-                self.ax1.axvline(ztrue, color='g', alpha=0.5)
+                self._ax1.axvline(ztrue, color='g', alpha=0.5)
             else:
                 print('WARNING: target id {} not in truth table'.format(target.id))
 
-        self.ax1.axvline(zz['z'], color='k', alpha=0.1)
-        self.ax1.axhline(zz['chi2'], color='k', alpha=0.1)
-        self.ax1.legend()
-        self.ax1.set_title('target {}  zbest={:.3f} {}'.format(target.id, zz['z'], zz['spectype']))
-        self.ax1.set_ylabel(r'$\chi^2$')
-        self.ax1.set_xlabel('redshift')
+        self._ax1.axvline(zz['z'], color='k', alpha=0.1)
+        self._ax1.axhline(zz['chi2'], color='k', alpha=0.1)
+        self._ax1.legend()
+        self._ax1.set_title('target {}  zbest={:.3f} {}'.format(target.id, zz['z'], zz['spectype']))
+        self._ax1.set_ylabel(r'$\chi^2$')
+        self._ax1.set_xlabel('redshift')
         if keepzoom:
-            self.ax1.set_xlim(*force_xlim)
-            self.ax1.set_ylim(*force_ylim)
+            self._ax1.set_xlim(*force_xlim)
+            self._ax1.set_ylim(*force_ylim)
     
-        #- spectrum plot
+        #----- spectrum plot
         if keepzoom:
-            force_xlim = self.ax2.get_xlim()
-            force_ylim = self.ax2.get_ylim()
+            force_xlim = self._ax2.get_xlim()
+            force_ylim = self._ax2.get_ylim()
             
-        self.ax2.clear()
+        self._ax2.clear()
         ymin = ymax = 0.0
         for spec in target.coadd:
             mx = tp.eval(coeff[0:tp.nbasis], spec.wave, zz['z']) * (1+zz['z'])
@@ -140,10 +140,10 @@ class PlotSpec(object):
             isbad = (spec.ivar == 0)
             ## model[isbad] = mx[isbad]
             flux[isbad] = np.NaN
-            self.ax2.plot(spec.wave, medfilt(flux, self.smooth), alpha=0.5)
-            self.ax2.plot(spec.wave, medfilt(mx, self.smooth), 'k:', alpha=0.8)
+            self._ax2.plot(spec.wave, medfilt(flux, self.smooth), alpha=0.5)
+            self._ax2.plot(spec.wave, medfilt(mx, self.smooth), 'k:', alpha=0.8)
             model[isbad] = np.NaN
-            self.ax2.plot(spec.wave, medfilt(model, self.smooth), 'k-', alpha=0.8)
+            self._ax2.plot(spec.wave, medfilt(model, self.smooth), 'k-', alpha=0.8)
 
             ymin = min(ymin, np.percentile(flux[~isbad], 1))
             ymax = max(ymax, np.percentile(flux[~isbad], 99), np.max(model)*1.05)
@@ -152,7 +152,7 @@ class PlotSpec(object):
         label = 'znum {} {} z={:.3f}'.format(self.znum, zz['spectype'], zz['z'])
         print('target {} id {} {}'.format(self.itarget, target.id, label))
         ytext = ymin+0.9*(ymax-ymin)
-        self.ax2.text(3800, ytext, label)
+        self._ax2.text(3800, ytext, label)
 
         #- ZWARN labels
         if zz['zwarn'] != 0:
@@ -166,17 +166,17 @@ class PlotSpec(object):
             label = 'ZWARN=0'
             color = 'g'
 
-        self.ax2.text(10000, ytext, label, horizontalalignment='right', color=color)
+        self._ax2.text(10000, ytext, label, horizontalalignment='right', color=color)
 
-        self.ax2.axhline(0, color='k', alpha=0.2)
+        self._ax2.axhline(0, color='k', alpha=0.2)
         if keepzoom:
-            self.ax2.set_xlim(*force_xlim)
-            self.ax2.set_ylim(*force_ylim)
+            self._ax2.set_xlim(*force_xlim)
+            self._ax2.set_ylim(*force_ylim)
         else:
-            self.ax2.set_ylim(ymin, ymax)
-            self.ax2.set_xlim(3500,10100)
+            self._ax2.set_ylim(ymin, ymax)
+            self._ax2.set_xlim(3500,10100)
 
-        self.ax2.set_ylabel('flux')
-        self.ax2.set_xlabel('wavelength [A]')
-        # self.fig.tight_layout()
-        self.fig.canvas.draw()
+        self._ax2.set_ylabel('flux')
+        self._ax2.set_xlabel('wavelength [A]')
+        # self._fig.tight_layout()
+        self._fig.canvas.draw()

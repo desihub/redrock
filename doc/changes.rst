@@ -7,7 +7,8 @@ Redrock change log
 
 * add optional truth input to plotspec
 * Fix bug when first target is missing a channel of data
-* Allow glob for list of brick files
+* external.desi.read_bricks allow glob for list of brick files
+* external.desi.read_bricks read subset of targetids from bricks
 
 0.3 (2016-01-23)
 ----------------
