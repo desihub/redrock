@@ -27,6 +27,9 @@ def minfit(x,y):
     
     See redrock.zwarning.ZWarningMask.BAD_MINFIT for zwarn failure flags
     '''
+    if len(x) < 3:
+        return (-1,-1,-1,ZW.BAD_MINFIT)
+
     try:
         #- y = a x^2 + b x + c
         a,b,c = np.polyfit(x,y,2)
@@ -154,7 +157,7 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3):
         zzchi2, zzcoeff, zzpenalty = redrock.zscan.calc_zchi2(zz, spectra, template)
 
         #- fit parabola to 3 points around minimum
-        i = min(max(np.argmin(zzchi2),1), len(zz)-1)
+        i = min(max(np.argmin(zzchi2),1), len(zz)-2)
         zmin, sigma, chi2min, zwarn = minfit(zz[i-1:i+2], zzchi2[i-1:i+2])
         try:
             coeff = redrock.zscan.calc_zchi2([zmin,], spectra, template)[1][0]
