@@ -26,8 +26,8 @@ from desispec.interpolation import resample_flux
 
 parser = optparse.OptionParser(usage = "%prog [options]")
 parser.add_option("-o", "--outfile", type=str,  help="Output filename")
-parser.add_option("--niter", type=int,  help="Number of EMPCA iterations to run [%default]", default=5)
-parser.add_option("--nvec", type=int,  help="Number of basis vectors to generate [%default]", default=5)
+parser.add_option("--niter", type=int,  help="Number of EMPCA iterations to run [%default]", default=10)
+parser.add_option("--nvec", type=int,  help="Number of basis vectors to generate [%default]", default=10)
 
 opts, args = parser.parse_args()
 
@@ -37,23 +37,31 @@ if opts.outfile is None:
     parser.print_help()
     sys.exit(1)
 
-#- Generate templates and resample to 0.2A grid that covers
-#- z=0 to 2 for obsframe wavelengths 3500 to 10000
+#- Generate templates and resample to 0.1A grid that covers
+#- z=0 to 1.85 for obsframe wavelengths 3500 to 11000, purposefully
+#- avoiding Lyman-alpha to focus PCA variations on other lines
 dw = 0.1
-wave = np.arange(3500/3., 10000+dw/2, dw)
-nelg = 500
-nlrg = 250
-tflux, twave, tmeta = ELG().make_templates(nelg, restframe=True)
+wave = np.arange(3500/(1+1.85), 11000+dw/2, dw)
+nelg = 1000
+nlrg = 500
+tflux, twave, tmeta = ELG().make_templates(nelg, restframe=True, nocolorcuts=True)
 elgflux = np.zeros((nelg, len(wave)))
 for i in range(nelg):
     elgflux[i] = resample_flux(wave, twave, tflux[i])
 
-tflux, twave, tmeta = LRG().make_templates(nlrg, restframe=True)
+tflux, twave, tmeta = LRG().make_templates(nlrg, restframe=True, nocolorcuts=True)
 lrgflux = np.zeros((nlrg, len(wave)))
 for i in range(nlrg):
     lrgflux[i] = resample_flux(wave, twave, tflux[i])
     
 flux = np.vstack([elgflux, lrgflux])
+
+#- fix a resampling bug that causes end-point outliers
+flux[:, -1] = flux[:, -2]
+
+#- Normalize spectra so that PCA captures variance rather than normalization
+for i in range(flux.shape[0]):
+    flux[i] /= np.median(flux[i])
     
 #- EMPCA fit
 print('RR: Fitting for basis vectors')
@@ -83,11 +91,4 @@ hdus.append(fits.ImageHDU(model.coeff, name='ARCHETYPE_COEFF'))
 
 hdus.writeto(opts.outfile, clobber=True)
 print('RR: Wrote '+opts.outfile)
-
-
-
-
-
-
-
 

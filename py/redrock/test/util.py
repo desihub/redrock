@@ -7,7 +7,7 @@ import scipy.sparse
 
 from redrock.dataobj import Template, Spectrum, Target
 
-def get_template(wavemin=100, wavemax=9000, wavestep=5):
+def get_template(wavemin=100, wavemax=9000, wavestep=5, spectype='GALAXY', subtype=''):
     '''
     Returns fake template PCA eigenvectors to use for testing
     '''
@@ -15,11 +15,12 @@ def get_template(wavemin=100, wavemax=9000, wavestep=5):
     wave = np.arange(wavemin, wavemax + wavestep/2.0, wavestep)
     flux = np.zeros((3, len(wave)))
     wavemid = (wavemin + wavemax) / 2.0
+    wx = np.pi*(2*(wave - wavemin) / (wavemax-wavemin) - 1)
     flux[0] = 1.0
     flux[1] = np.arange(len(wave)) / len(wave)
-    flux[2] = np.exp(-(wave-wavemid)**2/(2*20**2))
+    flux[2] = np.exp(-(wave-wavemid)**2/(2*20**2)) + 0.1*np.sin(wx)
     
-    return Template('GALAXY', redshifts, wave, flux)
+    return Template(spectype, redshifts, wave, flux, subtype=subtype)
     
 def get_target(z=0.5, wavestep=5):
     '''Returns a fake target at redshift z to use for testing'''
@@ -27,7 +28,7 @@ def get_target(z=0.5, wavestep=5):
     c = np.random.normal(size=template.nbasis)
     c = [1,2,3]
     spectra = list()
-    for wave in [np.arange(4000, 6700, wavestep), np.arange(6502, 9001, wavestep)]:
+    for wave in [np.arange(4000, 6700, wavestep), np.arange(6502, 8001, wavestep)]:
         flux = template.eval(c, wave, z)
         sigma = np.random.normal(loc=1, scale=0.1, size=len(wave)).clip(0.5, 1.5)
         ivar = 1/sigma**2

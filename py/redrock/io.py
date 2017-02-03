@@ -56,16 +56,21 @@ def read_template(filename):
     rrtype = hdr['RRTYPE'].strip().upper()
     if rrtype == 'GALAXY':
         ### redshifts = 10**np.arange(np.log10(1+0.005), np.log10(1+2.0), 1.5e-4) - 1
-        redshifts = 10**np.arange(np.log10(1+0.005), np.log10(1+2.0), 3e-4) - 1
+        redshifts = 10**np.arange(np.log10(1+0.005), np.log10(1+1.8), 3e-4) - 1
     elif rrtype == 'STAR':
-        redshifts = np.arange(-0.001, 0.00101, 0.0001)
+        redshifts = np.arange(-0.002, 0.00201, 4e-5)
     elif rrtype == 'QSO':
         redshifts = 10**np.arange(np.log10(1+0.5), np.log10(1+4.0), 5e-4) - 1
         redshifts = 10**np.arange(np.log10(1+0.5), np.log10(1+4.0), 5e-4) - 1
     else:
         raise ValueError('Unknown redshift range to use for template type {}'.format(rrtype))
 
-    return Template(rrtype, redshifts, wave, flux)
+    if 'RRSUBTYP' in hdr:
+        subtype = hdr['RRSUBTYP'].strip().upper()
+    else:
+        subtype = ''
+
+    return Template(rrtype, redshifts, wave, flux, subtype=subtype)
 
 def find_templates(template_dir=None):
     '''
@@ -135,7 +140,10 @@ def write_zscan(filename, zscan, zfit, clobber=False):
         os.remove(filename)
 
     zfit = zfit.copy()
+
+    #- convert unicode to byte strings
     zfit.replace_column('spectype', np.char.encode(zfit['spectype'], 'ascii'))
+    zfit.replace_column('subtype', np.char.encode(zfit['subtype'], 'ascii'))
 
     zbest = zfit[zfit['znum'] == 0]
     zbest.remove_column('znum')
@@ -211,11 +219,13 @@ def read_zscan(filename):
                 thiszfit = Table(thiszfit[ii])
                 thiszfit.remove_columns(['targetid', 'znum', 'deltachi2'])
                 thiszfit.replace_column('spectype', _encode_column(thiszfit['spectype']))
+                thiszfit.replace_column('subtype', _encode_column(thiszfit['subtype']))
                 zscan[targetid][spectype]['zfit'] = thiszfit
     
         zfit = [fx['zfit/{}/zfit'.format(tid)].value for tid in targetids]
         zfit = Table(np.hstack(zfit))
         zfit.replace_column('spectype', _encode_column(zfit['spectype']))
+        zfit.replace_column('subtype', _encode_column(zfit['subtype']))
 
     return zscan, zfit
 

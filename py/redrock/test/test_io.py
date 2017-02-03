@@ -58,7 +58,7 @@ class TestIO(unittest.TestCase):
         t1.id = 111
         t2 = redrock.test.util.get_target(0.5)
         t2.id = 222
-        template = redrock.test.util.get_template()
+        template = redrock.test.util.get_template(subtype='BLAT')
         zscan1, zfit1 = redrock.zfind([t1,t2], [template,], ncpu=1)
 
         io.write_zscan(self.testfile, zscan1, zfit1)

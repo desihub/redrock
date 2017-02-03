@@ -21,14 +21,17 @@ def _wrap_calc_zchi2(args):
         print('-'*60)
         raise oops
 
-def zfind(targets, templates, ncpu=None):
+def zfind(targets, templates, ncpu=None, nminima=3):
     '''
     Given a list of targets and a list of templates, find redshifts
     
     Args:
         targets : list of Target objects
         templates: list of Template objects
+
+    Options:
         ncpu: number of CPU cores to use for multiprocessing
+        nminima: number of minima per spectype to return
 
     Returns nested dictionary results[targetid][templatetype] with keys
         - z: array of redshifts scanned
@@ -48,7 +51,7 @@ def zfind(targets, templates, ncpu=None):
     for target in targets:
         zscan[target.id] = dict()
         for t in templates:
-            zscan[target.id][t.type] = dict()
+            zscan[target.id][t.fulltype] = dict()
             
     if ncpu is None:
         ncpu = max(mp.cpu_count() // 2, 1)
@@ -59,7 +62,7 @@ def zfind(targets, templates, ncpu=None):
         print("INFO: not using multiprocessing")
 
     for t in templates:
-        print('Starting zchi2 scan for '+t.type)
+        print('Starting zchi2 scan for '+t.fulltype)
         
         t0 = time.time()
         if ncpu > 1:
@@ -67,20 +70,22 @@ def zfind(targets, templates, ncpu=None):
         else:
             zchi2, zcoeff, penalty = redrock.zscan.calc_zchi2_targets(t.redshifts, targets, t)
         dt = time.time() - t0
-        print('DEBUG: {} zscan in {:.1f} seconds'.format(t.type, dt))
+        print('DEBUG: {} zscan in {:.1f} seconds'.format(t.fulltype, dt))
 
         t0 = time.time()
         print('Starting fitz')
-        for i, zfit in enumerate(redrock.fitz.parallel_fitz_targets(zchi2+penalty, t.redshifts, targets, t, ncpu=ncpu, verbose=False)):
-            zscan[targets[i].id][t.type]['zfit'] = zfit
+        for i, zfit in enumerate(redrock.fitz.parallel_fitz_targets(
+                zchi2+penalty, t.redshifts, targets, t,
+                ncpu=ncpu, verbose=False, nminima=nminima)):
+            zscan[targets[i].id][t.fulltype]['zfit'] = zfit
         
         for i in range(len(targets)):
-            zscan[targets[i].id][t.type]['redshifts'] = t.redshifts
-            zscan[targets[i].id][t.type]['zchi2'] = zchi2[i]
-            zscan[targets[i].id][t.type]['penalty'] = penalty[i]
-            zscan[targets[i].id][t.type]['zcoeff'] = zcoeff[i]
+            zscan[targets[i].id][t.fulltype]['redshifts'] = t.redshifts
+            zscan[targets[i].id][t.fulltype]['zchi2'] = zchi2[i]
+            zscan[targets[i].id][t.fulltype]['penalty'] = penalty[i]
+            zscan[targets[i].id][t.fulltype]['zcoeff'] = zcoeff[i]
         dt = time.time() - t0
-        print('DEBUG: {} fitz in {:.1f} seconds'.format(t.type, dt))            
+        print('DEBUG: {} fitz in {:.1f} seconds'.format(t.fulltype, dt))
 
     #- Convert individual zfit results into a zall array
     t0 = time.time()
@@ -89,11 +94,17 @@ def zfind(targets, templates, ncpu=None):
     zfit = list() 
     for target in targets:
         tzfit = list()
-        for spectype in zscan[target.id]:
-            tmp = zscan[target.id][spectype]['zfit']
+        for fulltype in zscan[target.id]:
+            tmp = zscan[target.id][fulltype]['zfit']
+            #- TODO: reconsider fragile parsing of fulltype
+            if fulltype.count(':') > 0:
+                spectype, subtype = fulltype.split(':')
+            else:
+                spectype, subtype = (fulltype, '')
             tmp['spectype'] = spectype
+            tmp['subtype'] = subtype
             tzfit.append(tmp)
-            del zscan[target.id][spectype]['zfit']
+            del zscan[target.id][fulltype]['zfit']
 
         maxncoeff = max([tmp['coeff'].shape[1] for tmp in tzfit])
         for tmp in tzfit:
@@ -103,13 +114,24 @@ def zfind(targets, templates, ncpu=None):
                 tmp.replace_column('coeff', c)
 
         tzfit = astropy.table.vstack(tzfit)
-        ii = np.argsort(tzfit['chi2'])
-        tzfit = tzfit[ii]
+        tzfit.sort('chi2')
         tzfit['targetid'] = target.id
         tzfit['znum'] = np.arange(len(tzfit))
         tzfit['deltachi2'] = np.ediff1d(tzfit['chi2'], to_end=0.0)
         ii = np.where(tzfit['deltachi2'] < 9)[0]
         tzfit['zwarn'][ii] |= ZW.SMALL_DELTA_CHI2
+
+        #- Trim down cases of multiple subtypes for a single type (e.g. STARs)
+        #- tzfit is already sorted by chi2, so keep first nminima of each type
+        iikeep = list()
+        for spectype in np.unique(tzfit['spectype']):
+            ii = np.where(tzfit['spectype'] == spectype)[0]
+            iikeep.extend(ii[0:nminima])
+        if len(iikeep) < len(tzfit):
+            tzfit = tzfit[iikeep]
+            #- grouping by spectype could get chi2 out of order; resort
+            tzfit.sort('chi2')
+        
         zfit.append(tzfit)
 
     zfit = astropy.table.vstack(zfit)

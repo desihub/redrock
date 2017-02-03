@@ -6,7 +6,7 @@ import scipy.sparse
 from redrock.rebin import trapz_rebin
 
 class Template(object):
-    def __init__(self, template_type, redshifts, wave, flux):
+    def __init__(self, template_type, redshifts, wave, flux, subtype=''):
         '''
         Create a spectral Template PCA object
         
@@ -22,12 +22,21 @@ class Template(object):
         assert flux.shape[1] == len(wave)
         
         self.type = template_type
+        self.subtype = subtype
         self.redshifts = np.asarray(redshifts)
         self.wave = wave
         self.flux = flux
         self.nbasis = flux.shape[0]
         self.nwave = flux.shape[1]
-        
+
+    @property
+    def fulltype(self):
+        '''Return formatted type:subtype string'''
+        if self.subtype != '':
+            return '{}:{}'.format(self.type, self.subtype)
+        else:
+            return self.type
+
     def eval(self, coeff, wave, z):
         '''
         Return template for given coefficients, wavelengths, and redshift
