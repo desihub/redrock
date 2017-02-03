@@ -169,7 +169,7 @@ def calc_zchi2_targets(redshifts, targets, template, verbose=False):
             
         for j in range(ntargets):
             Tb = list()
-            for k, s in enumerate(targets[j].spectra):  #- TODO: coadd?
+            for k, s in enumerate(targets[j].spectra):
                 key = s.wavehash
                 Tb.append(s.Rcsr.dot(Tx[key]))
 

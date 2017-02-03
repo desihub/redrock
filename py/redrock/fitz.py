@@ -133,7 +133,6 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3):
     '''Refines redshift measurement around up to nminima minima
     
     TODO: document return values
-    TODO: fix deltachi2
     TODO: if there are fewer than nminima minima, consider padding
     '''
     assert len(zchi2) == len(redshifts)
