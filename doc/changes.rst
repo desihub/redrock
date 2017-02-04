@@ -2,15 +2,22 @@
 Redrock change log
 ==================
 
-0.3.1 (unreleased)
+0.4.1 (unreleased)
 ------------------
+
+* No changes yet
+
+0.4 (2017-02-03)
+----------------
 
 * add optional truth input to plotspec
 * Fix bug when first target is missing a channel of data
 * external.desi.read_bricks allow glob for list of brick files
 * external.desi.read_bricks read subset of targetids from bricks
+* add support for stars and template subtypes
+* limit galaxy redshift scan to z<1.7
 
-0.3 (2016-01-23)
+0.3 (2017-01-23)
 ----------------
 
 * added this file
