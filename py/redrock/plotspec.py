@@ -85,7 +85,7 @@ class PlotSpec(object):
         coeff = zz['coeff']
 
         for tp in self.templates:
-            if tp.type == zz['spectype']:
+            if (tp.type == zz['spectype']) & (tp.subtype == zz['subtype']):
                 break
     
         if tp.type != zz['spectype']:
@@ -149,7 +149,7 @@ class PlotSpec(object):
             ymax = max(ymax, np.percentile(flux[~isbad], 99), np.max(model)*1.05)
 
         #- Label object type and redshift
-        label = 'znum {} {} z={:.3f}'.format(self.znum, zz['spectype'], zz['z'])
+        label = 'znum {} {} z={:.3f}'.format(self.znum, tp.fulltype, zz['z'])
         print('target {} id {} {}'.format(self.itarget, target.id, label))
         ytext = ymin+0.9*(ymax-ymin)
         self._ax2.text(3800, ytext, label)

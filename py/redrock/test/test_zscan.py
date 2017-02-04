@@ -71,6 +71,23 @@ class TestZScan(unittest.TestCase):
         self.assertEqual(zcoeffa.shape, zcoeffb.shape)
         self.assertTrue(np.all(zchi2a == zchi2b))
         self.assertTrue(np.all(zcoeffa == zcoeffb))
-                
+
+    def test_subtype(self):
+        z1 = 0.0
+        z2 = 1e-4
+        seed = np.random.randint(2**31)
+        print('TEST: Using random seed {}'.format(seed))
+        np.random.seed(seed)
+        t1 = redrock.test.util.get_target(z1); t1.id = 111
+        t2 = redrock.test.util.get_target(z2); t2.id = 222
+        Fstar = redrock.test.util.get_template(spectype='STAR', subtype='F')
+        Mstar = redrock.test.util.get_template(spectype='STAR', subtype='M')
+        Fstar.redshifts = np.linspace(-1e-3, 1e-3, 25)
+        Fstar.redshifts = np.linspace(-1e-3, 1e-3, 25)
+        nminima = 3
+        zscan, zfit = redrock.zfind([t1,t2], [Fstar, Mstar,], ncpu=1, nminima=nminima)
+        self.assertEqual(len(zfit), 2*nminima)
+        self.assertTrue(np.all(zfit['spectype'] == 'STAR'))
+
 if __name__ == '__main__':
     unittest.main()

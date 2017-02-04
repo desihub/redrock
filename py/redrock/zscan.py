@@ -165,21 +165,13 @@ def calc_zchi2_targets(redshifts, targets, template, verbose=False):
     for i, z in enumerate(redshifts):
         #- If all targets have the same number of spectra with the same
         #- wavelength grids, we only need to calculate this once per redshift.
-        #- TODO: That isn't general; this is an area for optimization.
         Tx = rebin_template(template, z, refspectra)
             
         for j in range(ntargets):
             Tb = list()
             for k, s in enumerate(targets[j].spectra):
                 key = s.wavehash
-                try:
-                    Tb.append(s.Rcsr.dot(Tx[key]))
-                except KeyError as err:
-                    #--- DEBUG ---
-                    import IPython
-                    IPython.embed()
-                    #--- DEBUG ---
-                    raise err
+                Tb.append(s.Rcsr.dot(Tx[key]))
 
             Tb = np.vstack(Tb)
 
@@ -187,7 +179,9 @@ def calc_zchi2_targets(redshifts, targets, template, verbose=False):
             wflux = wfluxlist[j]
             weights = weightslist[j]
             W = Wlist[j]
-            a = np.linalg.solve(Tb.T.dot(W.dot(Tb)), Tb.T.dot(wflux))
+            M = Tb.T.dot(W.dot(Tb))
+            y = Tb.T.dot(wflux)
+            a = np.linalg.solve(M, y)
 
             model = Tb.dot(a)
             zchi2[j,i] = np.sum( (flux - model)**2 * weights )
