@@ -96,7 +96,7 @@ def read_bricks(brickfiles, trueflux=False, targetids=None):
 
     return targets
 
-def rrdesi():
+def rrdesi(options=None):
     import redrock
     import optparse
     from astropy.io import fits
@@ -112,7 +112,10 @@ def rrdesi():
     ### parser.add_option("--coadd", help="use coadd instead of individual spectra", action="store_true")
     parser.add_option("--allspec", help="use individual spectra instead of coadd", action="store_true")
 
-    opts, brickfiles = parser.parse_args()
+    if options is None:
+        opts, brickfiles = parser.parse_args()
+    else:
+        opts, brickfiles = parser.parse_args(options)
 
     if (opts.output is None) and (opts.zbest is None):
         print('ERROR: --output or --zbest required')
