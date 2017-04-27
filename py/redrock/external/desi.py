@@ -1,3 +1,8 @@
+import sys
+import warnings
+if sys.version_info[0] > 2:
+    basestring = str
+
 import numpy as np
 import desispec.io
 from desispec.resolution import Resolution
@@ -22,21 +27,34 @@ def write_zbest(outfile, zbest):
     zbest.meta['EXTNAME'] = 'ZBEST'
     zbest.write(outfile, overwrite=True)
 
-def read_bricks(brickfiles, trueflux=False):
+def read_bricks(brickfiles, trueflux=False, targetids=None):
     '''
     Read targets from a list of brickfiles
     
     Args:
-        brickfiles : list of input brick files
+        brickfiles : list of input brick files, or string glob to match
         
     Returns list of Target objects
     '''
+    if isinstance(brickfiles, basestring):
+        import glob
+        brickfiles = glob.glob(brickfiles)
+
+    assert len(brickfiles) > 0
+
     bricks = list()
-    targetids = set()
-    for infile in brickfiles:
-        b = desispec.io.Brick(infile)
-        bricks.append(b)
-        targetids.update(b.get_target_ids())
+    brick_targetids = set()
+
+    #- Ignore warnings about zdc2 bricks lacking bricknames in header
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        for infile in brickfiles:
+            b = desispec.io.Brick(infile)
+            bricks.append(b)
+            brick_targetids.update(b.get_target_ids())
+
+    if targetids is None:
+        targetids = brick_targetids
 
     targets = list()
     for targetid in targetids:
@@ -52,11 +70,11 @@ def read_bricks(brickfiles, trueflux=False):
 
             for i in range(flux.shape[0]):
                 if np.all(flux[i] == 0):
-                    print('WARNING: Skipping spectrum {} of target {} on brick {} with flux=0'.format(i, targetid, brick.brickname))
+                    # print('WARNING: Skipping spectrum {} of target {} on brick {} with flux=0'.format(i, targetid, brick.brickname))
                     continue
 
                 if np.all(ivar[i] == 0):
-                    print('WARNING: Skipping spectrum {} of target {} on brick {} with ivar=0'.format(i, targetid, brick.brickname))
+                    # print('WARNING: Skipping spectrum {} of target {} on brick {} with ivar=0'.format(i, targetid, brick.brickname))
                     continue
 
                 R = Resolution(Rdata[i])
@@ -67,4 +85,7 @@ def read_bricks(brickfiles, trueflux=False):
         else:
             print('ERROR: Target {} on brick {} has no good spectra'.format(targetid, brick.brickname))
     
+    for brick in bricks:
+        brick.close()
+
     return targets

@@ -8,7 +8,6 @@ import numpy as np
 from astropy.io import fits
 from astropy.table import Table
 
-from .zbest import find_zbest
 from . import Template
 
 #- for python 3 compatibility
@@ -52,18 +51,26 @@ def read_template(filename):
         wave = 10**wave
 
     flux = native_endian(fx['BASIS_VECTORS'].data)
+    fx.close()
 
     rrtype = hdr['RRTYPE'].strip().upper()
     if rrtype == 'GALAXY':
-        redshifts = 10**np.arange(np.log10(1+0.005), np.log10(1+1.65), 1.5e-4) - 1
+        ### redshifts = 10**np.arange(np.log10(1+0.005), np.log10(1+2.0), 1.5e-4) - 1
+        redshifts = 10**np.arange(np.log10(1+0.005), np.log10(1+1.7), 3e-4) - 1
     elif rrtype == 'STAR':
-        redshifts = np.arange(-0.001, 0.00101, 0.0001)
+        redshifts = np.arange(-0.002, 0.00201, 4e-5)
     elif rrtype == 'QSO':
+        redshifts = 10**np.arange(np.log10(1+0.5), np.log10(1+4.0), 5e-4) - 1
         redshifts = 10**np.arange(np.log10(1+0.5), np.log10(1+4.0), 5e-4) - 1
     else:
         raise ValueError('Unknown redshift range to use for template type {}'.format(rrtype))
 
-    return Template(rrtype, redshifts, wave, flux)
+    if 'RRSUBTYP' in hdr:
+        subtype = hdr['RRSUBTYP'].strip().upper()
+    else:
+        subtype = ''
+
+    return Template(rrtype, redshifts, wave, flux, subtype=subtype)
 
 def find_templates(template_dir=None):
     '''
@@ -99,7 +106,7 @@ def read_templates(template_list=None, template_dir=None):
         template_list = find_templates(template_dir)
 
     templates = list()
-    if isinstance(template_list, basestring) and os.path.isfile(template_list):
+    if isinstance(template_list, basestring):
         templates.append(read_template(template_list))
     else:
         for tfile in template_list:
@@ -109,15 +116,22 @@ def read_templates(template_list=None, template_dir=None):
         raise IOError('No templates found')
     
     return templates
-    
-def write_zscan(filename, results, clobber=False):
+
+def write_zscan(filename, zscan, zfit, clobber=False):
     '''
     Writes redrock.zfind results to filename
     
     The nested dictionary structure of results is mapped into a nested
     group structure of the HDF5 file:
+
+    TODO: document structure
     
-    {targetid}/{templatetype}/[z|zchi2|zbest|minchi2|zerr|zwarn]
+    /targetids[nt]
+    /zscan/{spectype}/redshifts[nz]
+    /zscan/{spectype}/zchi2[nt, nz]
+    /zscan/{spectype}/penalty[nt, nz]
+    /zscan/{spectype}/zcoeff[nt, nz, nc] or zcoeff[nt, nc, nz] ?
+    /zfit/{targetid}/zfit table...
     
     if clobber=True, replace pre-existing file
     '''
@@ -125,15 +139,42 @@ def write_zscan(filename, results, clobber=False):
     if clobber and os.path.exists(filename):
         os.remove(filename)
 
-    zbest = find_zbest(results)        
+    zfit = zfit.copy()
+
+    #- convert unicode to byte strings
+    zfit.replace_column('spectype', np.char.encode(zfit['spectype'], 'ascii'))
+    zfit.replace_column('subtype', np.char.encode(zfit['subtype'], 'ascii'))
+
+    zbest = zfit[zfit['znum'] == 0]
+    zbest.remove_column('znum')
+        
     zbest.write(filename, path='zbest', format='hdf5')
 
+    targetids = np.asarray(zbest['targetid'])
+    spectypes = list(zscan[targetids[0]].keys())
+
     fx = h5py.File(filename)
-    for targetid in results:
-        for ttype in results[targetid]:
-            for key in results[targetid][ttype]:
-                name = 'targets/{}/{}/{}'.format(targetid, ttype, key)
-                fx[name] = results[targetid][ttype][key]
+    fx['targetids'] = targetids
+
+    for spectype in spectypes:
+        zchi2 = np.vstack([zscan[t][spectype]['zchi2'] for t in targetids])
+        penalty = np.vstack([zscan[t][spectype]['penalty'] for t in targetids])
+        zcoeff = list()
+        for t in targetids:
+            tmp = zscan[t][spectype]['zcoeff']
+            tmp = tmp.reshape((1,)+tmp.shape)
+            zcoeff.append(tmp)
+        zcoeff = np.vstack(zcoeff)
+        fx['zscan/{}/zchi2'.format(spectype)] = zchi2
+        fx['zscan/{}/penalty'.format(spectype)] = penalty
+        fx['zscan/{}/zcoeff'.format(spectype)] = zcoeff
+        fx['zscan/{}/redshifts'.format(spectype)] = zscan[targetids[0]][spectype]['redshifts']
+
+    for targetid in targetids:
+        ii = np.where(zfit['targetid'] == targetid)[0]
+        fx['zfit/{}/zfit'.format(targetid)] = zfit[ii].as_array()
+        #- TODO: fx['zfit/{}/model']
+
     fx.close()
     
 def read_zscan(filename):
@@ -145,25 +186,65 @@ def read_zscan(filename):
         results is a nested dictionary results[targetid][templatetype] with keys
             - z: array of redshifts scanned
             - zchi2: array of chi2 fit at each z
+            - penalty: array of chi2 penalties for unphysical fits at each z
             - zbest: best fit redshift (finer resolution fit around zchi2 min)
             - minchi2: chi2 at zbest
             - zerr: uncertainty on zbest
             - zwarn: 0=good, non-0 is a warning flag    
     '''
     import h5py
-    zbest = Table.read(filename, format='hdf5', path='zbest')
-    fx = h5py.File(filename, mode='r')
-    results = dict()
-    #- NOTE: this is clumsy iteration
-    targets = fx['targets']
-    for targetid in targets:
-        results[int(targetid)] = dict()
-        for ttype in targets[targetid]:
-            results[int(targetid)][ttype] = dict()
-            for dataname in targets[targetid+'/'+ttype]:
-                results[int(targetid)][ttype][dataname] = targets[targetid+'/'+ttype+'/'+dataname].value
-                
-    return zbest, results
-                
+    # zbest = Table.read(filename, format='hdf5', path='zbest')
+    with h5py.File(filename, mode='r') as fx:
+        targetids = fx['targetids'].value
+        spectypes = list(fx['zscan'].keys())
+    
+        zscan = dict()
+        for targetid in targetids:
+            zscan[targetid] = dict()
+            for spectype in spectypes:
+                zscan[targetid][spectype] = dict()
+
+        for spectype in spectypes:
+            zchi2 = fx['/zscan/{}/zchi2'.format(spectype)].value
+            penalty = fx['/zscan/{}/penalty'.format(spectype)].value
+            zcoeff = fx['/zscan/{}/zcoeff'.format(spectype)].value
+            redshifts = fx['/zscan/{}/redshifts'.format(spectype)].value
+            for i, targetid in enumerate(targetids):
+                zscan[targetid][spectype]['redshifts'] = redshifts
+                zscan[targetid][spectype]['zchi2'] = zchi2[i]
+                zscan[targetid][spectype]['penalty'] = penalty[i]
+                zscan[targetid][spectype]['zcoeff'] = zcoeff[i]
+                thiszfit = fx['/zfit/{}/zfit'.format(targetid)].value
+                ii = (thiszfit['spectype'].astype('U') == spectype)
+                thiszfit = Table(thiszfit[ii])
+                thiszfit.remove_columns(['targetid', 'znum', 'deltachi2'])
+                thiszfit.replace_column('spectype', _encode_column(thiszfit['spectype']))
+                thiszfit.replace_column('subtype', _encode_column(thiszfit['subtype']))
+                zscan[targetid][spectype]['zfit'] = thiszfit
+    
+        zfit = [fx['zfit/{}/zfit'.format(tid)].value for tid in targetids]
+        zfit = Table(np.hstack(zfit))
+        zfit.replace_column('spectype', _encode_column(zfit['spectype']))
+        zfit.replace_column('subtype', _encode_column(zfit['subtype']))
+
+    return zscan, zfit
+
+def _encode_column(c):
+    '''Returns a bytes column encoded into a string column'''
+    return c.astype((str, c.dtype.itemsize))
+
+#- Adapted from http://stackoverflow.com/a/21659588; unix only
+def getch():
+    '''Return a single character from stdin'''
+    import sys, tty, termios
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
+
             
     
