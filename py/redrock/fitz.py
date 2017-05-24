@@ -64,7 +64,9 @@ def parallel_fitz_targets(zchi2, redshifts, targets, template, nminima=3, ncpu=N
     
     import multiprocessing as mp
     if ncpu is None:
-        ncpu = mp.cpu_count() // 2
+        ncpu = max(1, mp.cpu_count() // 2)
+    else:
+        ncpu = max(1, ncpu)
     
     #- Wrapper function for fitz.  This can use targets, template, etc. without
     #- copying them.  multiprocessing.Queue is used for I/O to know which
@@ -100,9 +102,15 @@ def parallel_fitz_targets(zchi2, redshifts, targets, template, nminima=3, ncpu=N
         qin.put( (start, n) )
 
     #- Start processes to run wrap_fitz
-    for i in range(ncpu):
-        p = mp.Process(target=wrap_fitz, args=(i, qin, qout))
-        p.start()
+    if ncpu > 1:
+        for i in range(ncpu):
+            p = mp.Process(target=wrap_fitz, args=(i, qin, qout))
+            p.start()
+    else:
+        print('INFO: not using multiprocessing in fitz')
+        wrap_fitz(0, qin, qout)
+
+    #- TODO: cache Process objects and explicitly join them?
 
     #- Pull results from queue
     results = list()
