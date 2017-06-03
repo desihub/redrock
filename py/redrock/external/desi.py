@@ -4,7 +4,7 @@ redrock wrapper tools for DESI
 
 from __future__ import absolute_import, division, print_function
 
-import sys
+import os, sys
 import warnings
 if sys.version_info[0] > 2:
     basestring = str
@@ -142,6 +142,7 @@ def rrdesi(options=None):
     zscan, zfit = redrock.zfind(targets, templates, ncpu=opts.ncpu)
 
     if opts.output:
+        print('INFO: writing {}'.format(opts.output))
         redrock.io.write_zscan(opts.output, zscan, zfit, clobber=True)
 
     if opts.zbest:
@@ -157,8 +158,10 @@ def rrdesi(options=None):
 
         #- Get the BRICKNAME from the first brick file
         hdr = fits.getheader(brickfiles[0])
-        zbest['BRICKNAME'] = hdr['BRICKNAM']
+        if 'BRICKNAM' in hdr:
+            zbest['BRICKNAME'] = hdr['BRICKNAM']
 
+        print('INFO: writing {}'.format(opts.zbest))
         write_zbest(opts.zbest, zbest)
 
     if opts.debug:

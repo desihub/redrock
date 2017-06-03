@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import sys
 import numpy as np
 import redrock
 from redrock.zwarning import ZWarningMask as ZW
@@ -7,24 +8,24 @@ from redrock.zwarning import ZWarningMask as ZW
 def find_minima(x):
     '''
     return indices of local minima of x, including edges, sorted small to large
-    
+
     Note: this is somewhat conservative in the case of repeated values:
-    
+
     find_minima([1,1,1,2,2,2]) -> [0,1,2,4,5]
     '''
     x = np.asarray(x)
     ii = np.where(np.r_[True, x[1:]<=x[:-1]] & np.r_[x[:-1]<=x[1:], True])[0]
-    
+
     jj = np.argsort(x[ii])
-    
+
     return ii[jj]
 
 def minfit(x,y):
     '''
     Fits y = y0 + ((x-x0)/xerr)**2
-    
+
     Returns (x0, xerr, y0, zwarn) where zwarn=0 is good fit
-    
+
     See redrock.zwarning.ZWarningMask.BAD_MINFIT for zwarn failure flags
     '''
     if len(x) < 3:
@@ -35,7 +36,7 @@ def minfit(x,y):
         a,b,c = np.polyfit(x,y,2)
     except np.linalg.LinAlgError:
         return (-1,-1,-1,ZW.BAD_MINFIT)
-    
+
     if a == 0.0:
         return (-1,-1,-1,ZW.BAD_MINFIT)
 
@@ -61,28 +62,33 @@ def parallel_fitz_targets(zchi2, redshifts, targets, template, nminima=3, ncpu=N
     TODO: document
     '''
     assert zchi2.shape == (len(targets), len(redshifts))
-    
+
     import multiprocessing as mp
     if ncpu is None:
         ncpu = max(1, mp.cpu_count() // 2)
     else:
         ncpu = max(1, ncpu)
-    
+
     #- Wrapper function for fitz.  This can use targets, template, etc. without
     #- copying them.  multiprocessing.Queue is used for I/O to know which
     #- targets to process.
-    def wrap_fitz(i, qin, qout):
+    def wrap_fitz(i, qin, qout, close_qout=True):
         '''
         i: process number
         qin, qout: input and output multiprocessing.Queue
+        close_qout: if True, close qout before exiting; needed if calling
+            wrap_fitz from a multiprocessing Process with a large number of
+            targets.
 
         qin sends (start_index, number_of_targets_to_process)
         qout receives (target_index, fitz_results)
         '''
+        import sys, os
         try:
             start, n = qin.get()
             if verbose:
-                print('Process {} targets[]{}:{}]'.format(i, start, start+n))
+                print('Process {} targets[{}:{}]'.format(i, start, start+n))
+                sys.stdout.flush()
             for j in range(start, start+n):
                 results = fitz(zchi2[j], redshifts, targets[j].spectra, template, nminima=nminima)
                 #- return index with results so that they can be sorted
@@ -91,6 +97,9 @@ def parallel_fitz_targets(zchi2, redshifts, targets, template, nminima=3, ncpu=N
             import traceback, sys
             message = "".join(traceback.format_exception(*sys.exc_info()))
             qout.put( (i, err, message) )
+
+        if close_qout:
+            qout.close()
 
     #- Load Queue with start,n indices of targets to process
     ii = np.linspace(0, len(targets), ncpu+1).astype(int)
@@ -108,13 +117,14 @@ def parallel_fitz_targets(zchi2, redshifts, targets, template, nminima=3, ncpu=N
             p.start()
     else:
         print('INFO: not using multiprocessing in fitz')
-        wrap_fitz(0, qin, qout)
-
-    #- TODO: cache Process objects and explicitly join them?
+        wrap_fitz(0, qin, qout, close_qout=False)
 
     #- Pull results from queue
     results = list()
     for i in range(len(targets)):
+        if verbose:
+            print('Getting results for target {}/{}'.format(i+1, len(targets)))
+            sys.stdout.flush()
         results.append(qout.get())
 
     #- Check for any errors
@@ -126,20 +136,20 @@ def parallel_fitz_targets(zchi2, redshifts, targets, template, nminima=3, ncpu=N
             print("ERROR: result {} generated an exception".format(i))
             print(message)
             mpfail = True
-    
+
     if mpfail:
         print("ERROR: Raising the last of the exceptions")
         raise RuntimeError(message)
-    
+
     #- Sort results into original order of targets
     isort = np.argsort([r[0] for r in results])
     results = [results[i][1] for i in isort]
-    
+
     return results
 
 def fitz(zchi2, redshifts, spectra, template, nminima=3):
     '''Refines redshift measurement around up to nminima minima
-    
+
     TODO: document return values
     TODO: if there are fewer than nminima minima, consider padding
     '''
@@ -205,7 +215,7 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3):
     #- Convert list of dicts -> Table
     from astropy.table import Table
     results = Table(results)
-    
+
     assert len(results) > 0
-    
+
     return results
