@@ -1,4 +1,6 @@
 from __future__ import division, print_function
+import time
+import os, sys
 
 import time
 import numpy as np
@@ -47,6 +49,7 @@ def zfind(targets, templates, ncpu=None, nminima=3):
     #     QSO  = 10**np.arange(np.log10(0.5), np.log10(4.0), 5e-4),
     # )
 
+    pid = os.getpid()
     zscan = dict()
     for target in targets:
         zscan[target.id] = dict()
@@ -62,7 +65,7 @@ def zfind(targets, templates, ncpu=None, nminima=3):
         print("INFO: not using multiprocessing")
 
     for t in templates:
-        print('Starting zchi2 scan for '+t.fulltype)
+        print('DEBUG: PID {} starting zchi2 scan for {}'.format(pid, t.fulltype))
         
         t0 = time.time()
         if ncpu > 1:
@@ -70,10 +73,10 @@ def zfind(targets, templates, ncpu=None, nminima=3):
         else:
             zchi2, zcoeff, penalty = redrock.zscan.calc_zchi2_targets(t.redshifts, targets, t)
         dt = time.time() - t0
-        print('DEBUG: {} zscan in {:.1f} seconds'.format(t.fulltype, dt))
+        ### print('DEBUG: PID {} {} zscan in {:.1f} seconds'.format(pid, t.fulltype, dt))
 
         t0 = time.time()
-        print('Starting fitz')
+        ### print('DEBUG: PID {} Starting fitz for {}'.format(pid, t.fulltype))
         for i, zfit in enumerate(redrock.fitz.parallel_fitz_targets(
                 zchi2+penalty, t.redshifts, targets, t,
                 ncpu=ncpu, verbose=False, nminima=nminima)):
@@ -85,11 +88,12 @@ def zfind(targets, templates, ncpu=None, nminima=3):
             zscan[targets[i].id][t.fulltype]['penalty'] = penalty[i]
             zscan[targets[i].id][t.fulltype]['zcoeff'] = zcoeff[i]
         dt = time.time() - t0
-        print('DEBUG: {} fitz in {:.1f} seconds'.format(t.fulltype, dt))
+        ### print('DEBUG: PID {} {} fitz in {:.1f} seconds'.format(pid, t.fulltype, dt))
 
     #- Convert individual zfit results into a zall array
     t0 = time.time()
-    print('Making zall')
+    ### print('DEBUG: PID {} Making zall'.format(pid))
+    sys.stdout.flush()
     import astropy.table
     zfit = list() 
     for target in targets:
@@ -136,7 +140,7 @@ def zfind(targets, templates, ncpu=None, nminima=3):
 
     zfit = astropy.table.vstack(zfit)
     dt = time.time() - t0
-    print('DEBUG: zall in {:.1f} seconds'.format(dt))
+    ### print('DEBUG: PID {} zall in {:.1f} seconds'.format(pid, dt))
 
     return zscan, zfit
     

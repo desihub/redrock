@@ -4,7 +4,7 @@ redrock wrapper tools for DESI
 
 from __future__ import absolute_import, division, print_function
 
-import sys
+import os, sys
 import warnings
 if sys.version_info[0] > 2:
     basestring = str
@@ -41,6 +41,9 @@ def read_bricks(brickfiles, trueflux=False, targetids=None):
         brickfiles : list of input brick files, or string glob to match
         
     Returns list of Target objects
+
+    Note: these don't actually have to be bricks anymore; they are read via
+        desispec.io.read_frame()
     '''
     if isinstance(brickfiles, basestring):
         import glob
@@ -52,12 +55,10 @@ def read_bricks(brickfiles, trueflux=False, targetids=None):
     brick_targetids = set()
 
     #- Ignore warnings about zdc2 bricks lacking bricknames in header
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore')
-        for infile in brickfiles:
-            b = desispec.io.Brick(infile)
-            bricks.append(b)
-            brick_targetids.update(b.get_target_ids())
+    for infile in brickfiles:
+        b = desispec.io.read_frame(infile)
+        bricks.append(b)
+        brick_targetids.update(b.fibermap['TARGETID'])
 
     if targetids is None:
         targetids = brick_targetids
@@ -66,13 +67,16 @@ def read_bricks(brickfiles, trueflux=False, targetids=None):
     for targetid in targetids:
         spectra = list()
         for brick in bricks:
-            wave = brick.get_wavelength_grid()
-            flux, ivar, Rdata, info = brick.get_target(targetid)
+            wave = brick.wave
+            ii = (brick.fibermap['TARGETID'] == targetid)
+            flux = brick.flux[ii]
+            ivar = brick.ivar[ii]
+            Rdata = brick.resolution_data[ii]
 
             #- work around desispec.io.Brick returning 32-bit non-native endian
-            flux = flux.astype(float)
-            ivar = ivar.astype(float)
-            Rdata = Rdata.astype(float)
+            # flux = flux.astype(float)
+            # ivar = ivar.astype(float)
+            # Rdata = Rdata.astype(float)
 
             for i in range(flux.shape[0]):
                 if np.all(flux[i] == 0):
@@ -89,11 +93,8 @@ def read_bricks(brickfiles, trueflux=False, targetids=None):
         if len(spectra) > 0:
             targets.append(Target(targetid, spectra))
         else:
-            print('ERROR: Target {} on brick {} has no good spectra'.format(targetid, brick.brickname))
+            print('ERROR: Target {} on {} has no good spectra'.format(targetid, os.path.basename(brickfiles[0])))
     
-    for brick in bricks:
-        brick.close()
-
     return targets
 
 def rrdesi(options=None):
@@ -141,6 +142,7 @@ def rrdesi(options=None):
     zscan, zfit = redrock.zfind(targets, templates, ncpu=opts.ncpu)
 
     if opts.output:
+        print('INFO: writing {}'.format(opts.output))
         redrock.io.write_zscan(opts.output, zscan, zfit, clobber=True)
 
     if opts.zbest:
@@ -156,8 +158,10 @@ def rrdesi(options=None):
 
         #- Get the BRICKNAME from the first brick file
         hdr = fits.getheader(brickfiles[0])
-        zbest['BRICKNAME'] = hdr['BRICKNAM']
+        if 'BRICKNAM' in hdr:
+            zbest['BRICKNAME'] = hdr['BRICKNAM']
 
+        print('INFO: writing {}'.format(opts.zbest))
         write_zbest(opts.zbest, zbest)
 
     if opts.debug:
