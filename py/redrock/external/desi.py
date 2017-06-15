@@ -189,7 +189,7 @@ def rrdesi(options=None):
         print('ERROR: must provide input spectra/brick files')
         sys.exit(1)
 
-    if bricks:
+    if opts.bricks:
         targets = read_bricks(infiles)
     else:
         targets = read_spectra(infiles)
