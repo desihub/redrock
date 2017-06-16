@@ -54,27 +54,31 @@ def read_spectra(spectrafiles, targetids=None):
     #- Ignore warnings about zdc2 bricks lacking bricknames in header
     for infile in spectrafiles:
         sp = desispec.io.read_spectra(infile)
+        if hasattr(sp, 'fmap'):
+            sp.fibermap = sp.fmap   #- for future compatibility
         input_spectra.append(sp)
-        input_targetids.update(sp.fmap['TARGETID'])
+        input_targetids.update(sp.fibermap['TARGETID'])
 
     if targetids is None:
         targetids = input_targetids
 
     targets = list()
+    bricknames = list()
     for targetid in targetids:
         spectra = list()
         for sp in input_spectra:
+            ii = (sp.fibermap['TARGETID'] == targetid)
+            if np.count_nonzero(ii) == 0:
+                continue
+            if 'BRICKNAME' in sp.fibermap.dtype.names:
+                brickname = sp.fibermap['BRICKNAME'][ii][0]
+            else:
+                brickname = 'unknown'
             for x in sp.bands:          #- typically 'b', 'r', 'z'
-                wave = sp.wave[x]
-                ii = (sp.fmap['TARGETID'] == targetid)
+                wave = sp.wave[x]                
                 flux = sp.flux[x][ii]
                 ivar = sp.ivar[x][ii]
                 Rdata = sp.resolution_data[x][ii]
-
-                #- work around desispec.io.Brick returning 32-bit non-native endian
-                # flux = flux.astype(float)
-                # ivar = ivar.astype(float)
-                # Rdata = Rdata.astype(float)
 
                 for i in range(flux.shape[0]):
                     if np.all(flux[i] == 0):
@@ -88,12 +92,22 @@ def read_spectra(spectrafiles, targetids=None):
                     R = Resolution(Rdata[i])
                     spectra.append(Spectrum(wave, flux[i], ivar[i], R))
 
+        bricknames.append(brickname)
+        #- end of for targetid in targetids loop
+
         if len(spectra) > 0:
             targets.append(Target(targetid, spectra))
         else:
             print('ERROR: Target {} on {} has no good spectra'.format(targetid, os.path.basename(brickfiles[0])))
 
-    return targets
+    #- Create a metadata table in case we might want to add other columns
+    #- in the future
+    assert len(bricknames) == len(targets)
+    dtype = [('BRICKNAME', 'S8'),]
+    meta = np.zeros(len(bricknames), dtype=dtype)
+    meta['BRICKNAME'] = bricknames
+
+    return targets, meta
 
 def read_bricks(brickfiles, trueflux=False, targetids=None):
     '''
@@ -126,11 +140,19 @@ def read_bricks(brickfiles, trueflux=False, targetids=None):
         targetids = brick_targetids
 
     targets = list()
+    bricknames = list()
     for targetid in targetids:
         spectra = list()
         for brick in bricks:
             wave = brick.wave
             ii = (brick.fibermap['TARGETID'] == targetid)
+            if np.count_nonzero(ii) == 0:
+                continue
+
+            if 'BRICKNAME' in brick.fibermap.dtype.names:
+                brickname = brick.fibermap['BRICKNAME'][ii][0]
+            else:
+                brickname = 'unknown'
             flux = brick.flux[ii]
             ivar = brick.ivar[ii]
             Rdata = brick.resolution_data[ii]
@@ -152,12 +174,22 @@ def read_bricks(brickfiles, trueflux=False, targetids=None):
                 R = Resolution(Rdata[i])
                 spectra.append(Spectrum(wave, flux[i], ivar[i], R))
 
+        bricknames.append(brickname)
+        #- end of for targetid in targetids loop
+
         if len(spectra) > 0:
             targets.append(Target(targetid, spectra))
         else:
             print('ERROR: Target {} on {} has no good spectra'.format(targetid, os.path.basename(brickfiles[0])))
 
-    return targets
+    #- Create a metadata table in case we might want to add other columns
+    #- in the future
+    assert len(bricknames) == len(targets)
+    dtype = [('BRICKNAME', 'S8'),]
+    meta = np.zeros(len(bricknames), dtype=dtype)
+    meta['BRICKNAME'] = bricknames
+
+    return targets, meta
 
 def rrdesi(options=None):
     import redrock
@@ -174,7 +206,6 @@ def rrdesi(options=None):
     parser.add_option("--debug", help="debug with ipython", action="store_true")
     ### parser.add_option("--coadd", help="use coadd instead of individual spectra", action="store_true")
     parser.add_option("--allspec", help="use individual spectra instead of coadd", action="store_true")
-    parser.add_option("--bricks", help="inputs are old brick format instead of spectra format", action="store_true")
 
     if options is None:
         opts, infiles = parser.parse_args()
@@ -189,10 +220,10 @@ def rrdesi(options=None):
         print('ERROR: must provide input spectra/brick files')
         sys.exit(1)
 
-    if opts.bricks:
-        targets = read_bricks(infiles)
-    else:
-        targets = read_spectra(infiles)
+    try:
+        targets, meta = read_spectra(infiles)
+    except RuntimeError:
+        targets, meta = read_bricks(infiles)
 
     if not opts.allspec:
         for t in targets:
@@ -201,6 +232,7 @@ def rrdesi(options=None):
 
     if opts.ntargets is not None:
         targets = targets[opts.mintarget:opts.mintarget+opts.ntargets]
+        meta = meta[opts.mintarget:opts.mintarget+opts.ntargets]
 
     print('INFO: fitting {} targets'.format(len(targets)))
 
@@ -222,10 +254,8 @@ def rrdesi(options=None):
             if colname.islower():
                 zbest.rename_column(colname, colname.upper())
 
-        #- Get the BRICKNAME from the first brick file
-        hdr = fits.getheader(brickfiles[0])
-        if 'BRICKNAM' in hdr:
-            zbest['BRICKNAME'] = hdr['BRICKNAM']
+        #- Add brickname column
+        zbest['BRICKNAME'] = meta['BRICKNAME']
 
         print('INFO: writing {}'.format(opts.zbest))
         write_zbest(opts.zbest, zbest)
