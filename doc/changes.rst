@@ -2,10 +2,15 @@
 Redrock change log
 ==================
 
-0.4.1 (unreleased)
+0.4.2 (unreleased)
 ------------------
 
-* add suport for new DESI spectra format
+* No changes yet
+
+0.4.1 (2017-06-16)
+------------------
+
+* add support for new DESI spectra format
 
 0.4 (2017-02-03)
 ----------------
