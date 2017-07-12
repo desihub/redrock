@@ -174,10 +174,10 @@ def read_bricks(brickfiles, trueflux=False, targetids=None):
                 R = Resolution(Rdata[i])
                 spectra.append(Spectrum(wave, flux[i], ivar[i], R))
 
-        bricknames.append(brickname)
         #- end of for targetid in targetids loop
 
         if len(spectra) > 0:
+            bricknames.append(brickname)
             targets.append(Target(targetid, spectra))
         else:
             print('ERROR: Target {} on {} has no good spectra'.format(targetid, os.path.basename(brickfiles[0])))
