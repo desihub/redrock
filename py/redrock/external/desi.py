@@ -40,7 +40,9 @@ def read_spectra(spectrafiles, targetids=None):
     Args:
         spectrafiles : list of input spectra files, or string glob to match
 
-    Returns list of Target objects
+    Returns tuple of (targets, meta) where
+        targets is a list of Target objects and
+        meta is a Table of metadata (currently only BRICKNAME)
     '''
     if isinstance(spectrafiles, basestring):
         import glob
