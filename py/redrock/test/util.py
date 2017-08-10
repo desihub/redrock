@@ -33,6 +33,8 @@ def get_target(z=0.5, wavestep=5):
         sigma = np.random.normal(loc=1, scale=0.1, size=len(wave)).clip(0.5, 1.5)
         ivar = 1/sigma**2
         R = _getR(len(wave), 2.0)
+        assert isinstance(R, scipy.sparse.dia_matrix)
+        assert hasattr(R, 'offsets')
         for i in range(2):
             noisyflux = flux + np.random.normal(scale=sigma)
             spectra.append(Spectrum(wave, noisyflux, ivar, R))

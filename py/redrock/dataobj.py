@@ -4,6 +4,7 @@ import numpy as np
 import scipy.sparse
 
 from redrock.rebin import trapz_rebin
+from redrock import sharedmem
 
 class Template(object):
     def __init__(self, template_type, redshifts, wave, flux, subtype=''):
@@ -68,26 +69,51 @@ class Spectrum(object):
             ivar : array of inverse variances of flux
             R : resolution matrix, sparse 2D[nwave, nwave]
         """
-        wave = np.asarray(wave)
-        flux = np.asarray(flux)
-        ivar = np.asarray(ivar)
+        self.nwave = len(wave)
+        assert(len(flux) == self.nwave)
+        assert(len(ivar) == self.nwave)
+        assert(R.shape == (self.nwave, self.nwave))
+        
+        self._shmem = dict()
+        self._shmem['wave'] = sharedmem.fromarray(wave)
+        self._shmem['flux'] = sharedmem.fromarray(flux)
+        self._shmem['ivar'] = sharedmem.fromarray(ivar)
+        self._shmem['R.data'] = sharedmem.fromarray(R.data)
+        self._shmem['R.offsets'] = R.offsets
 
-        nwave = len(wave)
-        assert(len(flux) == nwave)
-        assert(len(ivar) == nwave)
-        assert(R.shape == (nwave, nwave))
-        
-        self.wave = wave
-        self.flux = flux
-        self.ivar = ivar
-        self.R = R
-        self.nwave = nwave
-        
-        #- Precalculate R as a CSR sparse matrix
-        self.Rcsr = R.tocsr()
-        
+        self._shmem['R.shape'] = R.shape
+
+        self.sharedmem_unpack()
+
         #- NOT EXACT: hash of wavelengths
         self.wavehash = hash((len(wave), wave[0], wave[1], wave[-2], wave[-1]))
+
+    def sharedmem_unpack(self):
+        '''TODO: document'''
+        self.wave = sharedmem.toarray(self._shmem['wave'])
+        self.flux = sharedmem.toarray(self._shmem['flux'])
+        self.ivar = sharedmem.toarray(self._shmem['ivar'])
+        Rdata = sharedmem.toarray(self._shmem['R.data'])
+        Roffsets = self._shmem['R.offsets']
+        Rshape = self._shmem['R.shape']
+        self.R = scipy.sparse.dia_matrix((Rdata, Roffsets), shape=Rshape)
+        self.Rcsr = self.R.tocsr()   #- Precalculate R as a CSR sparse matrix
+
+    def sharedmem_pack(self):
+        '''
+        Prepare for passing to multiprocessing process function;
+        use self.sharedmem_unpack() to restore to the original state
+        '''
+        if hasattr(self, 'wave'):
+            del self.wave
+        if hasattr(self, 'flux'):
+            del self.flux
+        if hasattr(self, 'ivar'):
+            del self.ivar
+        if hasattr(self, 'R'):
+            del self.R
+        if hasattr(self, 'Rcsr'):
+            del self.Rcsr
 
 class Target(object):
     def __init__(self, targetid, spectra):
@@ -134,4 +160,23 @@ class Target(object):
             flux[isbad] = unweightedflux[isbad] / nspec
             Winv = scipy.sparse.dia_matrix((1/(weights+isbad), [0,]), (n,n))
             R = Winv * weightedR
+            R = R.todia()
             self.coadd.append(Spectrum(wave, flux, weights, R))
+
+    def sharedmem_pack(self):
+        '''TODO: document'''
+        for s in self.spectra:
+            s.sharedmem_pack()
+
+        if hasattr(self, 'coadd'):
+            for s in self.coadd:
+                s.sharedmem_pack()
+
+    def sharedmem_unpack(self):
+        '''TODO: document'''
+        for s in self.spectra:
+            s.sharedmem_unpack()
+
+        if hasattr(self, 'coadd'):
+            for s in self.coadd:
+                s.sharedmem_unpack()

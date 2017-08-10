@@ -16,7 +16,74 @@ def calc_zchi2(redshifts, spectra, template):
     zchi2, zcoeff, penalty = calc_zchi2_targets(redshifts, targets, template)
     return zchi2[0], zcoeff[0], penalty[0]
 
-def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
+def _foo(redshifts, targets, template, qout):
+    for t in targets:
+        t.sharedmem_unpack()
+    try:
+        results = redrock.zscan.calc_zchi2_targets(redshifts, targets, template)
+    except Exception as err:
+        import traceback, sys
+        message = "".join(traceback.format_exception(*sys.exc_info()))
+        results = (err, message)
+
+    qout.put((redshifts[0], results))
+
+
+def _new_parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
+    ncpu=None):
+    '''
+    Parallel version of calc_zchi2_targets; see that docstring for details
+
+    ncpu is number of multiprocessing processes to use
+    '''
+
+    import multiprocessing as mp
+    if ncpu is None:
+        ncpu = mp.cpu_count()
+
+    if ncpu > len(redshifts):
+        ncpu = len(redshifts)
+        print('WARNING: Using {} cores for {} redshifts'.format(ncpu, ncpu))
+
+    #- Pack targets for passing to multiprocessing function without pickling
+    #- large numpy arrays of spectra
+    for t in targets:
+        t.sharedmem_pack()
+
+    qout = mp.Queue()
+    zsplit = np.array_split(redshifts, ncpu)
+    for i in range(ncpu):
+        p = mp.Process(target=_foo, args=(zsplit[i], targets, template, qout))
+        p.start()
+
+    results = list()
+    for i in range(ncpu):
+        results.append(qout.get())
+
+    #- Figure out what order the results arrived in the output queue
+    z0 = [r[0] for r in results]
+    izsort = np.argsort(z0)
+
+    zchi2 = list()
+    zcoeff = list()
+    zchi2penalty = list()
+    for i in izsort:
+        tmpzchi2, tmpzcoeff, tmpzchi2penalty = results[i][1]
+        zchi2.append(tmpzchi2)
+        zcoeff.append(tmpzcoeff)
+        zchi2penalty.append(tmpzchi2penalty)
+
+    zchi2 = np.hstack(zchi2)
+    zcoeff = np.hstack(zcoeff)
+    zchi2penalty = np.hstack(zchi2penalty)
+
+    #- restore the state of targets
+    for t in targets:
+        t.sharedmem_unpack()
+
+    return zchi2, zcoeff, zchi2penalty
+
+def _orig_parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
     ncpu=None, numthreads=-1):
     '''
     Parallel version of calc_zchi2_targets; see that docstring for details
@@ -84,7 +151,7 @@ def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
             print("ERROR: result {} starting z={} generated an exception".format(i, z0))
             print(message)
             mpfail = True
-    
+
     if mpfail:
         raise RuntimeError(message)
 
@@ -100,12 +167,14 @@ def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
         zchi2.append(tmpzchi2)
         zcoeff.append(tmpzcoeff)
         zchi2penalty.append(tmpzchi2penalty)
-        
+
     zchi2 = np.hstack(zchi2)
     zcoeff = np.hstack(zcoeff)
     zchi2penalty = np.hstack(zchi2penalty)
 
     return zchi2, zcoeff, zchi2penalty
+
+parallel_calc_zchi2_targets = _new_parallel_calc_zchi2_targets
 
 def calc_zchi2_targets(redshifts, targets, template, verbose=False):
     '''Calculates chi2 vs. redshift for a given PCA template.
@@ -132,7 +201,7 @@ def calc_zchi2_targets(redshifts, targets, template, verbose=False):
     zchi2 = np.zeros( (ntargets, nz) )
     zchi2penalty = np.zeros( (ntargets, nz) )
     zcoeff = np.zeros( (ntargets, nz, nbasis) )
-    
+
     #- Regroup fluxes and ivars into 1D arrays per target
     fluxlist = list()
     wfluxlist = list()
@@ -155,7 +224,7 @@ def calc_zchi2_targets(redshifts, targets, template, verbose=False):
                 refspectra[s.wavehash] = s
 
     refspectra = list(refspectra.values())
-    
+
     #- Redshifts near [OII]; used only for galaxy templates
     isOII = (3724 <= template.wave) & (template.wave <= 3733)
     OIItemplate = template.flux[:,isOII].T
@@ -169,7 +238,7 @@ def calc_zchi2_targets(redshifts, targets, template, verbose=False):
         #- if all targets have the same number of spectra with the same
         #- wavelength grids, we only need to calculate this once per redshift.
         Tx = rebin_template(template, z, refspectra)
-            
+
         for j in range(ntargets):
             Tb = list()
             for k, s in enumerate(targets[j].spectra):
