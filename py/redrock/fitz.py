@@ -56,8 +56,81 @@ def minfit(x,y):
 
     return (x0, xerr, y0, zwarn)
 
+def _foo(target_indices, qout, zchi2, redshifts, targets, template, nminima):
+    #- unpack shared memory buffers into numpy arrays
+    zchi2 = redrock.sharedmem.toarray(zchi2)
+    try:
+        for j in target_indices:
+            targets[j].sharedmem_unpack()
+            results = fitz(zchi2[j], redshifts, targets[j].spectra, template, nminima=nminima)
+            #- return index with results so that they can be sorted
+            qout.put( (j, results) )
+    except Exception as err:
+        import traceback, sys
+        message = "".join(traceback.format_exception(*sys.exc_info()))
+        qout.put( (target_indices[0], err, message) )
 
-def parallel_fitz_targets(zchi2, redshifts, targets, template, nminima=3, ncpu=None, verbose=False):
+    qout.close()
+
+def _new_parallel_fitz_targets(zchi2, redshifts, targets, template, nminima=3, ncpu=None, verbose=False):
+    '''
+    TODO: document
+    '''
+    assert zchi2.shape == (len(targets), len(redshifts))
+
+    import multiprocessing as mp
+    if ncpu is None:
+        ncpu = max(1, mp.cpu_count() // 2)
+    else:
+        ncpu = max(1, ncpu)
+
+    ncpu = min(len(targets), ncpu)
+
+    #- Pack arrays into shared memory for sending to processes
+    zchi2 = redrock.sharedmem.fromarray(zchi2)
+    for t in targets:
+        t.sharedmem_pack()
+
+    #- Start processes to run wrap_fitz
+    qout = mp.Queue()
+    target_indices = np.array_split(range(len(targets)), ncpu)
+    for i in range(ncpu):
+        ### print('fitz process {}/{} doing {} targets'.format(i+1, ncpu, len(target_indices[i])))
+        p = mp.Process(target=_foo, args=(target_indices[i], qout, 
+                zchi2, redshifts, targets, template, nminima))
+        p.start()
+
+    #- restore targets to unpacked numpy array state
+    for t in targets:
+        t.sharedmem_unpack()
+
+    #- Pull results from queue
+    #- NOTE: one per target, not one per process
+    results = list()
+    for i in range(len(targets)):
+        results.append(qout.get())
+
+    #- Check for any errors
+    mpfail = False
+    message = 'ok'
+    for r in results:
+        if isinstance(r[1], Exception):
+            i, err, message = r
+            print("ERROR: result {} generated an exception".format(i))
+            print(message)
+            mpfail = True
+
+    if mpfail:
+        print("ERROR: Raising the last of the exceptions")
+        raise RuntimeError(message)
+
+    #- Sort results into original order of targets
+    isort = np.argsort([r[0] for r in results])
+    results = [results[i][1] for i in isort]
+
+    return results
+
+def _orig_parallel_fitz_targets(zchi2, redshifts, targets, template, nminima=3, ncpu=None, verbose=False):
     '''
     TODO: document
     '''
@@ -146,6 +219,8 @@ def parallel_fitz_targets(zchi2, redshifts, targets, template, nminima=3, ncpu=N
     results = [results[i][1] for i in isort]
 
     return results
+
+parallel_fitz_targets = _new_parallel_fitz_targets
 
 def fitz(zchi2, redshifts, spectra, template, nminima=3):
     '''Refines redshift measurement around up to nminima minima
