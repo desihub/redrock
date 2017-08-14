@@ -72,9 +72,11 @@ def _wrap_fitz(target_indices, qout, zchi2, redshifts, targets, template, nminim
 
     qout.close()
 
-def parallel_fitz_targets(zchi2, redshifts, targets, template, nminima=3, ncpu=None, verbose=False):
+def parallel_fitz_targets(zchi2, redshifts, targets, template, nminima=3, ncpu=None):
     '''
-    TODO: document
+    run `fitz` in parallel using `ncpu` CPU cores.
+
+    See fitz for inputs and outputs.
     '''
     assert zchi2.shape == (len(targets), len(redshifts))
 
@@ -135,7 +137,7 @@ def parallel_fitz_targets(zchi2, redshifts, targets, template, nminima=3, ncpu=N
 def fitz(zchi2, redshifts, spectra, template, nminima=3):
     '''Refines redshift measurement around up to nminima minima
 
-    TODO: document return values
+    TODO: document return values    
     TODO: if there are fewer than nminima minima, consider padding
     '''
     assert len(zchi2) == len(redshifts)

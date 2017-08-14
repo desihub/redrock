@@ -10,7 +10,13 @@ import redrock
 
 def calc_zchi2(redshifts, spectra, template):
     '''
-    TODO: document
+    Calculates chi2 vs. redshift for these spectra and this template.
+
+    returns chi2[nz], coeff[nz,ncoeff], penalty[nz]
+
+    `chi2[i]` is best fit chi2 at `redshifts[i]`.
+    `coeff[i]` is array of best fit template coefficients at `redshifts[i]`.
+    `penalty` is array of penalty priors, e.g. to penalize unphysical fits.
     '''
     targets = [Target(0, spectra), ]
     zchi2, zcoeff, penalty = calc_zchi2_targets(redshifts, targets, template)

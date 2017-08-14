@@ -89,7 +89,10 @@ class Spectrum(object):
         self.wavehash = hash((len(wave), wave[0], wave[1], wave[-2], wave[-1]))
 
     def sharedmem_unpack(self):
-        '''TODO: document'''
+        '''Unpack shared memory buffers back into numpy array views of those
+        buffers; to be called after self.sharedmem_pack() to restore the object
+        back to a working state (as opposed to a state optimized for sending
+        to a new process).'''
         self.wave = sharedmem.toarray(self._shmem['wave'])
         self.flux = sharedmem.toarray(self._shmem['flux'])
         self.ivar = sharedmem.toarray(self._shmem['ivar'])
@@ -102,7 +105,7 @@ class Spectrum(object):
     def sharedmem_pack(self):
         '''
         Prepare for passing to multiprocessing process function;
-        use self.sharedmem_unpack() to restore to the original state
+        use self.sharedmem_unpack() to restore to the original state.
         '''
         if hasattr(self, 'wave'):
             del self.wave
@@ -164,7 +167,8 @@ class Target(object):
             self.coadd.append(Spectrum(wave, flux, weights, R))
 
     def sharedmem_pack(self):
-        '''TODO: document'''
+        '''Prepare underlying numpy arrays for sending to a new process;
+        call self.sharedmem_unpack() to restore to original state.'''
         for s in self.spectra:
             s.sharedmem_pack()
 
@@ -173,7 +177,9 @@ class Target(object):
                 s.sharedmem_pack()
 
     def sharedmem_unpack(self):
-        '''TODO: document'''
+        '''Unpack shared memory arrays into numpy array views of them.
+        To be used after self.sharedmem_pack() was called to pack arrays
+        before passing them to a new process.'''
         for s in self.spectra:
             s.sharedmem_unpack()
 
