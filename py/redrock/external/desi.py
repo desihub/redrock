@@ -197,6 +197,8 @@ def rrdesi(options=None):
     import redrock
     import optparse
     from astropy.io import fits
+    import time
+    start_time = time.time()
 
     parser = optparse.OptionParser(usage = "%prog [options] spectra1 spectra2...")
     parser.add_option("-t", "--templates", type="string",  help="template file or directory")
@@ -261,6 +263,9 @@ def rrdesi(options=None):
 
         print('INFO: writing {}'.format(opts.zbest))
         write_zbest(opts.zbest, zbest)
+
+    run_time = time.time() - start_time
+    print('INFO: finished {} in {:.1f} seconds'.format(os.path.basename(infiles[0]), run_time))
 
     if opts.debug:
         import IPython
