@@ -16,7 +16,7 @@ def calc_zchi2(redshifts, spectra, template):
     zchi2, zcoeff, penalty = calc_zchi2_targets(redshifts, targets, template)
     return zchi2[0], zcoeff[0], penalty[0]
 
-def _foo(redshifts, targets, template, qout):
+def _wrap_zchi2(redshifts, targets, template, qout):
     for t in targets:
         t.sharedmem_unpack()
     try:
@@ -29,7 +29,7 @@ def _foo(redshifts, targets, template, qout):
     qout.put((redshifts[0], results))
 
 
-def _new_parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
+def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
     ncpu=None):
     '''
     Parallel version of calc_zchi2_targets; see that docstring for details
@@ -50,12 +50,15 @@ def _new_parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False
     for t in targets:
         t.sharedmem_pack()
 
+    #- launch processes, returning results via Queue.  This is largely for
+    #- historical reasons; mp.Pool.map probably would have been fine too.
     qout = mp.Queue()
     zsplit = np.array_split(redshifts, ncpu)
     for i in range(ncpu):
-        p = mp.Process(target=_foo, args=(zsplit[i], targets, template, qout))
+        p = mp.Process(target=_wrap_zchi2, args=(zsplit[i], targets, template, qout))
         p.start()
 
+    #- Get results, one per process
     results = list()
     for i in range(ncpu):
         results.append(qout.get())
@@ -82,99 +85,6 @@ def _new_parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False
         t.sharedmem_unpack()
 
     return zchi2, zcoeff, zchi2penalty
-
-def _orig_parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
-    ncpu=None, numthreads=-1):
-    '''
-    Parallel version of calc_zchi2_targets; see that docstring for details
-
-    TODO: document ncpu and numthreads
-    '''
-    import multiprocessing as mp
-    if ncpu is None:
-        ncpu = mp.cpu_count()
-
-    if ncpu > len(redshifts):
-        ncpu = len(redshifts)
-        print('WARNING: Using {} cores for {} redshifts'.format(ncpu, ncpu))
-
-    if numthreads == 0:
-        n = max(mp.cpu_count() // ncpu, 1)
-        os.environ['OMP_NUM_THREADS'] = str(n)
-        os.environ['MKL_NUM_THREADS'] = str(n)
-        if verbose:
-            print('DEBUG: setting OMP_NUM_THREADS={}'.format(n))
-            print('DEBUG: setting MKL_NUM_THREADS={}'.format(n))
-    elif numthreads > 0:
-        os.environ['OMP_NUM_THREADS'] = str(numthreads)
-        os.environ['MKL_NUM_THREADS'] = str(numthreads)
-
-    if verbose:
-        print('DEBUG: $OMP_NUM_THREADS={}'.format(os.getenv('OMP_NUM_THREADS')))
-        print('DEBUG: $MKL_NUM_THREADS={}'.format(os.getenv('MKL_NUM_THREADS')))
-
-    def foo(i, qin, qout):
-        try:
-            zz = qin.get()
-            if verbose:
-                print('Process {}: {} redshifts from {:.4f} to {:.4f}'.format(i, len(zz), zz[0], zz[-1]))
-            results = redrock.zscan.calc_zchi2_targets(zz, targets, template, verbose=verbose)
-        except Exception as err:
-            import traceback, sys
-            message = "".join(traceback.format_exception(*sys.exc_info()))
-            results = (err, message)
-
-        qout.put((zz[0], results))
-
-    ii = np.linspace(0, len(redshifts), ncpu+1).astype(int)
-    qin = mp.Queue()
-    qout = mp.Queue()
-    for i in range(ncpu):
-        tmpz = redshifts[ii[i]:ii[i+1]]
-        assert len(tmpz) > 0
-        qin.put(tmpz)
-
-    for i in range(ncpu):
-        p = mp.Process(target=foo, args=(i, qin, qout))
-        p.start()
-
-    results = list()
-    for i in range(ncpu):
-        results.append(qout.get())
-
-    #- Check for any errors
-    mpfail = False
-    message = 'ok'
-    for i, (z0, r) in enumerate(results):
-        if isinstance(r[0], Exception):
-            err, message = r
-            print("ERROR: result {} starting z={} generated an exception".format(i, z0))
-            print(message)
-            mpfail = True
-
-    if mpfail:
-        raise RuntimeError(message)
-
-    #- Figure out what order the results arrived in the output queue
-    z0 = [r[0] for r in results]
-    izsort = np.argsort(z0)
-
-    zchi2 = list()
-    zcoeff = list()
-    zchi2penalty = list()
-    for i in izsort:
-        tmpzchi2, tmpzcoeff, tmpzchi2penalty = results[i][1]
-        zchi2.append(tmpzchi2)
-        zcoeff.append(tmpzcoeff)
-        zchi2penalty.append(tmpzchi2penalty)
-
-    zchi2 = np.hstack(zchi2)
-    zcoeff = np.hstack(zcoeff)
-    zchi2penalty = np.hstack(zchi2penalty)
-
-    return zchi2, zcoeff, zchi2penalty
-
-parallel_calc_zchi2_targets = _new_parallel_calc_zchi2_targets
 
 def calc_zchi2_targets(redshifts, targets, template, verbose=False):
     '''Calculates chi2 vs. redshift for a given PCA template.

@@ -5,7 +5,7 @@ Redrock change log
 0.4.2 (unreleased)
 ------------------
 
-* No changes yet
+* refactored multiprocessing parallelism to use explicit shared memory
 
 0.4.1 (2017-06-16)
 ------------------
