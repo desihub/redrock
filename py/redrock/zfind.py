@@ -79,7 +79,7 @@ def zfind(targets, templates, ncpu=None, nminima=3):
         ### print('DEBUG: PID {} Starting fitz for {}'.format(pid, t.fulltype))
         for i, zfit in enumerate(redrock.fitz.parallel_fitz_targets(
                 zchi2+penalty, t.redshifts, targets, t,
-                ncpu=ncpu, verbose=False, nminima=nminima)):
+                ncpu=ncpu, nminima=nminima)):
             zscan[targets[i].id][t.fulltype]['zfit'] = zfit
         
         for i in range(len(targets)):

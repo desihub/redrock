@@ -56,10 +56,27 @@ def minfit(x,y):
 
     return (x0, xerr, y0, zwarn)
 
+def _wrap_fitz(target_indices, qout, zchi2, redshifts, targets, template, nminima):
+    #- unpack shared memory buffers into numpy arrays
+    zchi2 = redrock.sharedmem.toarray(zchi2)
+    try:
+        for j in target_indices:
+            targets[j].sharedmem_unpack()
+            results = fitz(zchi2[j], redshifts, targets[j].spectra, template, nminima=nminima)
+            #- return index with results so that they can be sorted
+            qout.put( (j, results) )
+    except Exception as err:
+        import traceback, sys
+        message = "".join(traceback.format_exception(*sys.exc_info()))
+        qout.put( (target_indices[0], err, message) )
 
-def parallel_fitz_targets(zchi2, redshifts, targets, template, nminima=3, ncpu=None, verbose=False):
+    qout.close()
+
+def parallel_fitz_targets(zchi2, redshifts, targets, template, nminima=3, ncpu=None):
     '''
-    TODO: document
+    run `fitz` in parallel using `ncpu` CPU cores.
+
+    See fitz for inputs and outputs.
     '''
     assert zchi2.shape == (len(targets), len(redshifts))
 
@@ -69,62 +86,32 @@ def parallel_fitz_targets(zchi2, redshifts, targets, template, nminima=3, ncpu=N
     else:
         ncpu = max(1, ncpu)
 
-    #- Wrapper function for fitz.  This can use targets, template, etc. without
-    #- copying them.  multiprocessing.Queue is used for I/O to know which
-    #- targets to process.
-    def wrap_fitz(i, qin, qout, close_qout=True):
-        '''
-        i: process number
-        qin, qout: input and output multiprocessing.Queue
-        close_qout: if True, close qout before exiting; needed if calling
-            wrap_fitz from a multiprocessing Process with a large number of
-            targets.
+    ncpu = min(len(targets), ncpu)
 
-        qin sends (start_index, number_of_targets_to_process)
-        qout receives (target_index, fitz_results)
-        '''
-        import sys, os
-        try:
-            start, n = qin.get()
-            if verbose:
-                print('Process {} targets[{}:{}]'.format(i, start, start+n))
-                sys.stdout.flush()
-            for j in range(start, start+n):
-                results = fitz(zchi2[j], redshifts, targets[j].spectra, template, nminima=nminima)
-                #- return index with results so that they can be sorted
-                qout.put( (j, results) )
-        except Exception as err:
-            import traceback, sys
-            message = "".join(traceback.format_exception(*sys.exc_info()))
-            qout.put( (i, err, message) )
+    #- Pack arrays into shared memory for sending to processes
+    zchi2 = redrock.sharedmem.fromarray(zchi2)
+    for t in targets:
+        t.sharedmem_pack()
 
-        if close_qout:
-            qout.close()
-
-    #- Load Queue with start,n indices of targets to process
-    ii = np.linspace(0, len(targets), ncpu+1).astype(int)
-    qin = mp.Queue()
+    #- Start processes to run _wrap_fitz, returning results in a Queue
+    #- NOTE: this is somewhat for historical reasons; mp.Pool.map probably
+    #- would have been fine too.
     qout = mp.Queue()
+    target_indices = np.array_split(range(len(targets)), ncpu)
     for i in range(ncpu):
-        start = ii[i]
-        n = ii[i+1] - ii[i]
-        qin.put( (start, n) )
+        ### print('fitz process {}/{} doing {} targets'.format(i+1, ncpu, len(target_indices[i])))
+        p = mp.Process(target=_wrap_fitz, args=(target_indices[i], qout, 
+                zchi2, redshifts, targets, template, nminima))
+        p.start()
 
-    #- Start processes to run wrap_fitz
-    if ncpu > 1:
-        for i in range(ncpu):
-            p = mp.Process(target=wrap_fitz, args=(i, qin, qout))
-            p.start()
-    else:
-        print('INFO: not using multiprocessing in fitz')
-        wrap_fitz(0, qin, qout, close_qout=False)
+    #- restore targets to unpacked numpy array state
+    for t in targets:
+        t.sharedmem_unpack()
 
     #- Pull results from queue
+    #- NOTE: one per target, not one per process
     results = list()
     for i in range(len(targets)):
-        if verbose:
-            print('Getting results for target {}/{}'.format(i+1, len(targets)))
-            sys.stdout.flush()
         results.append(qout.get())
 
     #- Check for any errors
@@ -150,7 +137,7 @@ def parallel_fitz_targets(zchi2, redshifts, targets, template, nminima=3, ncpu=N
 def fitz(zchi2, redshifts, spectra, template, nminima=3):
     '''Refines redshift measurement around up to nminima minima
 
-    TODO: document return values
+    TODO: document return values    
     TODO: if there are fewer than nminima minima, consider padding
     '''
     assert len(zchi2) == len(redshifts)
