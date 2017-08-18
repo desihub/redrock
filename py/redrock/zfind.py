@@ -89,6 +89,7 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
         if comm is None or comm.rank==0 :
             print('DEBUG: PID {} {} zscan in {:.1f} seconds'.format(pid, t.fulltype, dt))
 
+        t0 = time.time()
         if comm is None : # multiprocessing version
             zfits = redrock.fitz.parallel_fitz_targets(
                 zchi2+penalty, t.redshifts, targets, t,
@@ -97,7 +98,12 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
             zfits = redrock.fitz.mpi_fitz_targets(
                 zchi2+penalty, t.redshifts, targets, t,
                 comm=comm, nminima=nminima)
+        dt = time.time() - t0
+
+        if comm is None or comm.rank==0 :
+            print('DEBUG: PID {} {} fitz in {:.1f} seconds'.format(pid, t.fulltype, dt))
         
+            
         if comm is None or comm.rank==0 :
             
             for i,zfit in enumerate(zfits) :
@@ -162,14 +168,13 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
 
         zfit = astropy.table.vstack(zfit)
         dt = time.time() - t0
-        ### print('DEBUG: PID {} zall in {:.1f} seconds'.format(pid, dt))
+        print('DEBUG: PID {} zall in {:.1f} seconds'.format(pid, dt))
     else :
        zscan=None
        zfit=None
     
-    # broadcast at the end of this routine
-    if comm is not None :
-        zscan=comm.bcast(zscan,root=0)
-        zfit=comm.bcast(zfit,root=0)
+    # no need to broadcast at the end of this routine
+    # because only rank 0 will write the results
+    
     return zscan, zfit
     
