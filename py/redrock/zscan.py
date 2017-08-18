@@ -5,7 +5,7 @@ import os
 import numpy as np
 import scipy.sparse
 
-from . import rebin, Spectrum, Target
+from . import rebin, MultiprocessingSharedSpectrum, SimpleSpectrum, MPISharedTargets, Target
 import redrock
 
 def calc_zchi2(redshifts, spectra, template):
