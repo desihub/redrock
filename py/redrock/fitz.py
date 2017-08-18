@@ -156,12 +156,15 @@ def mpi_fitz_targets(zchi2, redshifts, targets, template, nminima=3, comm=None):
         message = "".join(traceback.format_exception(*sys.exc_info()))
         result.append( (target_indices[comm.rank][0], err, message) )
     
-    print("rank #%d : done redrock.fitz"%comm.rank)
+    #print("rank #%d : done redrock.fitz"%comm.rank)
+
     #- all the results gather to rank #0
     results = comm.gather(result,root=0)
-    print("rank #%d : done gathering results to rank 0"%comm.rank)
+    
 
     if comm.rank == 0 :
+
+        print("rank #%d : done gathering zfit results to rank 0"%comm.rank)
         
         # rearrange results ( list of lists -> list )
         tmp=list()
@@ -169,7 +172,6 @@ def mpi_fitz_targets(zchi2, redshifts, targets, template, nminima=3, comm=None):
             for res in result :
                 tmp.append(res)
         results=tmp
-        print("rank #{} : results = {}".format(comm.rank,results))
         
         #- Check for any errors
         mpfail = False

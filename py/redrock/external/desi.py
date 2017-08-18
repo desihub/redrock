@@ -273,7 +273,7 @@ def rrdesi_multiprocessing(options=None):
         IPython.embed()
 
         
-def rrdesi_mpi(options=None):
+def rrdesi_mpi(options=None, comm=None):
 
     
     from mpi4py import MPI
@@ -283,11 +283,10 @@ def rrdesi_mpi(options=None):
     from astropy.io import fits
     import time
     start_time = time.time()
-    
-    comm = MPI.COMM_WORLD
-    rank = comm.rank
-    procs = comm.size
 
+    if comm is None :
+        comm = MPI.COMM_WORLD
+    
     parser = optparse.OptionParser(usage = "%prog [options] spectra1 spectra2...")
     parser.add_option("-t", "--templates", type="string",  help="template file or directory")
     parser.add_option("-o", "--output", type="string",  help="output file")
@@ -343,20 +342,16 @@ def rrdesi_mpi(options=None):
     # all processes get a copy of the templates from rank 0  
     templates = comm.bcast(templates,root=0)
     print('rank #%d : I have %d templates from bcast'%(comm.rank,len(templates)))
-    meta = comm.bcast(meta,root=0)
-    print('rank #%d : I have the targets meta data from bcast'%(comm.rank))
 
+    # no need to broad cast the target meta data because only used when writing results
+    # meta = comm.bcast(meta,root=0)
+    
     # in this class is performed the shared memory of all targets
     with MPISharedTargets(targets, comm) as shared_targets :
 
-        # this could go in the __init__ function
-        targets = shared_targets.get_targets()
-        print('rank #%d : number of targets = %d'%(comm.rank,len(targets)))
-
-        # here we have to do the redshift fitting
-        # print('INFO: fitting {} targets'.format(len(targets)))
-        zscan, zfit = redrock.zfind(targets, templates, ncpu=opts.ncpu, comm=comm)
-        
+        # in this context with a shared memory we perform the redshift fit
+        zscan, zfit = redrock.zfind(shared_targets.targets, templates, ncpu=opts.ncpu, comm=comm)
+    
     
     if comm.rank==0:
         
@@ -382,8 +377,10 @@ def rrdesi_mpi(options=None):
             write_zbest(opts.zbest, zbest)
 
     run_time = time.time() - start_time
-    print('INFO: finished {} in {:.1f} seconds'.format(os.path.basename(infiles[0]), run_time))
-
+    
+    if comm is None or comm.rank==0 :
+        print('INFO: finished {} in {:.1f} seconds'.format(os.path.basename(infiles[0]), run_time))
+    
     if opts.debug:
         import IPython
         IPython.embed()

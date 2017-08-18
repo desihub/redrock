@@ -144,8 +144,11 @@ class MPISharedTargets(object) :
         self._rank = self._comm.rank
         self._procs = self._comm.size
         
-        print('rank #%d : MPISharedTargets.__init__ starting'%self._rank)
+        #print('rank #%d : MPISharedTargets.__init__ starting'%self._rank)
 
+        if comm.rank==0 :
+            print('rank #%d : allocating a shared memory for targets '%self._rank)
+        
         self._n = 0
         self._dtype = np.dtype("float64")
         self._target_dictionnary = None
@@ -156,8 +159,8 @@ class MPISharedTargets(object) :
             self._target_dictionnary = dictionnary
             self._n = ndata
             
-        print('rank #%d : _n = %d'%(self._rank,self._n))
-        print('rank #%d : allocating memory'%self._rank)
+        #print('rank #%d : _n = %d'%(self._rank,self._n))
+        #print('rank #%d : allocating memory'%self._rank)
 
             
         # We are actually using MPI, so we need to ensure that
@@ -185,11 +188,11 @@ class MPISharedTargets(object) :
         except:
             status = 1
         self._checkabort(self._comm, status, "shared memory allocation")
-        print('rank #%d : MPISharedTargets.__init__ memory allocated'%self._rank)
+        #print('rank #%d : MPISharedTargets.__init__ memory allocated'%self._rank)
         
         # Every process looks up the memory address of rank zero's piece,
         # which is the start of the contiguous shared buffer.
-        print('rank #%d : MPISharedTargets.__init__ get memory address'%self._rank)
+        # print('rank #%d : MPISharedTargets.__init__ get memory address'%self._rank)
         status = 0
         try:
             self._buffer, dsize = self._win.Shared_query(0)
@@ -200,12 +203,12 @@ class MPISharedTargets(object) :
         # Create a numpy array which acts as a "view" of the buffer.
         self._dbuf = np.array(self._buffer, dtype="B", copy=False)
         self._data = self._dbuf.view(self._dtype) # here is the data !!
-        print('rank #%d : MPISharedTargets.__init__ have the data view'%self._rank)
+        # print('rank #%d : MPISharedTargets.__init__ have the data view'%self._rank)
         
         
         if self._rank == 0 :
 
-            print('rank #%d : MPISharedTargets.__init__ fill the memory with the data'%self._rank)
+            print('rank #%d : fill the memory with the data'%self._rank)
             
             # Get a write-lock on the shared memory
             self._win.Lock(self._rank, MPI.LOCK_EXCLUSIVE)
@@ -225,17 +228,22 @@ class MPISharedTargets(object) :
             # Release the write-lock
             self._win.Unlock(self._rank)
 
-            print('rank #%d : MPISharedTargets.__init__ done filling the shared memory'%self._rank)
+            #print('rank #%d : MPISharedTargets.__init__ done filling the shared memory'%self._rank)
             
         # Explicit barrier here, to ensure that other processes do not try
         # reading data before the writing processes have finished.
         self._comm.barrier()
 
-        print('rank #%d : MPISharedSpectrum.__init__ broadcasting target_dictionnary'%self._rank)
+        #print('rank #%d : MPISharedSpectrum.__init__ broadcasting target_dictionnary'%self._rank)
         self._target_dictionnary = comm.bcast(self._target_dictionnary,root=0)
         
+        #print('rank #%d : MPISharedSpectrum.__init__ unpacking targets'%self._rank)
+        self.targets = self.get_targets()
+
+        print('rank #%d : I have the %d targets'%(self._rank,len(self.targets)))
         
-        print('rank #%d : MPISharedSpectrum.__init__ ending'%self._rank)
+        
+        #print('rank #%d : MPISharedSpectrum.__init__ ending'%self._rank)
 
         
     def _checkabort(self, comm, status, msg):
@@ -247,7 +255,7 @@ class MPISharedTargets(object) :
     
     
     def fill_target_dictionnary(self,targets) :
-        print("rank #%d : fill_target_dictionnary"%self._rank)
+        #print("rank #%d : fill_target_dictionnary"%self._rank)
         n=0
         dictionnary={}
         for target in targets :
@@ -263,7 +271,7 @@ class MPISharedTargets(object) :
         return dictionnary,n
 
     def get_targets(self) :
-        print("rank #%d : get_targets"%self._rank)
+        #print("rank #%d : get_targets"%self._rank)
         targets = list()
         for targetid in self._target_dictionnary.keys() :
             tdict=self._target_dictionnary[targetid]
@@ -282,7 +290,7 @@ class MPISharedTargets(object) :
                     rdata=rdata.reshape((roffsets.size,rdata.shape[0]//roffsets.size))
                     spectra_ref.append(SimpleSpectrum(wave,flux,ivar,scipy.sparse.dia_matrix((rdata, roffsets), shape=rshape)))            
             targets.append(Target(targetid,spectra,coadd=coadd))
-        print("rank #%d : done get_targets"%self._rank)
+        #print("rank #%d : done get_targets"%self._rank)
         return targets
     
         

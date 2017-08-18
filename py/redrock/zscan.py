@@ -110,18 +110,22 @@ def mpi_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
     result = redrock.zscan.calc_zchi2_targets(zsplit[comm.rank], targets, template)
     result = ( zsplit[comm.rank][0] , result ) # to have the same result format as qout in parallel processing
     
-    print("rank #%d : done redrock.zscan.calc_zchi2_targets"%comm.rank)
+    #print("rank #%d : done redrock.zscan.calc_zchi2_targets"%comm.rank)
     
     #- all the results gather to rank #0
     results = comm.gather(result,root=0)
-    print("rank #%d : done gathering results to rank 0"%comm.rank)
+    
+    #print("rank #%d : done gathering results to rank 0"%comm.rank)
     #if comm.rank == 0 :
     #    print("rank #{} : results = {}".format(comm.rank,results))
     #    sys.stdout.flush() # will this help seeing something
     #    comm.Abort() # DEBUGGING
     
     if comm.rank == 0 :
-        print("rank #%d : figure out what order the results arrived"%comm.rank)
+        print("rank #%d : done gathering zscan results to rank 0"%comm.rank)
+
+        #print("rank #%d : figure out what order the results arrived"%comm.rank)
+
         z0 = [r[0] for r in results]
         izsort = np.argsort(z0)
 
@@ -137,7 +141,7 @@ def mpi_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
         zchi2 = np.hstack(zchi2)
         zcoeff = np.hstack(zcoeff)
         zchi2penalty = np.hstack(zchi2penalty)
-        print("rank #%d : I have all zchi2,zcoeff,zchi2penalty"%comm.rank)
+        # print("rank #%d : I have all zchi2,zcoeff,zchi2penalty"%comm.rank)
     else : # not rank 0
         zchi2=None
         zcoeff=None
@@ -147,7 +151,9 @@ def mpi_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
     zchi2=comm.bcast(zchi2,root=0)
     zcoeff=comm.bcast(zcoeff,root=0)
     zchi2penalty=comm.bcast(zchi2penalty,root=0)
-      
+
+    print("rank #%d : I have zchi2, zcoeff, zchi2penalty"%comm.rank)
+    
     return zchi2, zcoeff, zchi2penalty
 
 def calc_zchi2_targets(redshifts, targets, template, verbose=False):
