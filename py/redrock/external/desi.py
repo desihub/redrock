@@ -282,8 +282,10 @@ def rrdesi_mpi(options=None, comm=None):
     import optparse
     from astropy.io import fits
     import time
-    start_time = time.time()
 
+    start_time = time.time()
+    pid = os.getpid()
+    
     if comm is None :
         comm = MPI.COMM_WORLD
     
@@ -313,6 +315,7 @@ def rrdesi_mpi(options=None, comm=None):
 
     
     if comm.rank==0 : # MPI: only one process reads the data and the templates
+        t0 = time.time()
         print('rank #%d : reading targets'%comm.rank)
         try:
             targets, meta = read_spectra(infiles,spectrum_class=SimpleSpectrum)
@@ -332,7 +335,8 @@ def rrdesi_mpi(options=None, comm=None):
 
         templates = redrock.io.read_templates(opts.templates)
 
-        print('rank #%d : done reading'%comm.rank)
+        dt = time.time() - t0
+        print('DEBUG: PID {} read targets and templates in {:.1f} seconds'.format(pid,dt))
         
     else : # MPI : the others don't do anything
         templates = None
