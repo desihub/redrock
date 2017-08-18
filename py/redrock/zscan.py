@@ -95,9 +95,8 @@ def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
 def mpi_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
     comm=None):
     '''
-    MPI Parallel version of calc_zchi2_targets; see that docstring for details
+    MPI Parallel version of calc_zchi2_targets
     '''
-
     
     if comm is None:
         raise ValueError("I NEED A COMMUNICATOR")
@@ -107,52 +106,13 @@ def mpi_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
     print("rank #%d : redrock.zscan.calc_zchi2_targets for %s redshifts %f:%f"%(comm.rank,template.fulltype,zsplit[comm.rank][0],zsplit[comm.rank][-1]))
     sys.stdout.flush() #  this helps seeing something
     
-    result = redrock.zscan.calc_zchi2_targets(zsplit[comm.rank], targets, template)
-    result = ( zsplit[comm.rank][0] , result ) # to have the same result format as qout in parallel processing
-    
-    #print("rank #%d : done redrock.zscan.calc_zchi2_targets"%comm.rank)
-    
-    #- all the results gather to rank #0
-    results = comm.gather(result,root=0)
-    
-    #print("rank #%d : done gathering results to rank 0"%comm.rank)
-    #if comm.rank == 0 :
-    #    print("rank #{} : results = {}".format(comm.rank,results))
-    #    sys.stdout.flush() # will this help seeing something
-    #    comm.Abort() # DEBUGGING
-    
-    if comm.rank == 0 :
-        print("rank #%d : done gathering zscan results for %s"%(comm.rank,template.fulltype))
-
-        #print("rank #%d : figure out what order the results arrived"%comm.rank)
-
-        z0 = [r[0] for r in results]
-        izsort = np.argsort(z0)
-
-        zchi2 = list()
-        zcoeff = list()
-        zchi2penalty = list()
-        for i in izsort:
-            tmpzchi2, tmpzcoeff, tmpzchi2penalty = results[i][1]
-            zchi2.append(tmpzchi2)
-            zcoeff.append(tmpzcoeff)
-            zchi2penalty.append(tmpzchi2penalty)
-
-        zchi2 = np.hstack(zchi2)
-        zcoeff = np.hstack(zcoeff)
-        zchi2penalty = np.hstack(zchi2penalty)
-        # print("rank #%d : I have all zchi2,zcoeff,zchi2penalty"%comm.rank)
-    else : # not rank 0
-        zchi2=None
-        zcoeff=None
-        zchi2penalty=None
-    
-    #- now bcast
-    zchi2=comm.bcast(zchi2,root=0)
-    zcoeff=comm.bcast(zcoeff,root=0)
-    zchi2penalty=comm.bcast(zchi2penalty,root=0)
-
-    # print("rank #%d : I have zchi2, zcoeff, zchi2penalty"%comm.rank)
+    zchi2, zcoeff, zchi2penalty = redrock.zscan.calc_zchi2_targets(zsplit[comm.rank], targets, template)
+    zchi2        = comm.allgather(zchi2)
+    zcoeff       = comm.allgather(zcoeff)
+    zchi2penalty = comm.allgather(zchi2penalty)
+    zchi2        = np.hstack(zchi2)
+    zcoeff       = np.hstack(zcoeff)
+    zchi2penalty = np.hstack(zchi2penalty)
     
     return zchi2, zcoeff, zchi2penalty
 
