@@ -122,7 +122,7 @@ def mpi_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
     #    comm.Abort() # DEBUGGING
     
     if comm.rank == 0 :
-        print("rank #%d : done gathering zscan results to rank 0"%comm.rank)
+        print("rank #%d : done gathering zscan results for %s"%(comm.rank,template.fulltype))
 
         #print("rank #%d : figure out what order the results arrived"%comm.rank)
 
@@ -152,7 +152,7 @@ def mpi_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
     zcoeff=comm.bcast(zcoeff,root=0)
     zchi2penalty=comm.bcast(zchi2penalty,root=0)
 
-    print("rank #%d : I have zchi2, zcoeff, zchi2penalty"%comm.rank)
+    # print("rank #%d : I have zchi2, zcoeff, zchi2penalty"%comm.rank)
     
     return zchi2, zcoeff, zchi2penalty
 

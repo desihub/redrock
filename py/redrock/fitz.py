@@ -164,7 +164,7 @@ def mpi_fitz_targets(zchi2, redshifts, targets, template, nminima=3, comm=None):
 
     if comm.rank == 0 :
 
-        print("rank #%d : done gathering zfit results to rank 0"%comm.rank)
+        print("rank #%d : done gathering zfit results for %s"%(comm.rank,template.fulltype))
         
         # rearrange results ( list of lists -> list )
         tmp=list()
