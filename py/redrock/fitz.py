@@ -150,51 +150,38 @@ def mpi_fitz_targets(zchi2, redshifts, targets, template, nminima=3, comm=None):
     try:
         for j in target_indices[comm.rank]:
             res = fitz(zchi2[j], redshifts, targets[j].spectra, template, nminima=nminima)
-            result.append( (j,res) ) # same result format as _wrap_fitz
+            result.append(res)
     except Exception as err:
         import traceback, sys
-        message = "".join(traceback.format_exception(*sys.exc_info()))
-        result.append( (target_indices[comm.rank][0], err, message) )
+        message = "error for a target between %d and %d : %s"%(target_indices[comm.rank][0],target_indices[comm.rank][1],traceback.format_exception(*sys.exc_info()))
+        result.append( (err, message) )
     
-    #print("rank #%d : done redrock.fitz"%comm.rank)
-
     #- all the results gather to rank #0
     results = comm.gather(result,root=0)
     
-
     if comm.rank == 0 :
 
         print("rank #%d : done gathering zfit results for %s"%(comm.rank,template.fulltype))
-        
+
         # rearrange results ( list of lists -> list )
-        tmp=list()
-        for result in results :
-            for res in result :
-                tmp.append(res)
-        results=tmp
+        results = [item for sublist in results for item in sublist]
         
         #- Check for any errors
         mpfail = False
         message = 'ok'
         for r in results:
-            if isinstance(r[1], Exception):
-                i, err, message = r
-                print("ERROR: result {} generated an exception".format(i))
-                print(message)
+            if isinstance(r[0], Exception):
+                err, message = r
+                print("ERROR: ",message)
                 mpfail = True
-        
         if mpfail:
             print("ERROR: Raising the last of the exceptions")
             raise RuntimeError(message)
-    
-        #- Sort results into original order of targets
-        isort = np.argsort([r[0] for r in results])
-        results = [results[i][1] for i in isort]
+        
     else : # not rank 0
         results = None
     
-    # bcast results? no, rank 0 keeps the results
-            
+    # do not need to bcast results      
     return results
 
 
