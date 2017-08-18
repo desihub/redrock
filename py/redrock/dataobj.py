@@ -122,10 +122,12 @@ class MultiprocessingSharedSpectrum(object):
 
 class SimpleSpectrum(object):
     def __init__(self, wave, flux, ivar, R):
+        self.nwave=wave.size
         self.wave=wave
         self.flux=flux
         self.ivar=ivar
         self.R=R
+        self.Rcsr = self.R.tocsr()
         self.wavehash = hash((len(wave), wave[0], wave[1], wave[-2], wave[-1]))
 
 
@@ -237,11 +239,10 @@ class MPISharedTargets(object) :
 
         
     def _checkabort(self, comm, status, msg):
-        
         if status != 0 :
             print("rank #{} : MPI ERROR : {}".format(comm.rank,msg))
             sys.stdout.flush()
-            comm.Abort()  # unfortunately this removes all print messages ...
+            comm.Abort()  # unfortunately this removes all print messages, need to check this now that I added a flush ...
         
     
     
@@ -249,7 +250,6 @@ class MPISharedTargets(object) :
         print("rank #%d : fill_target_dictionnary"%self._rank)
         n=0
         dictionnary={}
-        
         for target in targets :
             dictionnary[target.id]={}
             for spectra_label, spectra in zip(["spectra","coadd"],[target.spectra,target.coadd]) :
@@ -272,16 +272,7 @@ class MPISharedTargets(object) :
             for spectra_dict_list_label, spectra_ref in zip(["spectra","coadd"],[spectra,coadd]) :
                 spectra_dict_list=tdict[spectra_dict_list_label]
                 for spectrum_dict in spectra_dict_list :
-                    # this is where we have to do the buffer ...
-                    # it's not working
-                    # wave=np.frombuffer(self._data,dtype=self._dtype, count=(spectrum_dict["wave"][1]-spectrum_dict["wave"][0]), offset=spectrum_dict["wave"][0])
-                    # flux=np.frombuffer(self._data,dtype=self._dtype, count=(spectrum_dict["flux"][1]-spectrum_dict["flux"][0]), offset=spectrum_dict["flux"][0])
-                    # ivar=np.frombuffer(self._data,dtype=self._dtype, count=(spectrum_dict["ivar"][1]-spectrum_dict["ivar"][0]), offset=spectrum_dict["ivar"][0])
-                    # rdata=np.frombuffer(self._data,dtype=self._dtype, count=(spectrum_dict["rdata"][1]-spectrum_dict["rdata"][0]), offset=spectrum_dict["rdata"][0])
-                    # roffsets=np.frombuffer(self._data,dtype=self._dtype, count=(spectrum_dict["roffsets"][1]-spectrum_dict["roffsets"][0]), offset=spectrum_dict["roffsets"][0]).astype(int)
-                    # rshape=tuple(np.frombuffer(self._data,dtype=self._dtype, count=(spectrum_dict["rshape"][1]-spectrum_dict["rshape"][0]), offset=spectrum_dict["rshape"][0]).astype(int))
-
-                    # we not doing a copy here (except for R)
+                    # we are not doing a copy here (except maybe for R ...)
                     wave=self._data[spectrum_dict["wave"][0]:spectrum_dict["wave"][1]]
                     flux=self._data[spectrum_dict["flux"][0]:spectrum_dict["flux"][1]]
                     ivar=self._data[spectrum_dict["ivar"][0]:spectrum_dict["ivar"][1]]
@@ -289,8 +280,7 @@ class MPISharedTargets(object) :
                     roffsets=self._data[spectrum_dict["roffsets"][0]:spectrum_dict["roffsets"][1]]
                     rshape=tuple(self._data[spectrum_dict["rshape"][0]:spectrum_dict["rshape"][1]].astype(int))
                     rdata=rdata.reshape((roffsets.size,rdata.shape[0]//roffsets.size))
-                    spectra_ref.append(SimpleSpectrum(wave,flux,ivar,scipy.sparse.dia_matrix((rdata, roffsets), shape=rshape)))
-            
+                    spectra_ref.append(SimpleSpectrum(wave,flux,ivar,scipy.sparse.dia_matrix((rdata, roffsets), shape=rshape)))            
             targets.append(Target(targetid,spectra,coadd=coadd))
         print("rank #%d : done get_targets"%self._rank)
         return targets

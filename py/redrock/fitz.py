@@ -134,6 +134,69 @@ def parallel_fitz_targets(zchi2, redshifts, targets, template, nminima=3, ncpu=N
 
     return results
 
+
+def mpi_fitz_targets(zchi2, redshifts, targets, template, nminima=3, comm=None):
+
+    if comm is None:
+        raise ValueError("I NEED A COMMUNICATOR")
+    
+    assert zchi2.shape == (len(targets), len(redshifts))
+    
+    target_indices = np.array_split(range(len(targets)), comm.size)
+
+    print("rank #%d : redrock.fitz for %s targets %d:%d"%(comm.rank,template.fulltype,target_indices[comm.rank][0],target_indices[comm.rank][-1]))
+    #sys.stdout.flush() #  this would helps seeing something, but why is python saying it does know sys ?????
+    result=[]
+    try:
+        for j in target_indices[comm.rank]:
+            res = fitz(zchi2[j], redshifts, targets[j].spectra, template, nminima=nminima)
+            result.append( (j,res) ) # same result format as _wrap_fitz
+    except Exception as err:
+        import traceback, sys
+        message = "".join(traceback.format_exception(*sys.exc_info()))
+        result.append( (target_indices[comm.rank][0], err, message) )
+    
+    print("rank #%d : done redrock.fitz"%comm.rank)
+    #- all the results gather to rank #0
+    results = comm.gather(result,root=0)
+    print("rank #%d : done gathering results to rank 0"%comm.rank)
+
+    if comm.rank == 0 :
+        
+        # rearrange results ( list of lists -> list )
+        tmp=list()
+        for result in results :
+            for res in result :
+                tmp.append(res)
+        results=tmp
+        print("rank #{} : results = {}".format(comm.rank,results))
+        
+        #- Check for any errors
+        mpfail = False
+        message = 'ok'
+        for r in results:
+            if isinstance(r[1], Exception):
+                i, err, message = r
+                print("ERROR: result {} generated an exception".format(i))
+                print(message)
+                mpfail = True
+        
+        if mpfail:
+            print("ERROR: Raising the last of the exceptions")
+            raise RuntimeError(message)
+    
+        #- Sort results into original order of targets
+        isort = np.argsort([r[0] for r in results])
+        results = [results[i][1] for i in isort]
+    else : # not rank 0
+        results = None
+    
+    # bcast results? no, rank 0 keeps the results
+            
+    return results
+
+
+
 def fitz(zchi2, redshifts, spectra, template, nminima=3):
     '''Refines redshift measurement around up to nminima minima
 

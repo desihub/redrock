@@ -242,31 +242,28 @@ def rrdesi_multiprocessing(options=None):
 
     templates = redrock.io.read_templates(opts.templates)
 
-    print('DEBUG: only test IO for now')
-    if False :
-        
-        zscan, zfit = redrock.zfind(targets, templates, ncpu=opts.ncpu)
+    zscan, zfit = redrock.zfind(targets, templates, ncpu=opts.ncpu)
 
-        if opts.output:
-            print('INFO: writing {}'.format(opts.output))
-            redrock.io.write_zscan(opts.output, zscan, zfit, clobber=True)
+    if opts.output:
+        print('INFO: writing {}'.format(opts.output))
+        redrock.io.write_zscan(opts.output, zscan, zfit, clobber=True)
 
-        if opts.zbest:
-            zbest = zfit[zfit['znum'] == 0]
+    if opts.zbest:
+        zbest = zfit[zfit['znum'] == 0]
 
-            #- Remove extra columns not needed for zbest
-            zbest.remove_columns(['zz', 'zzchi2', 'znum'])
+        #- Remove extra columns not needed for zbest
+        zbest.remove_columns(['zz', 'zzchi2', 'znum'])
 
-            #- Change to upper case like DESI
-            for colname in zbest.colnames:
-                if colname.islower():
-                    zbest.rename_column(colname, colname.upper())
+        #- Change to upper case like DESI
+        for colname in zbest.colnames:
+            if colname.islower():
+                zbest.rename_column(colname, colname.upper())
 
-            #- Add brickname column
-            zbest['BRICKNAME'] = meta['BRICKNAME']
+        #- Add brickname column
+        zbest['BRICKNAME'] = meta['BRICKNAME']
 
-            print('INFO: writing {}'.format(opts.zbest))
-            write_zbest(opts.zbest, zbest)
+        print('INFO: writing {}'.format(opts.zbest))
+        write_zbest(opts.zbest, zbest)
 
     run_time = time.time() - start_time
     print('INFO: finished {} in {:.1f} seconds'.format(os.path.basename(infiles[0]), run_time))
@@ -339,33 +336,30 @@ def rrdesi_mpi(options=None):
         print('rank #%d : done reading'%comm.rank)
         
     else : # MPI : the others don't do anything
-        print('rank #%d : waiting'%comm.rank)
         templates = None
         targets   = None
         meta      = None
         
-    # all processes get a copy of the templates  
+    # all processes get a copy of the templates from rank 0  
     templates = comm.bcast(templates,root=0)
     print('rank #%d : I have %d templates from bcast'%(comm.rank,len(templates)))
     meta = comm.bcast(meta,root=0)
     print('rank #%d : I have the targets meta data from bcast'%(comm.rank))
-    
+
+    # in this class is performed the shared memory of all targets
     with MPISharedTargets(targets, comm) as shared_targets :
-        
-        print('rank #%d : shared_targets._data.size=%d'%(comm.rank,shared_targets._data.size))
-        print('rank #%d : shared_targets._data=%s'%(comm.rank,shared_targets._data[:12]))
-        
+
+        # this could go in the __init__ function
         targets = shared_targets.get_targets()
         print('rank #%d : number of targets = %d'%(comm.rank,len(targets)))
-    
+
+        # here we have to do the redshift fitting
+        # print('INFO: fitting {} targets'.format(len(targets)))
+        zscan, zfit = redrock.zfind(targets, templates, ncpu=opts.ncpu, comm=comm)
         
-    print('DEBUG: only test IO for now')
     
-    if False :
-        print('INFO: fitting {} targets'.format(len(targets)))
-
-        zscan, zfit = redrock.zfind(targets, templates, ncpu=opts.ncpu)
-
+    if comm.rank==0:
+        
         if opts.output:
             print('INFO: writing {}'.format(opts.output))
             redrock.io.write_zscan(opts.output, zscan, zfit, clobber=True)
