@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import numpy as np
 import scipy.sparse
+from collections import OrderedDict
 
 from redrock.rebin import trapz_rebin
 from redrock import sharedmem
@@ -255,9 +256,9 @@ class MPISharedTargets(object) :
     
     
     def fill_target_dictionnary(self,targets) :
-        #print("rank #%d : fill_target_dictionnary"%self._rank)
+        
         n=0
-        dictionnary={}
+        dictionnary=OrderedDict() # keep targets as ordered in list
         for target in targets :
             dictionnary[target.id]={}
             for spectra_label, spectra in zip(["spectra","coadd"],[target.spectra,target.coadd]) :
