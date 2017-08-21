@@ -317,6 +317,8 @@ def rrdesi_mpi(options=None, comm=None):
     if comm.rank==0 : # MPI: only one process reads the data and the templates
         t0 = time.time()
         print('rank #%d : reading targets'%comm.rank)
+        sys.stdout.flush()
+        
         try:
             targets, meta = read_spectra(infiles,spectrum_class=SimpleSpectrum)
         except RuntimeError:
@@ -332,11 +334,14 @@ def rrdesi_mpi(options=None, comm=None):
             meta = meta[opts.mintarget:opts.mintarget+opts.ntargets]
         
         print('rank #%d : reading templates'%comm.rank)
-
+        sys.stdout.flush()
+        
         templates = redrock.io.read_templates(opts.templates)
 
         dt = time.time() - t0
         print('DEBUG: PID {} read targets and templates in {:.1f} seconds'.format(pid,dt))
+        sys.stdout.flush()
+        
         
     else : # MPI : the others don't do anything
         templates = None
@@ -346,6 +351,9 @@ def rrdesi_mpi(options=None, comm=None):
     # all processes get a copy of the templates from rank 0  
     templates = comm.bcast(templates,root=0)
     print('rank #%d : I have %d templates from bcast'%(comm.rank,len(templates)))
+    
+    if comm.rank==0 :
+        sys.stdout.flush()
 
     # no need to broad cast the target meta data because only used when writing results
     # meta = comm.bcast(meta,root=0)
