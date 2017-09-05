@@ -5,15 +5,16 @@ import os, sys
 import time
 import numpy as np
 
-import redrock.zscan
-import redrock.fitz
-from redrock.zwarning import ZWarningMask as ZW
+from . import zscan as rrzscan
+from . import fitz
+from .zwarning import ZWarningMask as ZW
 
 import multiprocessing as mp
 
+
 def _wrap_calc_zchi2(args):
     try:
-        return redrock.zscan.calc_zchi2_targets(*args)
+        return rrzscan.calc_zchi2_targets(*args)
     except Exception as oops:
         print('-'*60)
         print('ERROR: calc_zchi2_targets raised exception; original traceback:')
@@ -22,6 +23,7 @@ def _wrap_calc_zchi2(args):
         print('...propagating exception upwards')
         print('-'*60)
         raise oops
+
 
 def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
     '''
@@ -65,7 +67,7 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
 
     if comm is not None :
         if comm.rank == 0 :
-            print("INFO: using MPI")
+            print("INFO: using MPI with {} processes".format(comm.size))
     elif ncpu > 1:
         print("INFO: using multiprocessing with {} cores".format(ncpu))
     else:
@@ -73,38 +75,38 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
         
     for t in templates:
 
-        if comm is not None and (comm.rank == 0) :
-            print('rank #{} : starting zchi2 scan for {}'.format(comm.rank,t.fulltype))
-            sys.stdout.flush() #  this helps seeing something
+        # if comm is not None and (comm.rank == 0) :
+        #     print('INFO: starting zchi2 scan for {}'.format(comm.rank,
+        #         t.fulltype))
+        #     sys.stdout.flush() #  this helps seeing something
         
         t0 = time.time()
         if ncpu > 1:
-            zchi2, zcoeff, penalty = redrock.zscan.parallel_calc_zchi2_targets(t.redshifts, targets, t, ncpu=ncpu)
-        elif comm is not None :
-            zchi2, zcoeff, penalty = redrock.zscan.mpi_calc_zchi2_targets(t.redshifts, targets, t, comm=comm)
+            zchi2, zcoeff, penalty = rrzscan.parallel_calc_zchi2_targets(t.redshifts, targets, t, ncpu=ncpu)
+        elif comm is not None:
+            zchi2, zcoeff, penalty = rrzscan.mpi_calc_zchi2_targets(t.redshifts, targets, t, comm=comm)
         else:
-            zchi2, zcoeff, penalty = redrock.zscan.calc_zchi2_targets(t.redshifts, targets, t)
+            zchi2, zcoeff, penalty = rrzscan.calc_zchi2_targets(t.redshifts, targets, t)
         dt = time.time() - t0
 
-        if comm is None or comm.rank==0 :
-            print('DEBUG: PID {} {} zscan in {:.1f} seconds'.format(pid, t.fulltype, dt))
+        # if comm is None or comm.rank==0 :
+        #     print('DEBUG: PID {} {} zscan in {:.1f} seconds'.format(pid, t.fulltype, dt))
 
         t0 = time.time()
         if comm is None : # multiprocessing version
-            zfits = redrock.fitz.parallel_fitz_targets(
+            zfits = fitz.parallel_fitz_targets(
                 zchi2+penalty, t.redshifts, targets, t,
                 ncpu=ncpu, nminima=nminima)
         else : # mpi version
-            zfits = redrock.fitz.mpi_fitz_targets(
+            zfits = fitz.mpi_fitz_targets(
                 zchi2+penalty, t.redshifts, targets, t,
                 comm=comm, nminima=nminima)
         dt = time.time() - t0
 
-        if comm is None or comm.rank==0 :
-            print('DEBUG: PID {} {} fitz in {:.1f} seconds'.format(pid, t.fulltype, dt))
-        
-            
-        if comm is None or comm.rank==0 :
+        # if comm is None or comm.rank==0 :
+        #     print('DEBUG: PID {} {} fitz in {:.1f} seconds'.format(pid, t.fulltype, dt))
+  
+        if comm is None or comm.rank == 0 :
             
             for i,zfit in enumerate(zfits) :
                 zscan[targets[i].id][t.fulltype]['zfit'] = zfit
@@ -117,7 +119,7 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
 
     sys.stdout.flush()
     
-    if comm is None or comm.rank==0 :
+    if comm is None or comm.rank == 0 :
         #- Convert individual zfit results into a zall array
         t0 = time.time()
         ### print('DEBUG: PID {} Making zall'.format(pid))
@@ -168,10 +170,10 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
 
         zfit = astropy.table.vstack(zfit)
         dt = time.time() - t0
-        print('DEBUG: PID {} zall in {:.1f} seconds'.format(pid, dt))
+        #print('DEBUG: PID {} zall in {:.1f} seconds'.format(pid, dt))
     else :
-       zscan=None
-       zfit=None
+       zscan = None
+       zfit = None
     
     # no need to broadcast at the end of this routine
     # because only rank 0 will write the results

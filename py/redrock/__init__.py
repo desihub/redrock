@@ -5,7 +5,8 @@ from __future__ import absolute_import, division, print_function
 
 __version__ = '0.4.2.dev1'
 
-from .dataobj import Target, MultiprocessingSharedSpectrum, SimpleSpectrum, MPISharedTargets, Template
+from .dataobj import (Target, MultiprocessingSharedSpectrum, 
+	SimpleSpectrum, MPISharedTargets, Template)
 from . import rebin
 from . import zscan
 from . import fitz

@@ -22,6 +22,7 @@ def centers2edges(centers):
 
     return edges
 
+
 #- numba JIT compiler doesn't seem to like keyword args, so wrap it
 def trapz_rebin(x, y, xnew=None, edges=None):
     if edges is None:
@@ -33,6 +34,7 @@ def trapz_rebin(x, y, xnew=None, edges=None):
         raise ValueError('edges must be within input x range')
 
     return _trapz_rebin(x, y, edges)
+
 
 @numba.jit
 def _trapz_rebin(x, y, edges):

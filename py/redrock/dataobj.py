@@ -4,11 +4,13 @@ import numpy as np
 import scipy.sparse
 from collections import OrderedDict
 
-from redrock.rebin import trapz_rebin
-from redrock import sharedmem
-from mpi4py import MPI
+from .rebin import trapz_rebin
+from . import sharedmem
+from .sharedmem_mpi import MPIShared
+
 
 class Template(object):
+
     def __init__(self, template_type, redshifts, wave, flux, subtype=''):
         '''
         Create a spectral Template PCA object
@@ -62,6 +64,7 @@ class Template(object):
 
         
 class MultiprocessingSharedSpectrum(object):
+
     def __init__(self, wave, flux, ivar, R):
         """
         create a Spectrum object
@@ -121,7 +124,9 @@ class MultiprocessingSharedSpectrum(object):
         if hasattr(self, 'Rcsr'):
             del self.Rcsr
 
+
 class SimpleSpectrum(object):
+
     def __init__(self, wave, flux, ivar, R):
         self.nwave=wave.size
         self.wave=wave
@@ -132,170 +137,84 @@ class SimpleSpectrum(object):
         self.wavehash = hash((len(wave), wave[0], wave[1], wave[-2], wave[-1]))
 
 
+class MPISharedTargets(object):
 
-class MPISharedTargets(object) :
     def __init__(self, targets, comm):
-        
-        
-        if comm is None :
-            raise ValueError('I NEED A MPI COMMUNICATOR')
-        
-        # Global communicator.        
+        """
+        Place a list of targets into MPI shared memory.
+
+        Args:
+            targets (list): the list of targets.  This is ONLY meaningful
+                on the rank zero process.  Data on other processes is
+                ignored.
+            comm (mpi4py.MPI.Comm): the communicator to use (or None).
+        """
+
         self._comm = comm
-        self._rank = self._comm.rank
-        self._procs = self._comm.size
-        
-        #print('rank #%d : MPISharedTargets.__init__ starting'%self._rank)
+        self._dtype = np.dtype(np.float64)
 
-        if comm.rank==0 :
-            print('rank #%d : allocating a shared memory for targets '%self._rank)
-        
-        self._n = 0
-        self._dtype = np.dtype("float64")
-        self._target_dictionnary = None
-        
-        # for the moment, the whole memory allocation is going to the first rank
-        if self._rank == 0 :
-            dictionnary,ndata = self.fill_target_dictionnary(targets)
-            self._target_dictionnary = dictionnary
-            self._n = ndata
-            
-        #print('rank #%d : _n = %d'%(self._rank,self._n))
-        #print('rank #%d : allocating memory'%self._rank)
+        root = False
+        if self._comm is None:
+            root = True
+        elif self._comm.rank == 0:
+            root = True
 
-            
-        # We are actually using MPI, so we need to ensure that
-        # our specified numpy dtype has a corresponding MPI datatype.
-        status = 0
-        try:
-            # Technically this is an internal variable, but online
-            # forum posts from the developers indicate this is stable
-            # at least until a public interface is created.
-            self._mpitype = MPI._typedict[self._dtype.char]
-        except:
-            status = 1
-        self._checkabort(self._comm, status, "numpy to MPI type conversion")
-        
-        # Number of bytes in our buffer
-        dsize = self._mpitype.Get_size()
-        nbytes = self._n * dsize
-                    
-        # allocating the shared memory
-        # all ranks have to go through this even if they don't allocate anything (_n=nbytes=0 for rank>0)
-        # otherwise this does not work (don't ask me why)
-        status = 0
-        try:
-            self._win = MPI.Win.Allocate_shared(nbytes, dsize,comm=self._comm)
-        except:
-            status = 1
-        self._checkabort(self._comm, status, "shared memory allocation")
-        #print('rank #%d : MPISharedTargets.__init__ memory allocated'%self._rank)
-        
-        # Every process looks up the memory address of rank zero's piece,
-        # which is the start of the contiguous shared buffer.
-        # print('rank #%d : MPISharedTargets.__init__ get memory address'%self._rank)
-        status = 0
-        try:
-            self._buffer, dsize = self._win.Shared_query(0)
-        except:
-            status = 1
-        self._checkabort(self._comm, status, "shared memory query")
+        # We are going to pack the target data into one big memory buffer.
+        # First compute the displacements of the data for each target.
 
-        # Create a numpy array which acts as a "view" of the buffer.
-        self._dbuf = np.array(self._buffer, dtype="B", copy=False)
-        self._data = self._dbuf.view(self._dtype) # here is the data !!
-        # print('rank #%d : MPISharedTargets.__init__ have the data view'%self._rank)
-        
-        
-        if self._rank == 0 :
+        self._target_dictionary = None
+        self._bufsize = None
 
-            print('rank #%d : fill the memory with the data'%self._rank)
-            
-            # Get a write-lock on the shared memory
-            self._win.Lock(self._rank, MPI.LOCK_EXCLUSIVE)
+        if root:
+            self._target_dictionary, self._bufsize = \
+                self._fill_target_dictionary(targets)
+        
+        if self._comm is not None:
+            self._target_dictionary = self._comm.bcast(self._target_dictionary,
+                root=0)
+            self._bufsize = self._comm.bcast(self._bufsize, root=0)
 
-            # Copy data ...
-            for target in targets :
-                tdict=self._target_dictionnary[target.id]
-                for spectra_dict_list_label,spectra_list in zip(["spectra","coadd"],[target.spectra,target.coadd]) :
-                    spectra_dict_list=tdict[spectra_dict_list_label]
-                    for spectrum_dict , spectrum in zip(spectra_dict_list,spectra_list) :
-                        for label,an_array in zip(["wave","flux","ivar","rdata","roffsets","rshape"],
-                                                  [spectrum.wave,spectrum.flux,spectrum.ivar,spectrum.R.data,spectrum.R.offsets.astype(self._dtype),np.array(spectrum.R.shape).astype(self._dtype)]) :
-                            begin=spectrum_dict[label][0]
-                            end=spectrum_dict[label][1]                            
-                            self._data[begin:end] = an_array.ravel()
-                        first=False
-            # Release the write-lock
-            self._win.Unlock(self._rank)
+        # Allocate the shared buffer
+        self._shared = MPIShared((self._bufsize,), self._dtype, self._comm)
 
-            #print('rank #%d : MPISharedTargets.__init__ done filling the shared memory'%self._rank)
-            
-        # Explicit barrier here, to ensure that other processes do not try
-        # reading data before the writing processes have finished.
-        self._comm.barrier()
+        # Now set the shared data buffer, one target at a time
 
-        #print('rank #%d : MPISharedSpectrum.__init__ broadcasting target_dictionnary'%self._rank)
-        self._target_dictionnary = comm.bcast(self._target_dictionnary,root=0)
-        
-        #print('rank #%d : MPISharedSpectrum.__init__ unpacking targets'%self._rank)
-        self.targets = self.get_targets()
+        targetnum = 0
+        for id, tdict in self._target_dictionary.items():
+            for spectra_label in ["spectra", "coadd"]:
+                specnum = 0
+                for spectra_dict in tdict[spectra_label]:
+                    target_begin = spectra_dict["wave"][0]
+                    target_end = spectra_dict["rshape"][1]
+                    target_buffer = None
+                    if root:
+                        assert targets[targetnum].id == id
+                        target_buffer = np.empty((target_end - target_begin,),
+                            dtype=np.float64)
+                        spectrum = None
+                        if spectra_label == "spectra":
+                            spectrum = targets[targetnum].spectra[specnum]
+                        elif spectra_label == "coadd":
+                            spectrum = targets[targetnum].coadd[specnum]
+                        for label, an_array in zip(["wave", "flux", "ivar", 
+                            "rdata", "roffsets", "rshape"], [spectrum.wave,
+                            spectrum.flux, spectrum.ivar, spectrum.R.data, 
+                            spectrum.R.offsets.astype(self._dtype),
+                            np.array(spectrum.R.shape).astype(self._dtype)]):
+                            begin = spectra_dict[label][0] - target_begin
+                            end = spectra_dict[label][1] - target_begin
+                            target_buffer[begin:end] = an_array.ravel()
+                    self._shared.set(target_buffer, (target_begin,), 
+                        fromrank=0)
+                    specnum += 1
+            targetnum += 1
 
-        print('rank #%d : I have the %d targets'%(self._rank,len(self.targets)))
-        
-        
-        #print('rank #%d : MPISharedSpectrum.__init__ ending'%self._rank)
+        # Wrap the target data in a friendlier format.  This will likely
+        # duplicate some data from the resolution matrix.
 
-        
-    def _checkabort(self, comm, status, msg):
-        if status != 0 :
-            print("rank #{} : MPI ERROR : {}".format(comm.rank,msg))
-            sys.stdout.flush()
-            comm.Abort()  # unfortunately this removes all print messages, need to check this now that I added a flush ...
-        
-    
-    
-    def fill_target_dictionnary(self,targets) :
-        
-        n=0
-        dictionnary=OrderedDict() # keep targets as ordered in list
-        for target in targets :
-            dictionnary[target.id]={}
-            for spectra_label, spectra in zip(["spectra","coadd"],[target.spectra,target.coadd]) :
-                spectra_list=list()
-                for spectrum in spectra :
-                    spectrum_dic={}
-                    for label,asize in zip(["wave","flux","ivar","rdata","roffsets","rshape"],[spectrum.wave.size,spectrum.flux.size,spectrum.ivar.size,spectrum.R.data.size,spectrum.R.offsets.size,len(spectrum.R.shape)]) :
-                        spectrum_dic[label]=[n,n+asize] ; n+=asize
-                    spectra_list.append(spectrum_dic)
-                dictionnary[target.id][spectra_label]=spectra_list
-        return dictionnary,n
+        self.targets = self._get_targets()
 
-    def get_targets(self) :
-        #print("rank #%d : get_targets"%self._rank)
-        targets = list()
-        for targetid in self._target_dictionnary.keys() :
-            tdict=self._target_dictionnary[targetid]
-            spectra=list()
-            coadd=list()
-            for spectra_dict_list_label, spectra_ref in zip(["spectra","coadd"],[spectra,coadd]) :
-                spectra_dict_list=tdict[spectra_dict_list_label]
-                for spectrum_dict in spectra_dict_list :
-                    # we are not doing a copy here (except maybe for R ...)
-                    wave=self._data[spectrum_dict["wave"][0]:spectrum_dict["wave"][1]]
-                    flux=self._data[spectrum_dict["flux"][0]:spectrum_dict["flux"][1]]
-                    ivar=self._data[spectrum_dict["ivar"][0]:spectrum_dict["ivar"][1]]
-                    rdata=self._data[spectrum_dict["rdata"][0]:spectrum_dict["rdata"][1]]
-                    roffsets=self._data[spectrum_dict["roffsets"][0]:spectrum_dict["roffsets"][1]]
-                    rshape=tuple(self._data[spectrum_dict["rshape"][0]:spectrum_dict["rshape"][1]].astype(int))
-                    rdata=rdata.reshape((roffsets.size,rdata.shape[0]//roffsets.size))
-                    spectra_ref.append(SimpleSpectrum(wave,flux,ivar,scipy.sparse.dia_matrix((rdata, roffsets), shape=rshape)))            
-            targets.append(Target(targetid,spectra,coadd=coadd))
-        #print("rank #%d : done get_targets"%self._rank)
-        return targets
-    
-        
-    
+
     def __del__(self):
         self.close()
     
@@ -307,11 +226,56 @@ class MPISharedTargets(object) :
         return False
 
     def close(self):
-        # The shared memory window is automatically freed
-        # when the class instance is garbage collected.
-        # This function is for any other clean up on destruction.
         return
-    
+
+
+    def _fill_target_dictionary(self, targets):
+        n = 0
+        dictionary = OrderedDict() # keep targets as ordered in list
+        for target in targets :
+            dictionary[target.id] = {}
+            for spectra_label, spectra in zip(["spectra", "coadd"], 
+                [target.spectra, target.coadd]):
+                spectra_list = list()
+                for spectrum in spectra :
+                    spectrum_dict = {}
+                    for label, asize in zip(["wave","flux","ivar","rdata",
+                        "roffsets","rshape"], [spectrum.wave.size, 
+                        spectrum.flux.size, spectrum.ivar.size, 
+                        spectrum.R.data.size, spectrum.R.offsets.size,
+                        len(spectrum.R.shape)]):
+                        spectrum_dict[label] = [n, n + asize]
+                        n += asize
+                    spectra_list.append(spectrum_dict)
+                dictionary[target.id][spectra_label] = spectra_list
+        return dictionary, n
+
+
+    def _get_targets(self):
+        targets = list()
+        for id, tdict in self._target_dictionary.items():
+            spectra = list()
+            coadd = list()
+            for spectra_label, spectra_ref in zip(["spectra", "coadd"],
+                [spectra, coadd]):
+                spectra_dict_list = tdict[spectra_label]
+                for spectrum_dict in spectra_dict_list :
+                    # we are not doing a copy here (except maybe for R ...)
+                    wave = self._shared[spectrum_dict["wave"][0]:spectrum_dict["wave"][1]]
+                    flux = self._shared[spectrum_dict["flux"][0]:spectrum_dict["flux"][1]]
+                    ivar = self._shared[spectrum_dict["ivar"][0]:spectrum_dict["ivar"][1]]
+                    rdata = self._shared[spectrum_dict["rdata"][0]:spectrum_dict["rdata"][1]]
+                    roffsets = self._shared[spectrum_dict["roffsets"][0]:spectrum_dict["roffsets"][1]]
+                    rshape = tuple(self._shared[spectrum_dict["rshape"][0]:spectrum_dict["rshape"][1]].astype(int))
+                    rdata = rdata.reshape((roffsets.size,rdata.shape[0]//roffsets.size))
+                    spectra_ref.append( SimpleSpectrum(wave, flux, ivar, 
+                        scipy.sparse.dia_matrix((rdata, roffsets), 
+                        shape=rshape)) )            
+            targets.append(Target(id, spectra, coadd=coadd))
+
+        return targets
+
+
 class Target(object):
     def __init__(self, targetid, spectra, coadd=None):
         """

@@ -4,4 +4,4 @@
 Redrock for DESI
 """
 from redrock.external import desi
-desi.rrdesi_multiprocessing()
+desi.rrdesi()

@@ -14,6 +14,7 @@ from . import Template
 if sys.version_info.major > 2:
     basestring = str
 
+
 #- From https://github.com/desihub/desispec io.util.native_endian
 def native_endian(data):
     """Convert numpy array data to native endianness if needed.
@@ -29,6 +30,7 @@ def native_endian(data):
         return data
     else:
         return data.byteswap().newbyteorder()
+
 
 def read_template(filename):
     '''
@@ -72,6 +74,7 @@ def read_template(filename):
 
     return Template(rrtype, redshifts, wave, flux, subtype=subtype)
 
+
 def find_templates(template_dir=None):
     '''
     Return list of redrock-*.fits template files
@@ -95,6 +98,7 @@ def find_templates(template_dir=None):
 
     return glob(os.path.join(template_dir, 'rrtemplate-*.fits'))
 
+
 def read_templates(template_list=None, template_dir=None):
     '''
     Return a list of templates from the files in template_list
@@ -116,6 +120,7 @@ def read_templates(template_list=None, template_dir=None):
         raise IOError('No templates found')
     
     return templates
+
 
 def write_zscan(filename, zscan, zfit, clobber=False):
     '''
@@ -176,7 +181,8 @@ def write_zscan(filename, zscan, zfit, clobber=False):
         #- TODO: fx['zfit/{}/model']
 
     fx.close()
-    
+
+
 def read_zscan(filename):
     '''Return redrock.zfind results stored in hdf5 file as written
     by write_zscan
@@ -229,9 +235,11 @@ def read_zscan(filename):
 
     return zscan, zfit
 
+
 def _encode_column(c):
     '''Returns a bytes column encoded into a string column'''
     return c.astype((str, c.dtype.itemsize))
+
 
 #- Adapted from http://stackoverflow.com/a/21659588; unix only
 def getch():
