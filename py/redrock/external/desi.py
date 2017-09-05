@@ -1,7 +1,6 @@
 '''
 redrock wrapper tools for DESI
 '''
-
 from __future__ import absolute_import, division, print_function
 
 import os, sys
@@ -13,8 +12,11 @@ import numpy as np
 import desispec.io
 from desispec.resolution import Resolution
 
-from .. import Target
-from .. import MultiprocessingSharedSpectrum, SimpleSpectrum,  MPISharedTargets
+from ..dataobj import (Target, MultiprocessingSharedSpectrum, 
+    SimpleSpectrum, MPISharedTargets)
+
+from .. import io
+from .. import zfind
 
 
 def write_zbest(outfile, zbest):
@@ -197,102 +199,24 @@ def read_bricks(brickfiles, trueflux=False, targetids=None, spectrum_class=None)
     return targets, meta
 
 
-def rrdesi_multiprocessing(options=None):
-    import redrock
+def rrdesi(options=None, comm=None):
     import optparse
     from astropy.io import fits
     import time
-    start_time = time.time()
 
-    parser = optparse.OptionParser(usage = "%prog [options] spectra1 spectra2...")
-    parser.add_option("-t", "--templates", type="string",  help="template file or directory")
-    parser.add_option("-o", "--output", type="string",  help="output file")
-    parser.add_option("--zbest", type="string",  help="output zbest fits file")
-    parser.add_option("-n", "--ntargets", type=int,  help="number of targets to process")
-    parser.add_option("--mintarget", type=int,  help="first target to include", default=0)
-    parser.add_option("--ncpu", type=int,  help="number of cpu cores for multiprocessing", default=None)
-    parser.add_option("--debug", help="debug with ipython", action="store_true")
-    ### parser.add_option("--coadd", help="use coadd instead of individual spectra", action="store_true")
-    parser.add_option("--allspec", help="use individual spectra instead of coadd", action="store_true")
-
-    if options is None:
-        opts, infiles = parser.parse_args()
-    else:
-        opts, infiles = parser.parse_args(options)
-
-    if (opts.output is None) and (opts.zbest is None):
-        print('ERROR: --output or --zbest required')
-        sys.exit(1)
-
-    if len(infiles) == 0:
-        print('ERROR: must provide input spectra/brick files')
-        sys.exit(1)
-
-    try:
-        targets, meta = read_spectra(infiles,spectrum_class=MultiprocessingSharedSpectrum)
-    except RuntimeError:
-        targets, meta = read_bricks(infiles,spectrum_class=MultiprocessingSharedSpectrum)
-
-    if not opts.allspec:
-        for t in targets:
-            t._all_spectra = t.spectra
-            t.spectra = t.coadd
-
-    if opts.ntargets is not None:
-        targets = targets[opts.mintarget:opts.mintarget+opts.ntargets]
-        meta = meta[opts.mintarget:opts.mintarget+opts.ntargets]
-
-    print('INFO: fitting {} targets'.format(len(targets)))
-
-    templates = redrock.io.read_templates(opts.templates)
-
-    zscan, zfit = redrock.zfind(targets, templates, ncpu=opts.ncpu)
-
-    if opts.output:
-        print('INFO: writing {}'.format(opts.output))
-        redrock.io.write_zscan(opts.output, zscan, zfit, clobber=True)
-
-    if opts.zbest:
-        zbest = zfit[zfit['znum'] == 0]
-
-        #- Remove extra columns not needed for zbest
-        zbest.remove_columns(['zz', 'zzchi2', 'znum'])
-
-        #- Change to upper case like DESI
-        for colname in zbest.colnames:
-            if colname.islower():
-                zbest.rename_column(colname, colname.upper())
-
-        #- Add brickname column
-        zbest['BRICKNAME'] = meta['BRICKNAME']
-
-        print('INFO: writing {}'.format(opts.zbest))
-        write_zbest(opts.zbest, zbest)
-
-    run_time = time.time() - start_time
-    print('INFO: finished {} in {:.1f} seconds'.format(os.path.basename(infiles[0]), run_time))
-
-    if opts.debug:
-        import IPython
-        IPython.embed()
-
-        
-def rrdesi_mpi(options=None, comm=None):
-
-    
-    from mpi4py import MPI
-    
-    import redrock
-    import optparse
-    from astropy.io import fits
-    import time
+    # Note, in the pure multiprocessing case (comm == None), "rank"
+    # will always be set to zero, which is fine since we are outside
+    # any areas using multiprocessing and this is just used to control
+    # program flow.
+    rank = 0
+    nproc = 1
+    if comm is not None:
+        rank = comm.rank
+        nproc = comm.size
 
     start_time = time.time()
     pid = os.getpid()
     
-    if comm is None :
-        comm = MPI.COMM_WORLD
-    
     parser = optparse.OptionParser(usage = "%prog [options] spectra1 spectra2...")
     parser.add_option("-t", "--templates", type="string",  help="template file or directory")
     parser.add_option("-o", "--output", type="string",  help="output file")
@@ -317,10 +241,12 @@ def rrdesi_mpi(options=None, comm=None):
         print('ERROR: must provide input spectra/brick files')
         sys.exit(1)
 
-    
-    if comm.rank==0 : # MPI: only one process reads the data and the templates
+    templates = None
+    targets   = None
+    meta      = None
+    if rank == 0:
         t0 = time.time()
-        print('rank #%d : reading targets'%comm.rank)
+        print('INFO: reading targets')
         sys.stdout.flush()
         
         try:
@@ -337,43 +263,34 @@ def rrdesi_mpi(options=None, comm=None):
             targets = targets[opts.mintarget:opts.mintarget+opts.ntargets]
             meta = meta[opts.mintarget:opts.mintarget+opts.ntargets]
         
-        print('rank #%d : reading templates'%comm.rank)
+        print('INFO: reading templates')
         sys.stdout.flush()
         
-        templates = redrock.io.read_templates(opts.templates)
+        templates = io.read_templates(opts.templates)
 
         dt = time.time() - t0
-        print('DEBUG: PID {} read targets and templates in {:.1f} seconds'.format(pid,dt))
+        # print('DEBUG: PID {} read targets and templates in {:.1f} seconds'.format(pid,dt))
         sys.stdout.flush()
         
-        
-    else : # MPI : the others don't do anything
-        templates = None
-        targets   = None
-        meta      = None
-        
-    # all processes get a copy of the templates from rank 0  
-    templates = comm.bcast(templates,root=0)
-    print('rank #%d : I have %d templates from bcast'%(comm.rank,len(templates)))
-    
-    if comm.rank==0 :
-        sys.stdout.flush()
+    # all processes get a copy of the templates from rank 0
+    if comm is not None:
+        templates = comm.bcast(templates, root=0)
 
-    # no need to broad cast the target meta data because only used when writing results
-    # meta = comm.bcast(meta,root=0)
-    
-    # in this class is performed the shared memory of all targets
-    with MPISharedTargets(targets, comm) as shared_targets :
+    # Call zfind differently depending on our type of parallelism.
 
-        # in this context with a shared memory we perform the redshift fit
-        zscan, zfit = redrock.zfind(shared_targets.targets, templates, ncpu=opts.ncpu, comm=comm)
+    if comm is not None:
+        # Use MPI- set multiprocessing "ncpu" to one.
+        with MPISharedTargets(targets, comm) as shared_targets:
+            zscan, zfit = zfind(shared_targets.targets, templates, 
+                ncpu=1, comm=comm)
+    else:
+        # Use pure multiprocessing
+        zscan, zfit = zfind(targets, templates, ncpu=opts.ncpu)
     
-    
-    if comm.rank==0:
-        
+    if rank == 0:
         if opts.output:
             print('INFO: writing {}'.format(opts.output))
-            redrock.io.write_zscan(opts.output, zscan, zfit, clobber=True)
+            io.write_zscan(opts.output, zscan, zfit, clobber=True)
 
         if opts.zbest:
             zbest = zfit[zfit['znum'] == 0]
@@ -394,9 +311,17 @@ def rrdesi_mpi(options=None, comm=None):
 
     run_time = time.time() - start_time
     
-    if comm is None or comm.rank==0 :
+    if comm is None or comm.rank == 0:
         print('INFO: finished {} in {:.1f} seconds'.format(os.path.basename(infiles[0]), run_time))
     
     if opts.debug:
-        import IPython
-        IPython.embed()
+        if comm is not None:
+            print('INFO: ignoring ipython debugging when using MPI')
+        else:
+            import IPython
+            IPython.embed()
+
+    return
+
+
+

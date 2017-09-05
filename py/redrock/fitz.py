@@ -71,8 +71,8 @@ def _wrap_fitz(target_indices, qout, zchi2, redshifts, targets, template, nminim
             #- return index with results so that they can be sorted
             qout.put( (j, results) )
     except Exception as err:
-        import traceback, sys
-        message = "".join(traceback.format_exception(*sys.exc_info()))
+        import traceback, syst
+        message = "".join(traceback.format_exception(*syst.exc_info()))
         qout.put( (target_indices[0], err, message) )
 
     qout.close()
@@ -141,50 +141,58 @@ def parallel_fitz_targets(zchi2, redshifts, targets, template, nminima=3, ncpu=N
     return results
 
 
-def mpi_fitz_targets(zchi2, redshifts, targets, template, nminima=3, comm=None):
+def mpi_fitz_targets(zchi2, redshifts, targets, template, nminima=3, 
+    comm=None):
 
-    if comm is None:
-        raise ValueError("I NEED A COMMUNICATOR")
-    
+    rank = 0
+    nproc = 1
+    if comm is not None:
+        rank = comm.rank
+        nproc = comm.size
+
     assert zchi2.shape == (len(targets), len(redshifts))
     
-    target_indices = np.array_split(range(len(targets)), comm.size)
+    target_indices = np.array_split(range(len(targets)), nproc)
 
-    print("rank #%d : redrock.fitz for %s targets %d:%d"%(comm.rank,template.fulltype,target_indices[comm.rank][0],target_indices[comm.rank][-1]))
-    #sys.stdout.flush() #  this would helps seeing something, but why is python saying it does know sys ?????
+    # print("rank {} : redrock.fitz for {} targets {}:{}".format(rank,
+    #     template.fulltype, target_indices[rank][0], target_indices[rank][-1]))
+    # sys.stdout.flush()
     result=[]
     try:
-        for j in target_indices[comm.rank]:
-            res = fitz(zchi2[j], redshifts, targets[j].spectra, template, nminima=nminima)
+        for j in target_indices[rank]:
+            res = fitz(zchi2[j], redshifts, targets[j].spectra, template,
+                nminima=nminima)
             result.append(res)
     except Exception as err:
-        import traceback, sys
-        message = "error for a target between %d and %d : %s"%(target_indices[comm.rank][0],target_indices[comm.rank][1],traceback.format_exception(*sys.exc_info()))
+        import traceback, syst
+        message = "error for a target between {} and {} : {}".format(
+            target_indices[rank][0], target_indices[rank][1], 
+            traceback.format_exception(*syst.exc_info()))
         result.append( (err, message) )
     
     #- all the results gather to rank #0
-    results = comm.gather(result,root=0)
+    if comm is not None:
+        results = comm.gather(result, root=0)
+    else:
+        results = [ result ]
     
-    if comm.rank == 0 :
-
-        print("rank #%d : done gathering zfit results for %s"%(comm.rank,template.fulltype))
-
+    if rank == 0:
         # rearrange results ( list of lists -> list )
         results = [item for sublist in results for item in sublist]
         
         #- Check for any errors
-        mpfail = False
+        mpifail = False
         message = 'ok'
         for r in results:
             if isinstance(r[0], Exception):
                 err, message = r
                 print("ERROR: ",message)
-                mpfail = True
-        if mpfail:
+                mpifail = True
+        if mpifail:
             print("ERROR: Raising the last of the exceptions")
             raise RuntimeError(message)
         
-    else : # not rank 0
+    else: # not rank 0
         results = None
     
     # do not need to bcast results      

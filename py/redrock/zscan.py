@@ -102,24 +102,28 @@ def mpi_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
     '''
     MPI Parallel version of calc_zchi2_targets
     '''
-    
-    if comm is None:
-        raise ValueError("I NEED A COMMUNICATOR")
+    rank = 0
+    nproc = 1
+    if comm is not None:
+        rank = comm.rank
+        nproc = comm.size
                 
-    zsplit = np.array_split(redshifts, comm.size)
+    zsplit = np.array_split(redshifts, nproc)
 
-    print("rank {} : zscan.calc_zchi2_targets for {} redshifts "
-        "{}:{}".format(comm.rank, template.fulltype, zsplit[comm.rank][0],
-        zsplit[comm.rank][-1]))
-    sys.stdout.flush() #  this helps seeing something
+    # print("rank {} : zscan.calc_zchi2_targets for {} redshifts "
+    #     "{}:{}".format(rank, template.fulltype, zsplit[rank][0],
+    #     zsplit[rank][-1]))
+    # sys.stdout.flush() #  this helps seeing something
     
-    zchi2, zcoeff, zchi2penalty = calc_zchi2_targets(zsplit[comm.rank], targets, template)
-    zchi2        = comm.allgather(zchi2)
-    zcoeff       = comm.allgather(zcoeff)
-    zchi2penalty = comm.allgather(zchi2penalty)
-    zchi2        = np.hstack(zchi2)
-    zcoeff       = np.hstack(zcoeff)
-    zchi2penalty = np.hstack(zchi2penalty)
+    zchi2, zcoeff, zchi2penalty = calc_zchi2_targets(zsplit[rank], targets, template)
+
+    if comm is not None:
+        zchi2        = comm.allgather(zchi2)
+        zcoeff       = comm.allgather(zcoeff)
+        zchi2penalty = comm.allgather(zchi2penalty)
+        zchi2        = np.hstack(zchi2)
+        zcoeff       = np.hstack(zcoeff)
+        zchi2penalty = np.hstack(zchi2penalty)
     
     return zchi2, zcoeff, zchi2penalty
 

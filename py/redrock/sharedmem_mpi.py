@@ -7,24 +7,10 @@ https://github.com/tskisner/mpi_shmem
 revision:  c10498f227db809365c362e13d18a77a429a09ae
 '''
 
-import os
-
-# MPI environment availability
-
-have_mpi = None
-"""Whether we can use MPI.  Set globally on first import."""
-
-if ("NERSC_HOST" in os.environ) and ("SLURM_JOB_NAME" not in os.environ):
-    have_mpi = False
-else:
-    have_mpi = True
-    try:
-        import mpi4py.MPI as MPI
-    except ImportError:
-        have_mpi = False
-
 import sys
 import numpy as np
+
+import mpi4py.MPI as MPI
 
 
 class MPIShared(object):
