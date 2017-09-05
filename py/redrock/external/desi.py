@@ -16,6 +16,7 @@ from desispec.resolution import Resolution
 from .. import Target
 from .. import MultiprocessingSharedSpectrum, SimpleSpectrum,  MPISharedTargets
 
+
 def write_zbest(outfile, zbest):
     '''
     Write zbest Table to outfile
@@ -32,6 +33,7 @@ def write_zbest(outfile, zbest):
 
     zbest.meta['EXTNAME'] = 'ZBEST'
     zbest.write(outfile, overwrite=True)
+
 
 def read_spectra(spectrafiles, targetids=None, spectrum_class=None):
     '''
@@ -110,6 +112,7 @@ def read_spectra(spectrafiles, targetids=None, spectrum_class=None):
     meta['BRICKNAME'] = bricknames
 
     return targets, meta
+
 
 def read_bricks(brickfiles, trueflux=False, targetids=None, spectrum_class=None):
     '''
@@ -192,6 +195,7 @@ def read_bricks(brickfiles, trueflux=False, targetids=None, spectrum_class=None)
     meta['BRICKNAME'] = bricknames
 
     return targets, meta
+
 
 def rrdesi_multiprocessing(options=None):
     import redrock

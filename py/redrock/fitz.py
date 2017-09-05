@@ -2,8 +2,11 @@ from __future__ import absolute_import, division, print_function
 
 import sys
 import numpy as np
-import redrock
-from redrock.zwarning import ZWarningMask as ZW
+
+from . import sharedmem
+from . import zscan
+from .zwarning import ZWarningMask as ZW
+
 
 def find_minima(x):
     '''
@@ -19,6 +22,7 @@ def find_minima(x):
     jj = np.argsort(x[ii])
 
     return ii[jj]
+
 
 def minfit(x,y):
     '''
@@ -56,9 +60,10 @@ def minfit(x,y):
 
     return (x0, xerr, y0, zwarn)
 
+
 def _wrap_fitz(target_indices, qout, zchi2, redshifts, targets, template, nminima):
     #- unpack shared memory buffers into numpy arrays
-    zchi2 = redrock.sharedmem.toarray(zchi2)
+    zchi2 = sharedmem.toarray(zchi2)
     try:
         for j in target_indices:
             targets[j].sharedmem_unpack()
@@ -71,6 +76,7 @@ def _wrap_fitz(target_indices, qout, zchi2, redshifts, targets, template, nminim
         qout.put( (target_indices[0], err, message) )
 
     qout.close()
+
 
 def parallel_fitz_targets(zchi2, redshifts, targets, template, nminima=3, ncpu=None):
     '''
@@ -89,7 +95,7 @@ def parallel_fitz_targets(zchi2, redshifts, targets, template, nminima=3, ncpu=N
     ncpu = min(len(targets), ncpu)
 
     #- Pack arrays into shared memory for sending to processes
-    zchi2 = redrock.sharedmem.fromarray(zchi2)
+    zchi2 = sharedmem.fromarray(zchi2)
     for t in targets:
         t.sharedmem_pack()
 
@@ -185,7 +191,6 @@ def mpi_fitz_targets(zchi2, redshifts, targets, template, nminima=3, comm=None):
     return results
 
 
-
 def fitz(zchi2, redshifts, spectra, template, nminima=3):
     '''Refines redshift measurement around up to nminima minima
 
@@ -210,13 +215,13 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3):
         ilo = max(0, imin-1)
         ihi = min(imin+1, len(zchi2)-1)
         zz = np.linspace(redshifts[ilo], redshifts[ihi], 15)
-        zzchi2, zzcoeff, zzpenalty = redrock.zscan.calc_zchi2(zz, spectra, template)
+        zzchi2, zzcoeff, zzpenalty = zscan.calc_zchi2(zz, spectra, template)
 
         #- fit parabola to 3 points around minimum
         i = min(max(np.argmin(zzchi2),1), len(zz)-2)
         zmin, sigma, chi2min, zwarn = minfit(zz[i-1:i+2], zzchi2[i-1:i+2])
         try:
-            coeff = redrock.zscan.calc_zchi2([zmin,], spectra, template)[1][0]
+            coeff = zscan.calc_zchi2([zmin,], spectra, template)[1][0]
         except ValueError as err:
             if zmin<redshifts[0] or redshifts[-1]<zmin:
                 #- beyond redshift range can be invalid for template

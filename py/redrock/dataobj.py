@@ -4,11 +4,12 @@ import numpy as np
 import scipy.sparse
 from collections import OrderedDict
 
-from redrock.rebin import trapz_rebin
-from redrock import sharedmem
-from mpi4py import MPI
+from .rebin import trapz_rebin
+from . import sharedmem
+
 
 class Template(object):
+
     def __init__(self, template_type, redshifts, wave, flux, subtype=''):
         '''
         Create a spectral Template PCA object
@@ -62,6 +63,7 @@ class Template(object):
 
         
 class MultiprocessingSharedSpectrum(object):
+
     def __init__(self, wave, flux, ivar, R):
         """
         create a Spectrum object
@@ -121,7 +123,9 @@ class MultiprocessingSharedSpectrum(object):
         if hasattr(self, 'Rcsr'):
             del self.Rcsr
 
+
 class SimpleSpectrum(object):
+
     def __init__(self, wave, flux, ivar, R):
         self.nwave=wave.size
         self.wave=wave
@@ -132,10 +136,10 @@ class SimpleSpectrum(object):
         self.wavehash = hash((len(wave), wave[0], wave[1], wave[-2], wave[-1]))
 
 
+class MPISharedTargets(object):
 
-class MPISharedTargets(object) :
     def __init__(self, targets, comm):
-        
+
         
         if comm is None :
             raise ValueError('I NEED A MPI COMMUNICATOR')

@@ -5,15 +5,16 @@ import os, sys
 import time
 import numpy as np
 
-import redrock.zscan
-import redrock.fitz
-from redrock.zwarning import ZWarningMask as ZW
+from . import zscan
+from . import fitz
+from .zwarning import ZWarningMask as ZW
 
 import multiprocessing as mp
 
+
 def _wrap_calc_zchi2(args):
     try:
-        return redrock.zscan.calc_zchi2_targets(*args)
+        return zscan.calc_zchi2_targets(*args)
     except Exception as oops:
         print('-'*60)
         print('ERROR: calc_zchi2_targets raised exception; original traceback:')
@@ -22,6 +23,7 @@ def _wrap_calc_zchi2(args):
         print('...propagating exception upwards')
         print('-'*60)
         raise oops
+
 
 def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
     '''
@@ -79,11 +81,11 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
         
         t0 = time.time()
         if ncpu > 1:
-            zchi2, zcoeff, penalty = redrock.zscan.parallel_calc_zchi2_targets(t.redshifts, targets, t, ncpu=ncpu)
+            zchi2, zcoeff, penalty = zscan.parallel_calc_zchi2_targets(t.redshifts, targets, t, ncpu=ncpu)
         elif comm is not None :
-            zchi2, zcoeff, penalty = redrock.zscan.mpi_calc_zchi2_targets(t.redshifts, targets, t, comm=comm)
+            zchi2, zcoeff, penalty = zscan.mpi_calc_zchi2_targets(t.redshifts, targets, t, comm=comm)
         else:
-            zchi2, zcoeff, penalty = redrock.zscan.calc_zchi2_targets(t.redshifts, targets, t)
+            zchi2, zcoeff, penalty = zscan.calc_zchi2_targets(t.redshifts, targets, t)
         dt = time.time() - t0
 
         if comm is None or comm.rank==0 :
@@ -91,11 +93,11 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
 
         t0 = time.time()
         if comm is None : # multiprocessing version
-            zfits = redrock.fitz.parallel_fitz_targets(
+            zfits = fitz.parallel_fitz_targets(
                 zchi2+penalty, t.redshifts, targets, t,
                 ncpu=ncpu, nminima=nminima)
         else : # mpi version
-            zfits = redrock.fitz.mpi_fitz_targets(
+            zfits = fitz.mpi_fitz_targets(
                 zchi2+penalty, t.redshifts, targets, t,
                 comm=comm, nminima=nminima)
         dt = time.time() - t0

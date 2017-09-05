@@ -5,8 +5,11 @@ import os,sys
 import numpy as np
 import scipy.sparse
 
-from . import rebin, MultiprocessingSharedSpectrum, SimpleSpectrum, MPISharedTargets, Target
-import redrock
+from . import rebin
+
+from .dataobj import (MultiprocessingSharedSpectrum, 
+    SimpleSpectrum, MPISharedTargets, Target)
+
 
 def calc_zchi2(redshifts, spectra, template):
     '''
@@ -22,11 +25,12 @@ def calc_zchi2(redshifts, spectra, template):
     zchi2, zcoeff, penalty = calc_zchi2_targets(redshifts, targets, template)
     return zchi2[0], zcoeff[0], penalty[0]
 
+
 def _wrap_zchi2(redshifts, targets, template, qout):
     for t in targets:
         t.sharedmem_unpack()
     try:
-        results = redrock.zscan.calc_zchi2_targets(redshifts, targets, template)
+        results = calc_zchi2_targets(redshifts, targets, template)
     except Exception as err:
         import traceback, sys
         message = "".join(traceback.format_exception(*sys.exc_info()))
@@ -92,6 +96,7 @@ def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
 
     return zchi2, zcoeff, zchi2penalty
 
+
 def mpi_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
     comm=None):
     '''
@@ -103,10 +108,12 @@ def mpi_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
                 
     zsplit = np.array_split(redshifts, comm.size)
 
-    print("rank #%d : redrock.zscan.calc_zchi2_targets for %s redshifts %f:%f"%(comm.rank,template.fulltype,zsplit[comm.rank][0],zsplit[comm.rank][-1]))
+    print("rank {} : zscan.calc_zchi2_targets for {} redshifts "
+        "{}:{}".format(comm.rank, template.fulltype, zsplit[comm.rank][0],
+        zsplit[comm.rank][-1]))
     sys.stdout.flush() #  this helps seeing something
     
-    zchi2, zcoeff, zchi2penalty = redrock.zscan.calc_zchi2_targets(zsplit[comm.rank], targets, template)
+    zchi2, zcoeff, zchi2penalty = calc_zchi2_targets(zsplit[comm.rank], targets, template)
     zchi2        = comm.allgather(zchi2)
     zcoeff       = comm.allgather(zcoeff)
     zchi2penalty = comm.allgather(zchi2penalty)
@@ -115,6 +122,7 @@ def mpi_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
     zchi2penalty = np.hstack(zchi2penalty)
     
     return zchi2, zcoeff, zchi2penalty
+
 
 def calc_zchi2_targets(redshifts, targets, template, verbose=False):
     '''Calculates chi2 vs. redshift for a given PCA template.
@@ -207,6 +215,7 @@ def calc_zchi2_targets(redshifts, targets, template, verbose=False):
 
     return zchi2, zcoeff, zchi2penalty
 
+
 #- DEBUG: duplicated code, but provide a direct way to fit a template to a
 #- set of spectra at a given redshift
 def template_fit(spectra, z, template):
@@ -226,6 +235,7 @@ def template_fit(spectra, z, template):
     a = np.linalg.solve(Tbx.T.dot(W.dot(Tbx)), Tbx.T.dot(wflux))
 
     return [T.dot(a) for T in Tb], a
+
 
 def rebin_template(template, z, spectra):
     '''rebin template to match the wavelengths of the input spectra'''
