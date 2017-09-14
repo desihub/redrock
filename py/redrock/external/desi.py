@@ -279,10 +279,10 @@ def rrdesi(options=None, comm=None):
     # Call zfind differently depending on our type of parallelism.
 
     if comm is not None:
-        # Use MPI- set multiprocessing "ncpu" to one.
+        # Use MPI
         with MPISharedTargets(targets, comm) as shared_targets:
             zscan, zfit = zfind(shared_targets.targets, templates, 
-                ncpu=1, comm=comm)
+                ncpu=None, comm=comm)
     else:
         # Use pure multiprocessing
         zscan, zfit = zfind(targets, templates, ncpu=opts.ncpu)
