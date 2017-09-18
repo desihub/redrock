@@ -68,6 +68,7 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
     if comm is not None :
         if comm.rank == 0 :
             print("INFO: using MPI with {} processes".format(comm.size))
+            sys.stdout.flush()
     elif ncpu > 1:
         print("INFO: using multiprocessing with {} cores".format(ncpu))
     else:
@@ -75,10 +76,10 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
         
     for t in templates:
 
-        # if comm is not None and (comm.rank == 0) :
-        #     print('INFO: starting zchi2 scan for {}'.format(comm.rank,
-        #         t.fulltype))
-        #     sys.stdout.flush() #  this helps seeing something
+        if comm is not None and (comm.rank == 0) :
+            print('INFO: starting zchi2 scan for {}'.format(comm.rank,
+                t.fulltype))
+            sys.stdout.flush() #  this helps seeing something
         
         t0 = time.time()
         if ncpu > 1:
@@ -89,8 +90,8 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
             zchi2, zcoeff, penalty = rrzscan.calc_zchi2_targets(t.redshifts, targets, t)
         dt = time.time() - t0
 
-        # if comm is None or comm.rank==0 :
-        #     print('DEBUG: PID {} {} zscan in {:.1f} seconds'.format(pid, t.fulltype, dt))
+        if comm is None or comm.rank==0 :
+            print('DEBUG: PID {} {} zscan in {:.1f} seconds'.format(pid, t.fulltype, dt))
 
         t0 = time.time()
         if comm is None : # multiprocessing version
@@ -103,8 +104,8 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
                 comm=comm, nminima=nminima)
         dt = time.time() - t0
 
-        # if comm is None or comm.rank==0 :
-        #     print('DEBUG: PID {} {} fitz in {:.1f} seconds'.format(pid, t.fulltype, dt))
+        if comm is None or comm.rank==0 :
+            print('DEBUG: PID {} {} fitz in {:.1f} seconds'.format(pid, t.fulltype, dt))
   
         if comm is None or comm.rank == 0 :
             
