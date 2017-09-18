@@ -10,8 +10,6 @@ revision:  c10498f227db809365c362e13d18a77a429a09ae
 import sys
 import numpy as np
 
-import mpi4py.MPI as MPI
-
 
 class MPIShared(object):
     """
@@ -68,6 +66,7 @@ class MPIShared(object):
         self._nodes = 1
         self._mynode = 0
         if self._comm is not None:
+            import mpi4py.MPI as MPI
             self._nodecomm = self._comm.Split_type(MPI.COMM_TYPE_SHARED, 0)
             self._noderank = self._nodecomm.rank
             self._nodeprocs = self._nodecomm.size
@@ -123,6 +122,7 @@ class MPIShared(object):
         self._data = None
 
         if self._comm is not None:
+            import mpi4py.MPI as MPI
             # We are actually using MPI, so we need to ensure that
             # our specified numpy dtype has a corresponding MPI datatype.
             status = 0
@@ -247,6 +247,7 @@ class MPIShared(object):
 
 
     def _checkabort(self, comm, status, msg):
+        import mpi4py.MPI as MPI
         failed = comm.allreduce(status, op=MPI.SUM)
         if failed > 0:
             if comm.rank == 0:
@@ -319,6 +320,7 @@ class MPIShared(object):
         # process on each of the nodes.
 
         if self._comm is not None:
+            import mpi4py.MPI as MPI
             target_noderank = self._comm.bcast(self._noderank, root=fromrank)
             fromnode = self._comm.bcast(self._mynode, root=fromrank)
 
