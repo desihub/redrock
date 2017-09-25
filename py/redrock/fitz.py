@@ -71,8 +71,8 @@ def _wrap_fitz(target_indices, qout, zchi2, redshifts, targets, template, nminim
             #- return index with results so that they can be sorted
             qout.put( (j, results) )
     except Exception as err:
-        import traceback, syst
-        message = "".join(traceback.format_exception(*syst.exc_info()))
+        import traceback, sys
+        message = "".join(traceback.format_exception(*sys.exc_info()))
         qout.put( (target_indices[0], err, message) )
 
     qout.close()
@@ -164,10 +164,10 @@ def mpi_fitz_targets(zchi2, redshifts, targets, template, nminima=3,
                 nminima=nminima)
             result.append(res)
     except Exception as err:
-        import traceback, syst
+        import traceback, sys
         message = "error for a target between {} and {} : {}".format(
             target_indices[rank][0], target_indices[rank][1], 
-            traceback.format_exception(*syst.exc_info()))
+            traceback.format_exception(*sys.exc_info()))
         result.append( (err, message) )
     
     #- all the results gather to rank #0
