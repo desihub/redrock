@@ -1,7 +1,10 @@
+
+import time
 import numpy as np
 
-import redrock.io
-import time
+from . import io
+from . import zwarning
+
 
 class PlotSpec(object):
     def __init__(self, targets, templates, zscan, zfit, truth=None):
@@ -157,7 +160,7 @@ class PlotSpec(object):
         #- ZWARN labels
         if zz['zwarn'] != 0:
             label = list()
-            for name, mask in redrock.zwarning.ZWarningMask.flags():
+            for name, mask in zwarning.ZWarningMask.flags():
                 if (zz['zwarn'] & mask) != 0:
                     label.append(name)
             label = '\n'.join(label)

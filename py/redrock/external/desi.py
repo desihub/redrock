@@ -1,7 +1,6 @@
 '''
 redrock wrapper tools for DESI
 '''
-
 from __future__ import absolute_import, division, print_function
 
 import os, sys
@@ -13,8 +12,12 @@ import numpy as np
 import desispec.io
 from desispec.resolution import Resolution
 
-from .. import Target
-from .. import Spectrum
+from ..dataobj import (Target, MultiprocessingSharedSpectrum, 
+    SimpleSpectrum, MPISharedTargets)
+
+from .. import io
+from .. import zfind
+
 
 def write_zbest(outfile, zbest):
     '''
@@ -33,13 +36,25 @@ def write_zbest(outfile, zbest):
     zbest.meta['EXTNAME'] = 'ZBEST'
     zbest.write(outfile, overwrite=True)
 
-def read_spectra(spectrafiles, targetids=None):
+
+def read_spectra(spectrafiles, targetids=None, spectrum_class=SimpleSpectrum):
     '''
-    Read targets from a list of spectra files
+    Read targets from a list of spectra files.
+   
+
 
     Args:
         spectrafiles : list of input spectra files, or string glob to match
 
+    Options:
+        targetids : list of target ids. If set, only those target spectra will be read.
+        spectrum_class :  The spectrum_class argument is needed to use the same read_spectra
+        routine for the two parallelism approaches for redrock. The multiprocessing version
+        uses a shared memory at the spectrum class initialization, see
+        the redrock.dataobj.MultiprocessingSharedSpectrum class, whereas the MPI version
+        implements the shared memory after all spectra have been read by the root process,
+        and so the MPI version used another more simple spectrum class (see redrock.dataobj.SimpleSpectrum).
+    
     Returns tuple of (targets, meta) where
         targets is a list of Target objects and
         meta is a Table of metadata (currently only BRICKNAME)
@@ -92,7 +107,7 @@ def read_spectra(spectrafiles, targetids=None):
                         continue
 
                     R = Resolution(Rdata[i])
-                    spectra.append(Spectrum(wave, flux[i], ivar[i], R))
+                    spectra.append(spectrum_class(wave, flux[i], ivar[i], R))
 
         bricknames.append(brickname)
         #- end of for targetid in targetids loop
@@ -111,13 +126,23 @@ def read_spectra(spectrafiles, targetids=None):
 
     return targets, meta
 
-def read_bricks(brickfiles, trueflux=False, targetids=None):
+
+def read_bricks(brickfiles, trueflux=False, targetids=None, spectrum_class=SimpleSpectrum):
     '''
     Read targets from a list of brickfiles
 
     Args:
         brickfiles : list of input brick files, or string glob to match
-
+    
+    Options:
+        targetids : list of target ids. If set, only those target spectra will be read.
+        spectrum_class :  The spectrum_class argument is needed to use the same read_spectra
+        routine for the two parallelism approaches for redrock. The multiprocessing version
+        uses a shared memory at the spectrum class initialization, see
+        the redrock.dataobj.MultiprocessingSharedSpectrum class, whereas the MPI version
+        implements the shared memory after all spectra have been read by the root process,
+        and so the MPI version used another more simple spectrum class (see redrock.dataobj.SimpleSpectrum).
+    
     Returns list of Target objects
 
     Note: these don't actually have to be bricks anymore; they are read via
@@ -174,7 +199,7 @@ def read_bricks(brickfiles, trueflux=False, targetids=None):
                     continue
 
                 R = Resolution(Rdata[i])
-                spectra.append(Spectrum(wave, flux[i], ivar[i], R))
+                spectra.append(spectrum_class(wave, flux[i], ivar[i], R))
 
         #- end of for targetid in targetids loop
 
@@ -193,13 +218,25 @@ def read_bricks(brickfiles, trueflux=False, targetids=None):
 
     return targets, meta
 
-def rrdesi(options=None):
-    import redrock
+
+def rrdesi(options=None, comm=None):
     import optparse
     from astropy.io import fits
     import time
-    start_time = time.time()
 
+    # Note, in the pure multiprocessing case (comm == None), "rank"
+    # will always be set to zero, which is fine since we are outside
+    # any areas using multiprocessing and this is just used to control
+    # program flow.
+    rank = 0
+    nproc = 1
+    if comm is not None:
+        rank = comm.rank
+        nproc = comm.size
+
+    start_time = time.time()
+    pid = os.getpid()
+    
     parser = optparse.OptionParser(usage = "%prog [options] spectra1 spectra2...")
     parser.add_option("-t", "--templates", type="string",  help="template file or directory")
     parser.add_option("-o", "--output", type="string",  help="output file")
@@ -224,49 +261,87 @@ def rrdesi(options=None):
         print('ERROR: must provide input spectra/brick files')
         sys.exit(1)
 
-    try:
-        targets, meta = read_spectra(infiles)
-    except RuntimeError:
-        targets, meta = read_bricks(infiles)
+    templates = None
+    targets   = None
+    meta      = None
+    if rank == 0:
+        t0 = time.time()
+        print('INFO: reading targets')
+        sys.stdout.flush()
+        
+        try:
+            targets, meta = read_spectra(infiles,spectrum_class=SimpleSpectrum)
+        except RuntimeError:
+            targets, meta = read_bricks(infiles,spectrum_class=SimpleSpectrum)
+            
+        if not opts.allspec:
+            for t in targets:
+                t._all_spectra = t.spectra
+                t.spectra = t.coadd
 
-    if not opts.allspec:
-        for t in targets:
-            t._all_spectra = t.spectra
-            t.spectra = t.coadd
+        if opts.ntargets is not None:
+            targets = targets[opts.mintarget:opts.mintarget+opts.ntargets]
+            meta = meta[opts.mintarget:opts.mintarget+opts.ntargets]
+        
+        print('INFO: reading templates')
+        sys.stdout.flush()
+        
+        templates = io.read_templates(opts.templates)
 
-    if opts.ntargets is not None:
-        targets = targets[opts.mintarget:opts.mintarget+opts.ntargets]
-        meta = meta[opts.mintarget:opts.mintarget+opts.ntargets]
+        dt = time.time() - t0
+        # print('DEBUG: PID {} read targets and templates in {:.1f} seconds'.format(pid,dt))
+        sys.stdout.flush()
+        
+    # all processes get a copy of the templates from rank 0
+    if comm is not None:
+        templates = comm.bcast(templates, root=0)
 
-    print('INFO: fitting {} targets'.format(len(targets)))
+    # Call zfind differently depending on our type of parallelism.
 
-    templates = redrock.io.read_templates(opts.templates)
-    zscan, zfit = redrock.zfind(targets, templates, ncpu=opts.ncpu)
+    if comm is not None:
+        # Use MPI
+        with MPISharedTargets(targets, comm) as shared_targets:
+            zscan, zfit = zfind(shared_targets.targets, templates, 
+                ncpu=None, comm=comm)
+    else:
+        # Use pure multiprocessing
+        zscan, zfit = zfind(targets, templates, ncpu=opts.ncpu)
+    
+    if rank == 0:
+        if opts.output:
+            print('INFO: writing {}'.format(opts.output))
+            io.write_zscan(opts.output, zscan, zfit, clobber=True)
 
-    if opts.output:
-        print('INFO: writing {}'.format(opts.output))
-        redrock.io.write_zscan(opts.output, zscan, zfit, clobber=True)
+        if opts.zbest:
+            zbest = zfit[zfit['znum'] == 0]
 
-    if opts.zbest:
-        zbest = zfit[zfit['znum'] == 0]
+            #- Remove extra columns not needed for zbest
+            zbest.remove_columns(['zz', 'zzchi2', 'znum'])
 
-        #- Remove extra columns not needed for zbest
-        zbest.remove_columns(['zz', 'zzchi2', 'znum'])
+            #- Change to upper case like DESI
+            for colname in zbest.colnames:
+                if colname.islower():
+                    zbest.rename_column(colname, colname.upper())
 
-        #- Change to upper case like DESI
-        for colname in zbest.colnames:
-            if colname.islower():
-                zbest.rename_column(colname, colname.upper())
+            #- Add brickname column
+            zbest['BRICKNAME'] = meta['BRICKNAME']
 
-        #- Add brickname column
-        zbest['BRICKNAME'] = meta['BRICKNAME']
-
-        print('INFO: writing {}'.format(opts.zbest))
-        write_zbest(opts.zbest, zbest)
+            print('INFO: writing {}'.format(opts.zbest))
+            write_zbest(opts.zbest, zbest)
 
     run_time = time.time() - start_time
-    print('INFO: finished {} in {:.1f} seconds'.format(os.path.basename(infiles[0]), run_time))
-
+    
+    if comm is None or comm.rank == 0:
+        print('INFO: finished {} in {:.1f} seconds'.format(os.path.basename(infiles[0]), run_time))
+    
     if opts.debug:
-        import IPython
-        IPython.embed()
+        if comm is not None:
+            print('INFO: ignoring ipython debugging when using MPI')
+        else:
+            import IPython
+            IPython.embed()
+
+    return
+
+
+

@@ -2,7 +2,7 @@ import os
 import unittest
 import numpy as np
 
-from redrock import rebin
+from .. import rebin
 
 class TestRebin(unittest.TestCase):
     

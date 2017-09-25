@@ -18,6 +18,7 @@ read-only inputs.
 import numpy as np
 import multiprocessing as mp
 
+
 def fromarray(x):
     '''
     Copies array `x` into a shared memory buffer
@@ -32,6 +33,7 @@ def fromarray(x):
     a = np.frombuffer(rawbuf, dtype=x.dtype).reshape(x.shape)
     a[:] = x
     return (rawbuf, x.dtype, x.shape)
+
 
 def toarray(raw):
     '''
