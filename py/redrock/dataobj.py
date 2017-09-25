@@ -142,7 +142,17 @@ class MPISharedTargets(object):
     def __init__(self, targets, comm):
         """
         Place a list of targets into MPI shared memory.
-
+        This goes as follows.
+        1) The root process reads the targets, fills a dictionnary containing
+        for each spectrum of each target, the indices of
+        the wave, flux, ivar, rdata, roffsets and rshape arrays in the shared
+        memory buffer ( see self._fill_target_dictionary for more details
+        on the format of this dictionnary ).
+        2) The dictionary is broadcasted to all processes.
+        3) The root process allocates and fill the memory buffer with data.
+        4) All processes recreate the target list, using references to portions of 
+           the memory buffer for all wave, flux, ivar, rdata arrays.
+        
         Args:
             targets (list): the list of targets.  This is ONLY meaningful
                 on the rank zero process.  Data on other processes is
@@ -230,6 +240,26 @@ class MPISharedTargets(object):
 
 
     def _fill_target_dictionary(self, targets):
+        """
+        Reads a list of targets, fills a dictionnary containing
+        for each spectrum of each target, the indices of
+        the wave, flux, ivar, rdata, roffsets and rshape arrays in an array to be allocated.
+        The dictionnary structure is 
+        { target_id_1 : { "spectra" : [ {"wave" : [b,e] , "flux" : [b,e] ,  ....} , ... ]} , "coadd" : [ ... ]},  target_id_2 : ... },
+        i.e. a dictionnary of targets identified by their id
+             - each target has two list of spectra labeled "spectra" and "coadd"
+             - each spectrum in the two lists of spectra is a dictionnary containing, for the keys 
+                "wave", "flux", "ivar", "rdata", "roffsets" and "rshape" , the begin and end index of the array in the shared 
+               memory buffer.
+        
+        Args:
+            targets (list): the list of targets.
+
+        Returns:
+            - dictionnary
+            - size of the memory array
+        
+        """
         n = 0
         dictionary = OrderedDict() # keep targets as ordered in list
         for target in targets :
@@ -252,6 +282,12 @@ class MPISharedTargets(object):
 
 
     def _get_targets(self):
+        """
+        Generates a set of targets from a shared memory buffer, using self._target_dictionary
+        to get the list of target ids, the number spectra, and the addresses in the memory
+        of each array that defines a spectrum (wave, flux, ivar, rdata).
+        """
+        
         targets = list()
         for id, tdict in self._target_dictionary.items():
             spectra = list()
@@ -284,6 +320,12 @@ class Target(object):
         Args:
             targetid : unique targetid (integer or str)
             spectra : list of Spectra objects
+
+        Option:
+            coadd : list of Spectra objects. This option is used in MPISharedTargets._get_targets(). 
+                    It is needed to create a new Target object from a shared memory buffer, because 
+                    the Target object that was stored in the buffer had its coadd precomputed, 
+                    and we don't want to reallocate memory or compute the coadds twice.
         """
         self.id = targetid
         self.spectra = spectra
