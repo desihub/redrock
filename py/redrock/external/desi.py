@@ -37,13 +37,24 @@ def write_zbest(outfile, zbest):
     zbest.write(outfile, overwrite=True)
 
 
-def read_spectra(spectrafiles, targetids=None, spectrum_class=None):
+def read_spectra(spectrafiles, targetids=None, spectrum_class=SimpleSpectrum):
     '''
-    Read targets from a list of spectra files
+    Read targets from a list of spectra files.
+   
+
 
     Args:
         spectrafiles : list of input spectra files, or string glob to match
 
+    Options:
+        targetids : list of target ids. If set, only those target spectra will be read.
+        spectrum_class :  The spectrum_class argument is needed to use the same read_spectra
+        routine for the two parallelism approaches for redrock. The multiprocessing version
+        uses a shared memory at the spectrum class initialization, see
+        the redrock.dataobj.MultiprocessingSharedSpectrum class, whereas the MPI version
+        implements the shared memory after all spectra have been read by the root process,
+        and so the MPI version used another more simple spectrum class (see redrock.dataobj.SimpleSpectrum).
+    
     Returns tuple of (targets, meta) where
         targets is a list of Target objects and
         meta is a Table of metadata (currently only BRICKNAME)
@@ -116,13 +127,22 @@ def read_spectra(spectrafiles, targetids=None, spectrum_class=None):
     return targets, meta
 
 
-def read_bricks(brickfiles, trueflux=False, targetids=None, spectrum_class=None):
+def read_bricks(brickfiles, trueflux=False, targetids=None, spectrum_class=SimpleSpectrum):
     '''
     Read targets from a list of brickfiles
 
     Args:
         brickfiles : list of input brick files, or string glob to match
-
+    
+    Options:
+        targetids : list of target ids. If set, only those target spectra will be read.
+        spectrum_class :  The spectrum_class argument is needed to use the same read_spectra
+        routine for the two parallelism approaches for redrock. The multiprocessing version
+        uses a shared memory at the spectrum class initialization, see
+        the redrock.dataobj.MultiprocessingSharedSpectrum class, whereas the MPI version
+        implements the shared memory after all spectra have been read by the root process,
+        and so the MPI version used another more simple spectrum class (see redrock.dataobj.SimpleSpectrum).
+    
     Returns list of Target objects
 
     Note: these don't actually have to be bricks anymore; they are read via
