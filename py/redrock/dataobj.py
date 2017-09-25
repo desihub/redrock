@@ -143,11 +143,11 @@ class MPISharedTargets(object):
         """
         Place a list of targets into MPI shared memory.
         This goes as follows.
-        1) The root process reads the targets, fills a dictionnary containing
+        1) The root process reads the targets, fills a dictionary containing
         for each spectrum of each target, the indices of
         the wave, flux, ivar, rdata, roffsets and rshape arrays in the shared
         memory buffer ( see self._fill_target_dictionary for more details
-        on the format of this dictionnary ).
+        on the format of this dictionary ).
         2) The dictionary is broadcasted to all processes.
         3) The root process allocates and fill the memory buffer with data.
         4) All processes recreate the target list, using references to portions of 
@@ -241,14 +241,14 @@ class MPISharedTargets(object):
 
     def _fill_target_dictionary(self, targets):
         """
-        Reads a list of targets, fills a dictionnary containing
+        Reads a list of targets, fills a dictionary containing
         for each spectrum of each target, the indices of
         the wave, flux, ivar, rdata, roffsets and rshape arrays in an array to be allocated.
-        The dictionnary structure is 
+        The dictionary structure is
         { target_id_1 : { "spectra" : [ {"wave" : [b,e] , "flux" : [b,e] ,  ....} , ... ]} , "coadd" : [ ... ]},  target_id_2 : ... },
-        i.e. a dictionnary of targets identified by their id
+        i.e. a dictionary of targets identified by their id
              - each target has two list of spectra labeled "spectra" and "coadd"
-             - each spectrum in the two lists of spectra is a dictionnary containing, for the keys 
+             - each spectrum in the two lists of spectra is a dictionary containing, for the keys
                 "wave", "flux", "ivar", "rdata", "roffsets" and "rshape" , the begin and end index of the array in the shared 
                memory buffer.
         

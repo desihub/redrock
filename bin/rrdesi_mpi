@@ -19,7 +19,7 @@ else:
 from redrock.external import desi
 
 if have_mpi:
-	desi.rrdesi(comm=MPI.COMM_WORLD)
+    desi.rrdesi(comm=MPI.COMM_WORLD)
 else:
-	print("MPI not available, running serially")
-	desi.rrdesi()
+    print("MPI not available, running serially")
+    desi.rrdesi()
