@@ -1,0 +1,7 @@
+#!/usr/bin/env python
+
+"""
+Redrock for DESI
+"""
+from redrock.external import boss
+boss.rrboss()
