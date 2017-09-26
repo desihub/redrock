@@ -104,6 +104,9 @@ def read_spectra(indir, spall,targetids=None):
 
         for i,f in enumerate(fs):
             t = pmf2tid[(p,m,f)]
+            if t==-1 or np.all(iv[i]==0):
+                ### print("DEBUG: skipping thing_id {} (no thing_id or no data)".format(t))
+                continue
             if t not in dic_spectra:
                 dic_spectra[t]=[]
                 brickname = '{}-{}'.format(p,m)
