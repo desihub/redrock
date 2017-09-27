@@ -130,6 +130,7 @@ class Target(object):
         self.id = targetid
         self.spectra = spectra
 
+    def do_coadd():
         #- Make a basic coadd
         self.coadd = list()
         for key in set([s.wavehash for s in spectra]):
@@ -165,6 +166,8 @@ class Target(object):
             R = Winv * weightedR
             R = R.todia()
             self.coadd.append(Spectrum(wave, flux, weights, R))
+        self._all_spectra = self.spectra
+        self.spectra = self.coadd
 
     def sharedmem_pack(self):
         '''Prepare underlying numpy arrays for sending to a new process;

@@ -87,7 +87,6 @@ def read_spectra(indir, spall,targetids=None):
             lmax = 10000.
         imin = abs(la-lmin).min(axis=0).argmin()
         imax = abs(la-lmax).min(axis=0).argmin()
-        print(h[0].read_header()["CAMERAS"],lmin,lmax,imin,imax,la[0,imin],la[0,imax])
 
         la = la[:,imin:imax]
         fl = fl[:,imin:imax]
@@ -125,6 +124,9 @@ def read_spectra(indir, spall,targetids=None):
             ccd = sparse.spdiags(1./R.sum(axis=1).T, 0, *R.shape)
             R = (ccd*R).todia()
             dic_spectra[t].append(Spectrum(la[i],fl[i],iv[i],R))
+
+        h.close()
+        print("DEBUG: read {} ".format(infile))
 
     if targetids == None:
         targetids = dic_spectra.keys()
@@ -176,11 +178,11 @@ def rrboss(options=None):
         sys.exit(1)
 
     targets, meta = read_spectra(opts.indir,opts.spall)
+    print("DEBUG: read {} targets".format(len(targets)))
 
     if not opts.allspec:
         for t in targets:
-            t._all_spectra = t.spectra
-            t.spectra = t.coadd
+            t.do_coadd()
 
     if opts.ntargets is not None:
         targets = targets[opts.mintarget:opts.mintarget+opts.ntargets]

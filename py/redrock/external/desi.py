@@ -231,8 +231,7 @@ def rrdesi(options=None):
 
     if not opts.allspec:
         for t in targets:
-            t._all_spectra = t.spectra
-            t.spectra = t.coadd
+            t.do_coadd()
 
     if opts.ntargets is not None:
         targets = targets[opts.mintarget:opts.mintarget+opts.ntargets]
