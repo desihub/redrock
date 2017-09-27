@@ -133,14 +133,14 @@ class Target(object):
     def do_coadd(self):
         #- Make a basic coadd
         self.coadd = list()
-        for key in set([s.wavehash for s in spectra]):
+        for key in set([s.wavehash for s in self.spectra]):
             wave = None
             unweightedflux = None
             weightedflux = None
             weights = None
             R = None
             nspec = 0
-            for s in spectra:
+            for s in self.spectra:
                 if s.wavehash != key: continue
                 nspec += 1
                 if weightedflux is None:
