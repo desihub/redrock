@@ -130,7 +130,7 @@ class Target(object):
         self.id = targetid
         self.spectra = spectra
 
-    def do_coadd():
+    def do_coadd(self):
         #- Make a basic coadd
         self.coadd = list()
         for key in set([s.wavehash for s in spectra]):

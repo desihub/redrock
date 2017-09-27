@@ -149,8 +149,8 @@ def calc_zchi2_targets(redshifts, targets, template, verbose=False):
     nflux = len(fluxlist[0])
     Tb = np.zeros( (nflux, nbasis) )
     for i, z in enumerate(redshifts):
-        if verbose and i in istatus:
-            print('{} {:d}% done'.format(time.asctime(), round(100.0*i/len(redshifts))))
+        if verbose and i in istatus or True:
+            print('{} {}% done'.format(time.asctime(), round(100.0*i/len(redshifts))))
         #- if all targets have the same number of spectra with the same
         #- wavelength grids, we only need to calculate this once per redshift.
         Tx = rebin_template(template, z, refspectra)
