@@ -69,7 +69,6 @@ def read_spectra(indir, spall,targetids=None):
     #- Ignore warnings about zdc2 bricks lacking bricknames in header
     bricknames=[]
     for infile in spcframefiles:
-        sys.stderr.write(infile+"\n")
         h = fitsio.FITS(infile)
         fs = h[5]["FIBERID"][:]
 
@@ -164,7 +163,6 @@ def rrboss(options=None):
     parser.add_option("--mintarget", type=int,  help="first target to include", default=0)
     parser.add_option("--ncpu", type=int,  help="number of cpu cores for multiprocessing", default=None)
     parser.add_option("--debug", help="debug with ipython", action="store_true")
-    ### parser.add_option("--coadd", help="use coadd instead of individual spectra", action="store_true")
     parser.add_option("--allspec", help="use individual spectra instead of coadd", action="store_true")
     parser.add_option("--spall", type = "string", help="spAll file")
 
@@ -175,6 +173,10 @@ def rrboss(options=None):
 
     if (opts.output is None) and (opts.zbest is None):
         print('ERROR: --output or --zbest required')
+        sys.exit(1)
+
+    if opts.allspec == False:
+        print('ERROR: coaddition not yet implemented, please set --allspec')
         sys.exit(1)
 
     targets, meta = read_spectra(opts.indir,opts.spall)

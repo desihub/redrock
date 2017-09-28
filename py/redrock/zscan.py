@@ -32,7 +32,8 @@ def _wrap_zchi2(redshifts, targets, template, qout):
         message = "".join(traceback.format_exception(*sys.exc_info()))
         results = (err, message)
 
-    qout.put((redshifts[0], results))
+    ids = [t.id for t in targets]
+    qout.put((ids, results))
 
 
 def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
@@ -47,8 +48,8 @@ def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
     if ncpu is None:
         ncpu = mp.cpu_count()
 
-    if ncpu > len(redshifts):
-        ncpu = len(redshifts)
+    if ncpu > len(targets):
+        ncpu = len(targets)
         print('WARNING: Using {} cores for {} redshifts'.format(ncpu, ncpu))
 
     #- Pack targets for passing to multiprocessing function without pickling
@@ -59,9 +60,9 @@ def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
     #- launch processes, returning results via Queue.  This is largely for
     #- historical reasons; mp.Pool.map probably would have been fine too.
     qout = mp.Queue()
-    zsplit = np.array_split(redshifts, ncpu)
+    target_split = np.array_split(targets, ncpu)
     for i in range(ncpu):
-        p = mp.Process(target=_wrap_zchi2, args=(zsplit[i], targets, template, qout))
+        p = mp.Process(target=_wrap_zchi2, args=(redshifts, target_split[i], template, qout))
         p.start()
 
     #- Get results, one per process
@@ -70,21 +71,22 @@ def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
         results.append(qout.get())
 
     #- Figure out what order the results arrived in the output queue
-    z0 = [r[0] for r in results]
-    izsort = np.argsort(z0)
+    original_tid = [t.id for t in targets]
 
-    zchi2 = list()
-    zcoeff = list()
-    zchi2penalty = list()
-    for i in izsort:
-        tmpzchi2, tmpzcoeff, tmpzchi2penalty = results[i][1]
-        zchi2.append(tmpzchi2)
-        zcoeff.append(tmpzcoeff)
-        zchi2penalty.append(tmpzchi2penalty)
+    zchi2 = [None]*len(targets)
+    zcoeff = [None]*len(targets)
+    zchi2penalty = [None]*len(targets)
+    for res in results:
+        tmpzchi2, tmpzcoeff, tmpzchi2penalty = res[1]
+        for i,tid in enumerate(res[0]):
+            i0 = original_tid.index(tid)
+            zchi2[i0] = tmpzchi2[i]
+            zcoeff[i0] = tmpzcoeff[i]
+            zchi2penalty[i0] = tmpzchi2penalty[i]
 
-    zchi2 = np.hstack(zchi2)
-    zcoeff = np.hstack(zcoeff)
-    zchi2penalty = np.hstack(zchi2penalty)
+    zchi2 = np.vstack(zchi2)
+    zcoeff = np.vstack(zcoeff)
+    zchi2penalty = np.vstack(zchi2penalty)
 
     #- restore the state of targets
     for t in targets:
