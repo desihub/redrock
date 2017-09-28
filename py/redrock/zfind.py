@@ -73,10 +73,10 @@ def zfind(targets, templates, ncpu=None, nminima=3):
         else:
             zchi2, zcoeff, penalty = redrock.zscan.calc_zchi2_targets(t.redshifts, targets, t)
         dt = time.time() - t0
-        ### print('DEBUG: PID {} {} zscan in {:.1f} seconds'.format(pid, t.fulltype, dt))
+        print('DEBUG: PID {} {} zscan in {:.1f} seconds'.format(pid, t.fulltype, dt))
 
         t0 = time.time()
-        ### print('DEBUG: PID {} Starting fitz for {}'.format(pid, t.fulltype))
+        print('DEBUG: PID {} Starting fitz for {}'.format(pid, t.fulltype))
         for i, zfit in enumerate(redrock.fitz.parallel_fitz_targets(
                 zchi2+penalty, t.redshifts, targets, t,
                 ncpu=ncpu, nminima=nminima)):
@@ -88,7 +88,7 @@ def zfind(targets, templates, ncpu=None, nminima=3):
             zscan[targets[i].id][t.fulltype]['penalty'] = penalty[i]
             zscan[targets[i].id][t.fulltype]['zcoeff'] = zcoeff[i]
         dt = time.time() - t0
-        ### print('DEBUG: PID {} {} fitz in {:.1f} seconds'.format(pid, t.fulltype, dt))
+        print('DEBUG: PID {} {} fitz in {:.1f} seconds'.format(pid, t.fulltype, dt))
 
     #- Convert individual zfit results into a zall array
     t0 = time.time()
