@@ -16,6 +16,7 @@ from desispec.resolution import Resolution
 
 from .. import Target
 from ..dataobj import (Target, MultiprocessingSharedSpectrum, 
+    SimpleSpectrum, MPISharedTargets)
 
 def write_zbest(outfile, zbest):
     '''
@@ -179,7 +180,10 @@ def rrboss(options=None):
         print('ERROR: coaddition not yet implemented, please set --allspec')
         sys.exit(1)
 
-    targets, meta = read_spectra(opts.indir,opts.spall)
+    spectrum_class = SimpleSpectrum
+    if opts.ncpu is None or opts.ncpu > 1:
+        spectrum_class = MultiprocessingSharedSpectrum
+    targets, meta = read_spectra(opts.indir,opts.spall,spectrum_class=spectrum_class)
     print("DEBUG: read {} targets".format(len(targets)))
 
     if not opts.allspec:
