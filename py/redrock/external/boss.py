@@ -15,7 +15,7 @@ import desispec.resolution
 from desispec.resolution import Resolution
 
 from .. import Target
-from .. import Spectrum
+from ..dataobj import (Target, MultiprocessingSharedSpectrum, 
 
 def write_zbest(outfile, zbest):
     '''
@@ -34,7 +34,7 @@ def write_zbest(outfile, zbest):
     zbest.meta['EXTNAME'] = 'ZBEST'
     zbest.write(outfile, overwrite=True)
 
-def read_spectra(indir, spall,targetids=None):
+def read_spectra(indir, spall,targetids=None,spectrum_class=SimpleSpectrum):
     '''
     Read targets from a list of spectra files
 
@@ -122,7 +122,7 @@ def read_spectra(indir, spall,targetids=None):
             R = Resolution(reso)
             ccd = sparse.spdiags(1./R.sum(axis=1).T, 0, *R.shape)
             R = (ccd*R).todia()
-            dic_spectra[t].append(Spectrum(la[i],fl[i],iv[i],R))
+            dic_spectra[t].append(spectrum_class(la[i],fl[i],iv[i],R))
 
         h.close()
         print("DEBUG: read {} ".format(infile))
