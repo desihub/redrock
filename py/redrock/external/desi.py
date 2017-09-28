@@ -269,10 +269,13 @@ def rrdesi(options=None, comm=None):
         print('INFO: reading targets')
         sys.stdout.flush()
         
+        spectrum_class = SimpleSpectrum
+        if opts.ncpu is None or opts.ncpu > 1:
+            spectrum_class = MultiprocessingSharedSpectrum
         try:
-            targets, meta = read_spectra(infiles,spectrum_class=SimpleSpectrum)
+            targets, meta = read_spectra(infiles,spectrum_class=spectrum_class)
         except RuntimeError:
-            targets, meta = read_bricks(infiles,spectrum_class=SimpleSpectrum)
+            targets, meta = read_bricks(infiles,spectrum_class=spectrum_class)
             
         if not opts.allspec:
             for t in targets:
