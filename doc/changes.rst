@@ -2,15 +2,19 @@
 Redrock change log
 ==================
 
-0.4.3 (unreleased)
+0.5.0 (unreleased)
 ------------------
 
-* no changes yet
+* adds optional MPI parallelism (PR `#34`_)
+
+.. _`#34`: https://github.com/desihub/desispec/pull/34
 
 0.4.2 (2017-08-14)
 ------------------
 
-* refactored multiprocessing parallelism to use explicit shared memory
+* refactored multiprocessing parallelism to use explicit shared memory (PR `#31`_)
+
+.. _`#31`: https://github.com/desihub/desispec/pull/31
 
 0.4.1 (2017-06-16)
 ------------------

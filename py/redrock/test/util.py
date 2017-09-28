@@ -5,7 +5,7 @@ from __future__ import division, print_function
 import numpy as np
 import scipy.sparse
 
-from redrock.dataobj import Template, Spectrum, Target
+from ..dataobj import Template, MultiprocessingSharedSpectrum, Target
 
 def get_template(wavemin=100, wavemax=9000, wavestep=5, spectype='GALAXY', subtype=''):
     '''
@@ -37,7 +37,7 @@ def get_target(z=0.5, wavestep=5):
         assert hasattr(R, 'offsets')
         for i in range(2):
             noisyflux = flux + np.random.normal(scale=sigma)
-            spectra.append(Spectrum(wave, noisyflux, ivar, R))
+            spectra.append(MultiprocessingSharedSpectrum(wave, noisyflux, ivar, R))
 
     return Target(123, spectra)
 

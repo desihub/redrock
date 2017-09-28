@@ -2,8 +2,9 @@ import unittest
 import numpy as np
 import scipy.sparse
 
-import redrock
-import redrock.test.util
+from .. import zfind as rrzfind
+from .. import zscan as rrzscan
+from . import util
 
 #- Return a normalized sampled Gaussian (no integration, just sampling)
 def norm_gauss(x, sigma):
@@ -32,11 +33,11 @@ class TestZScan(unittest.TestCase):
         seed = np.random.randint(2**31)
         print('TEST: Using random seed {}'.format(seed))
         np.random.seed(seed)
-        t1 = redrock.test.util.get_target(z1); t1.id = 111
-        t2 = redrock.test.util.get_target(z2); t2.id = 222
-        template = redrock.test.util.get_template()
+        t1 = util.get_target(z1); t1.id = 111
+        t2 = util.get_target(z2); t2.id = 222
+        template = util.get_template()
         template.redshifts = np.linspace(0.15, 0.3, 50)
-        zscan, zfit = redrock.zfind([t1,t2], [template,], ncpu=1)
+        zscan, zfit = rrzfind([t1,t2], [template,], ncpu=1)
 
         zx1 = zfit[zfit['targetid'] == 111][0]
         zx2 = zfit[zfit['targetid'] == 222][0]
@@ -47,7 +48,7 @@ class TestZScan(unittest.TestCase):
         
         #- Test dimensions of template_fit return
         zmin = zx1['z']
-        fitflux, fitcoeff = redrock.zscan.template_fit(t1.spectra, zmin, template)
+        fitflux, fitcoeff = rrzscan.template_fit(t1.spectra, zmin, template)
 
         self.assertEqual(len(fitcoeff), template.nbasis)
         self.assertEqual(len(fitflux), len(t1.spectra))
@@ -60,12 +61,12 @@ class TestZScan(unittest.TestCase):
         seed = np.random.randint(2**31)
         print('TEST: Using random seed {}'.format(seed))
         np.random.seed(seed)
-        t1 = redrock.test.util.get_target(z1); t1.id = 111
-        t2 = redrock.test.util.get_target(z2); t2.id = 222
-        template = redrock.test.util.get_template()
+        t1 = util.get_target(z1); t1.id = 111
+        t2 = util.get_target(z2); t2.id = 222
+        template = util.get_template()
         redshifts = np.linspace(0.15, 0.3, 25)
-        zchi2a, zcoeffa, penaltya = redrock.zscan.calc_zchi2_targets(redshifts, [t1,t2], template)
-        zchi2b, zcoeffb, penaltyb = redrock.zscan.parallel_calc_zchi2_targets(redshifts, [t1,t2], template, ncpu=2)
+        zchi2a, zcoeffa, penaltya = rrzscan.calc_zchi2_targets(redshifts, [t1,t2], template)
+        zchi2b, zcoeffb, penaltyb = rrzscan.parallel_calc_zchi2_targets(redshifts, [t1,t2], template, ncpu=2)
         
         self.assertEqual(zchi2a.shape, zchi2b.shape)
         self.assertEqual(zcoeffa.shape, zcoeffb.shape)
@@ -78,14 +79,15 @@ class TestZScan(unittest.TestCase):
         seed = np.random.randint(2**31)
         print('TEST: Using random seed {}'.format(seed))
         np.random.seed(seed)
-        t1 = redrock.test.util.get_target(z1); t1.id = 111
-        t2 = redrock.test.util.get_target(z2); t2.id = 222
-        Fstar = redrock.test.util.get_template(spectype='STAR', subtype='F')
-        Mstar = redrock.test.util.get_template(spectype='STAR', subtype='M')
+        t1 = util.get_target(z1); t1.id = 111
+        t2 = util.get_target(z2); t2.id = 222
+        Fstar = util.get_template(spectype='STAR', subtype='F')
+        Mstar = util.get_template(spectype='STAR', subtype='M')
         Fstar.redshifts = np.linspace(-1e-3, 1e-3, 25)
         Fstar.redshifts = np.linspace(-1e-3, 1e-3, 25)
         nminima = 3
-        zscan, zfit = redrock.zfind([t1,t2], [Fstar, Mstar,], ncpu=1, nminima=nminima)
+        zscan, zfit = rrzfind([t1,t2], [Fstar, Mstar,], ncpu=1, 
+            nminima=nminima)
         self.assertEqual(len(zfit), 2*nminima)
         self.assertTrue(np.all(zfit['spectype'] == 'STAR'))
 

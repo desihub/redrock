@@ -1,0 +1,25 @@
+#!/usr/bin/env python
+
+"""
+Redrock for DESI
+"""
+import os
+
+# MPI environment availability
+have_mpi = None
+if ("NERSC_HOST" in os.environ) and ("SLURM_JOB_NAME" not in os.environ):
+    have_mpi = False
+else:
+    have_mpi = True
+    try:
+        import mpi4py.MPI as MPI
+    except ImportError:
+        have_mpi = False
+
+from redrock.external import desi
+
+if have_mpi:
+    desi.rrdesi(comm=MPI.COMM_WORLD)
+else:
+    print("MPI not available, running serially")
+    desi.rrdesi()

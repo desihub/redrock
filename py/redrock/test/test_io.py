@@ -4,8 +4,10 @@ import os
 import unittest
 from uuid import uuid1
 import numpy as np
-from redrock import io
-import redrock.test.util
+
+from .. import io as rrio
+from .. import zfind as rrzfind
+from . import util
 
 class TestIO(unittest.TestCase):
     
@@ -26,24 +28,24 @@ class TestIO(unittest.TestCase):
     def test_endian(self):
         x1 = np.arange(5, dtype='>f')
         x2 = np.arange(5, dtype='<f')
-        self.assertTrue(io.native_endian(x1).dtype.isnative)
-        self.assertTrue(io.native_endian(x2).dtype.isnative)
+        self.assertTrue(rrio.native_endian(x1).dtype.isnative)
+        self.assertTrue(rrio.native_endian(x2).dtype.isnative)
         if x1.dtype.isnative:
-            self.assertTrue(x1 is io.native_endian(x1))
+            self.assertTrue(x1 is rrio.native_endian(x1))
         else:
-            self.assertTrue(x2 is io.native_endian(x2))
+            self.assertTrue(x2 is rrio.native_endian(x2))
                 
     ### @unittest.skipIf('RR_TEMPLATE_DIR' not in os.environ, '$RR_TEMPLATE_DIR not set')
     def test_find_templates(self):
-        templates = io.find_templates()
+        templates = rrio.find_templates()
         self.assertTrue(len(templates) > 0)
         template_dir = os.path.dirname(templates[0])
-        templates = io.find_templates(template_dir = template_dir)
+        templates = rrio.find_templates(template_dir = template_dir)
         self.assertTrue(len(templates) > 0)
         
     ### @unittest.skipIf('RR_TEMPLATE_DIR' not in os.environ, '$RR_TEMPLATE_DIR not set')
     def test_read_templates(self):
-        for template in io.read_templates():
+        for template in rrio.read_templates():
             self.assertIn('wave', template.__dict__)
             self.assertIn('flux', template.__dict__)
             self.assertIn('type', template.__dict__)
@@ -54,19 +56,20 @@ class TestIO(unittest.TestCase):
             self.assertEqual(flux.ndim, 2)
         
     def test_zscan_io(self):
-        t1 = redrock.test.util.get_target(0.2)
+        t1 = util.get_target(0.2)
         t1.id = 111
-        t2 = redrock.test.util.get_target(0.5)
+        t2 = util.get_target(0.5)
         t2.id = 222
-        template = redrock.test.util.get_template(subtype='BLAT')
-        zscan1, zfit1 = redrock.zfind([t1,t2], [template,], ncpu=1)
+        template = util.get_template(subtype='BLAT')
+        zscan1, zfit1 = rrzfind([t1,t2], [template,], ncpu=1)
 
-        io.write_zscan(self.testfile, zscan1, zfit1)
-        io.write_zscan(self.testfile, zscan1, zfit1, clobber=True)
-        zscan2, zfit2 = io.read_zscan(self.testfile)
+        rrio.write_zscan(self.testfile, zscan1, zfit1)
+        rrio.write_zscan(self.testfile, zscan1, zfit1, clobber=True)
+        zscan2, zfit2 = rrio.read_zscan(self.testfile)
 
         self.assertEqual(zfit1.colnames, zfit2.colnames)
-        self.assertTrue(np.all(zfit1 == zfit2))
+        for cn in zfit1.colnames:
+            np.testing.assert_equal(zfit1[cn], zfit2[cn])
 
         for targetid in zscan1:
             for spectype in zscan1[targetid]:
