@@ -12,17 +12,13 @@ proc ModulesHelp {{ }} {{
 }}
 module-whatis "Sets up $product/$version in your environment."
 
-#- Dependencies
-# module load desiUtil
-# prereq desiUtil
-
 #- Default code location
 if {{[info exists env(DESI_PRODUCT_ROOT)]}} {{
-    set PRODUCT_ROOT $env(DESI_PRODUCT_ROOT)
+    set code_root $env(DESI_PRODUCT_ROOT)/code
 }} else {{
-    set PRODUCT_ROOT /project/projectdirs/desi/software/$env(NERSC_HOST)
+    set code_root {product_root}
 }}
-set PRODUCT_DIR $PRODUCT_ROOT/$product/$version
+set PRODUCT_DIR $code_root/$product/$version
 
 #- Set $REDROCK environment variable
 setenv [string toupper $product] $PRODUCT_DIR
