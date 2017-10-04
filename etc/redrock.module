@@ -27,3 +27,8 @@ setenv [string toupper $product] $PRODUCT_DIR
 prepend-path PATH $PRODUCT_DIR/bin
 ### prepend-path PYTHONPATH $PRODUCT_DIR/lib/{pyversion}/site-packages
 prepend-path PYTHONPATH $PRODUCT_DIR/py
+
+#- MPI or multiprocessing handle parallelism, not OpenMP via numpy/MKL
+setenv KMP_AFFINITY disabled
+setenv MPICH_GNI_FORK_MODE FULLCOPY
+setenv OMP_NUM_THREADS 1
