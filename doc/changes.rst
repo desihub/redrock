@@ -2,7 +2,12 @@
 Redrock change log
 ==================
 
-0.5.0 (unreleased)
+0.5.1 (unreleased)
+------------------
+
+* No changes yet
+
+0.5.0 (2017-09-29)
 ------------------
 
 * adds optional MPI parallelism (PR `#34`_)
