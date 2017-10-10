@@ -13,8 +13,11 @@ import numpy as np
 from scipy import sparse
 import desispec.resolution
 from desispec.resolution import Resolution
+import os.path
 
 from .. import Target
+from .. import io
+from .. import zfind
 from ..dataobj import (Target, MultiprocessingSharedSpectrum, 
     SimpleSpectrum, MPISharedTargets)
 
@@ -35,61 +38,81 @@ def write_zbest(outfile, zbest):
     zbest.meta['EXTNAME'] = 'ZBEST'
     zbest.write(outfile, overwrite=True)
 
-def read_spectra(indir, spall,targetids=None,spectrum_class=SimpleSpectrum):
+def read_spectra(spplate_name, spall, targetids=None,spectrum_class=SimpleSpectrum,use_frames=False):
     '''
     Read targets from a list of spectra files
 
     Args:
-        indir : input plate directory
-        spall: name of a fits file with a BinaryTable in HDU[1] containing the columns PLATE,MJD,FIBERID,THING_ID (typically spAll).
-                These columns are used to obtain the TARGETID (= THING_ID) from the PLATE,MJD,FIBERID
+        spplate_name: input spPlate file
+        spall: spAll file. Required to get THING_IDs from (PLATE,FIBER)
 
     Returns tuple of (targets, meta) where
         targets is a list of Target objects and
         meta is a Table of metadata (currently only BRICKNAME)
     '''
-    import glob
-    spcframefiles = glob.glob(indir+"/spCFrame-*.fits")
-
-    assert len(spcframefiles) > 0
-
     spall = fitsio.FITS(spall)
-    pla = spall[1]["PLATE"][:]
-    mjd = spall[1]["MJD"][:]
-    fib = spall[1]["FIBERID"][:]
-    tid = spall[1]["THING_ID"][:]
+    plates = spall[1]["PLATE"][:]
+    fibers = spall[1]["FIBERID"][:]
+    thingid = spall[1]["THING_ID"][:]
+    pf2thid = {(p,f):t for p,f,t in zip(plates,fibers,thingid)}
+    spall.close()
 
-    pmf2tid = {(p,m,f):t for p,m,f,t in zip(pla,mjd,fib,tid)}
+    ## read spplate
+    if not use_frames:
+        infiles = [spplate_name]
+    if use_frames:
+        path = os.path.dirname(spplate_name)
+        spplate = fitsio.FITS(spplate_name)
+        cameras = ['b1','r1','b2','r2']
 
-    ## get plate and mjd from the first file
-    h = fitsio.FITS(spcframefiles[0])
-    p = h[0].read_header()["PLATEID"]
+        infiles = []
+        for c in cameras:
+            try:
+                nexp = spplate[0].read_header()["NEXP_{}".format(c.upper())]
+            except ValueError:
+                print("DEBUG: spplate {} has no exposures in camera {} ".format(spplate_name,c))
+                continue
+            for i in range(1,nexp+1):
+                expid = str(i)
+                if i<10:
+                    expid = '0'+expid
+                exp = path+"/spCFrame"+spplate[0].read_header()["EXPID"+expid]
+                infiles.append(exp)
+
+    bricknames=[]
     dic_spectra = {}
 
-    #- Ignore warnings about zdc2 bricks lacking bricknames in header
-    bricknames=[]
-    for infile in spcframefiles:
+    for infile in infiles:
         h = fitsio.FITS(infile)
         plate = h[0].read_header()["PLATEID"]
-        w = pla == plate
-        m = h[0].read_header()["MJD"]
-        if not m in mjd[w]:continue
+        mjd = h[0].read_header()["MJD"]
         fs = h[5]["FIBERID"][:]
 
-        la = 10**h[3].read()
         fl = h[0].read()
         iv = h[1].read()*(h[2].read()==0)
         wd = h[4].read()
 
-        ## crop to lmin, lmax in blue and red
-        if h[0].read_header()["CAMERAS"][0]=="b":
-            lmin = 3500.
-            lmax = 6000.
+        ## crop to lmin, lmax
+        lmin = 3500.
+        lmax = 10000.
+        if use_frames:
+            la = 10**h[4].read()
+            if h[0].read_header()["CAMERAS"][0]=="b":
+                lmin = 3500.
+                lmax = 6000.
+            else:
+                lmin = 5500.
+                lmax = 10000.
         else:
-            lmin = 5500.
-            lmax = 10000.
+            coeff0 = h[0].read_header()["COEFF0"]
+            coeff1 = h[0].read_header()["COEFF1"]
+            la = 10**(coeff0 + coeff1*np.arange(fl.shape[1]))
+            la = np.broadcast_to(la,fl.shape)
+        
         imin = abs(la-lmin).min(axis=0).argmin()
         imax = abs(la-lmax).min(axis=0).argmin()
+
+        print("DEBUG: imin {} imax {}".format(imin,imax))
 
         la = la[:,imin:imax]
         fl = fl[:,imin:imax]
@@ -105,15 +128,26 @@ def read_spectra(indir, spall,targetids=None,spectrum_class=SimpleSpectrum):
         nbins = wd.shape[1]
 
         for i,f in enumerate(fs):
-            t = pmf2tid[(p,m,f)]
-            if t==-1 or np.all(iv[i]==0):
-                ### print("DEBUG: skipping thing_id {} (no thing_id or no data)".format(t))
+            if np.all(iv[i]==0):
+                print("DEBUG: skipping plate,mjd = {},{} (no data)".format(plate,f))
                 continue
+            t = pf2thid[(plate,f)]
+            if t==-1 or np.all(iv[i]==0):
+                sf = str(f)
+                if f<1000:
+                    sf = '0'+sf
+                if f<100:
+                    sf = '0'+sf
+                if f<10:
+                    sf = '0'+sf
+                t = int(str(plate)+str(mjd)+sf)
+                print("DEBUG: changing negative thing id to PLATEMJDFIBERID {}".format(t))
             if t not in dic_spectra:
                 dic_spectra[t]=[]
-                brickname = '{}-{}'.format(p,m)
+                brickname = '{}-{}'.format(plate,mjd)
                 bricknames.append(brickname)
 
+            ## build resolution from wdisp
             reso = np.zeros([ndiag,nbins])
             for idiag in range(ndiag):
                 offset = ndiag//2-idiag
@@ -151,7 +185,7 @@ def read_spectra(indir, spall,targetids=None,spectrum_class=SimpleSpectrum):
 
     return targets, meta
 
-def rrboss(options=None):
+def rrboss(options=None, comm=None):
     import redrock
     import optparse
     from astropy.io import fits
@@ -171,7 +205,8 @@ def rrboss(options=None):
     pid = os.getpid()
 
     parser = optparse.OptionParser(usage = "%prog [options] spectra1 spectra2...")
-    parser.add_option("--platedir", type="string",  help="input plate directory")
+    parser.add_option("--spplate", type="string",  help="input plate directory")
+    parser.add_option("--spall", type="string",  help="spAll file")
     parser.add_option("-t", "--templates", type="string",  help="template file or directory")
     parser.add_option("-o", "--output", type="string",  help="output file")
     parser.add_option("--zbest", type="string",  help="output zbest fits file")
@@ -179,8 +214,7 @@ def rrboss(options=None):
     parser.add_option("--mintarget", type=int,  help="first target to include", default=0)
     parser.add_option("--ncpu", type=int,  help="number of cpu cores for multiprocessing", default=None)
     parser.add_option("--debug", help="debug with ipython", action="store_true")
-    parser.add_option("--spcframes", help="use individual spcframes instead of spplate", action="store_true")
-    parser.add_option("--spall", type = "string", help="spAll file (required in combination of --spcframes to get the THING_ID mapping)")
+    parser.add_option("--use-frames", help="use individual spcframes instead of spplate (the spCFrame files are expected to be in the same directory as the spPlate", action="store_true")
 
     if options is None:
         opts, infiles = parser.parse_args()
@@ -189,10 +223,6 @@ def rrboss(options=None):
 
     if (opts.output is None) and (opts.zbest is None):
         print('ERROR: --output or --zbest required')
-        sys.exit(1)
-
-    if opts.spcframes == True and opts.spall == None:
-        print('ERROR: --spcframes option requires --spall to be set')
         sys.exit(1)
 
     templates = None
@@ -209,10 +239,10 @@ def rrboss(options=None):
         if opts.ncpu is None or opts.ncpu > 1:
             spectrum_class = MultiprocessingSharedSpectrum
 
-        targets, meta = read_spectra(opts.indir,opts.spall,spectrum_class=spectrum_class)
+        targets, meta = read_spectra(opts.spplate,opts.spall,spectrum_class=spectrum_class,use_frames=opts.use_frames)
         print("DEBUG: read {} targets".format(len(targets)))
 
-        if not opts.spcframes:
+        if not opts.use_frames:
             for t in targets:
                 t._all_spectra = t.spectra
                 t.spectra = t.coadd
@@ -222,7 +252,7 @@ def rrboss(options=None):
             meta = meta[opts.mintarget:opts.mintarget+opts.ntargets]
 
         print('INFO: fitting {} targets'.format(len(targets)))
-        sus.stdout.flush()
+        sys.stdout.flush()
 
         templates = io.read_templates(opts.templates)
 
