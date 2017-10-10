@@ -156,10 +156,22 @@ def rrboss(options=None):
     import optparse
     from astropy.io import fits
     import time
+
+    # Note, in the pure multiprocessing case (comm == None), "rank"
+    # will always be set to zero, which is fine since we are outside
+    # any areas using multiprocessing and this is just used to control
+    # program flow.
+    rank = 0
+    nproc = 1
+    if comm is not None:
+        rank = comm.rank
+        nproc = comm.size
+
     start_time = time.time()
+    pid = os.getpid()
 
     parser = optparse.OptionParser(usage = "%prog [options] spectra1 spectra2...")
-    parser.add_option("--indir", type="string",  help="input plate directory")
+    parser.add_option("--platedir", type="string",  help="input plate directory")
     parser.add_option("-t", "--templates", type="string",  help="template file or directory")
     parser.add_option("-o", "--output", type="string",  help="output file")
     parser.add_option("--zbest", type="string",  help="output zbest fits file")
@@ -167,8 +179,8 @@ def rrboss(options=None):
     parser.add_option("--mintarget", type=int,  help="first target to include", default=0)
     parser.add_option("--ncpu", type=int,  help="number of cpu cores for multiprocessing", default=None)
     parser.add_option("--debug", help="debug with ipython", action="store_true")
-    parser.add_option("--allspec", help="use individual spectra instead of coadd", action="store_true")
-    parser.add_option("--spall", type = "string", help="spAll file")
+    parser.add_option("--spcframes", help="use individual spcframes instead of spplate", action="store_true")
+    parser.add_option("--spall", type = "string", help="spAll file (required in combination of --spcframes to get the THING_ID mapping)")
 
     if options is None:
         opts, infiles = parser.parse_args()
@@ -179,53 +191,92 @@ def rrboss(options=None):
         print('ERROR: --output or --zbest required')
         sys.exit(1)
 
-    if opts.allspec == False:
-        print('ERROR: coaddition not yet implemented, please set --allspec')
+    if opts.spcframes == True and opts.spall == None:
+        print('ERROR: --spcframes option requires --spall to be set')
         sys.exit(1)
 
-    spectrum_class = SimpleSpectrum
-    if opts.ncpu is None or opts.ncpu > 1:
-        spectrum_class = MultiprocessingSharedSpectrum
-    targets, meta = read_spectra(opts.indir,opts.spall,spectrum_class=spectrum_class)
-    print("DEBUG: read {} targets".format(len(targets)))
+    templates = None
+    targets   = None
+    meta      = None
 
-    if not opts.allspec:
-        for t in targets:
-            t.do_coadd()
+    if rank == 0:
+        t0 = time.time()
+        print('INFO: reading targets')
+        sys.stdout.flush()
 
-    if opts.ntargets is not None:
-        targets = targets[opts.mintarget:opts.mintarget+opts.ntargets]
-        meta = meta[opts.mintarget:opts.mintarget+opts.ntargets]
+        spectrum_class = SimpleSpectrum
 
-    print('INFO: fitting {} targets'.format(len(targets)))
+        if opts.ncpu is None or opts.ncpu > 1:
+            spectrum_class = MultiprocessingSharedSpectrum
 
-    templates = redrock.io.read_templates(opts.templates)
-    zscan, zfit = redrock.zfind(targets, templates, ncpu=opts.ncpu)
+        targets, meta = read_spectra(opts.indir,opts.spall,spectrum_class=spectrum_class)
+        print("DEBUG: read {} targets".format(len(targets)))
 
-    if opts.output:
-        print('INFO: writing {}'.format(opts.output))
-        redrock.io.write_zscan(opts.output, zscan, zfit, clobber=True)
+        if not opts.spcframes:
+            for t in targets:
+                t._all_spectra = t.spectra
+                t.spectra = t.coadd
 
-    if opts.zbest:
-        zbest = zfit[zfit['znum'] == 0]
+        if opts.ntargets is not None:
+            targets = targets[opts.mintarget:opts.mintarget+opts.ntargets]
+            meta = meta[opts.mintarget:opts.mintarget+opts.ntargets]
 
-        #- Remove extra columns not needed for zbest
-        zbest.remove_columns(['zz', 'zzchi2', 'znum'])
+        print('INFO: fitting {} targets'.format(len(targets)))
+        sus.stdout.flush()
 
-        #- Change to upper case like DESI
-        for colname in zbest.colnames:
-            if colname.islower():
-                zbest.rename_column(colname, colname.upper())
+        templates = io.read_templates(opts.templates)
 
-        #- Add brickname column
-        zbest['BRICKNAME'] = meta['BRICKNAME']
+        dt = time.time() - t0
+        sys.stdout.flush()
 
-        print('INFO: writing {}'.format(opts.zbest))
-        write_zbest(opts.zbest, zbest)
+    # all processes get a copy of the templates from rank 0
+    if comm is not None:
+        templates = comm.bcast(templates, root=0)
+
+    # Call zfind differently depending on our type of parallelism.
+
+    if comm is not None:
+        # Use MPI
+        with MPISharedTargets(targets, comm) as shared_targets:
+            zscan, zfit = zfind(shared_targets.targets, templates,
+                ncpu=None, comm=comm)
+    else:
+        # Use pure multiprocessing
+        zscan, zfit = zfind(targets, templates, ncpu=opts.ncpu)
+
+    if rank == 0:
+        if opts.output:
+            print('INFO: writing {}'.format(opts.output))
+            io.write_zscan(opts.output, zscan, zfit, clobber=True)
+
+
+        if opts.zbest:
+            zbest = zfit[zfit['znum'] == 0]
+
+            #- Remove extra columns not needed for zbest
+            zbest.remove_columns(['zz', 'zzchi2', 'znum'])
+
+            #- Change to upper case like DESI
+            for colname in zbest.colnames:
+                if colname.islower():
+                    zbest.rename_column(colname, colname.upper())
+
+            #- Add brickname column
+            zbest['BRICKNAME'] = meta['BRICKNAME']
+
+            print('INFO: writing {}'.format(opts.zbest))
+            write_zbest(opts.zbest, zbest)
 
     run_time = time.time() - start_time
-    print('INFO: finished in {:.1f} seconds'.format(run_time))
+
+    if comm is None or comm.rank == 0:
+        print('INFO: finished in {:.1f} seconds'.format(run_time))
 
     if opts.debug:
-        import IPython
-        IPython.embed()
+        if comm is not None:
+            print('INFO: ignoring ipython debugging when using MPI')
+        else:
+            import IPython
+            IPython.embed()
+
+    return
