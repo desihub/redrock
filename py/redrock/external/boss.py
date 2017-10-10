@@ -64,13 +64,16 @@ def read_spectra(indir, spall,targetids=None,spectrum_class=SimpleSpectrum):
     ## get plate and mjd from the first file
     h = fitsio.FITS(spcframefiles[0])
     p = h[0].read_header()["PLATEID"]
-    m = h[0].read_header()["MJD"]
     dic_spectra = {}
 
     #- Ignore warnings about zdc2 bricks lacking bricknames in header
     bricknames=[]
     for infile in spcframefiles:
         h = fitsio.FITS(infile)
+        plate = h[0].read_header()["PLATEID"]
+        w = pla == plate
+        m = h[0].read_header()["MJD"]
+        if not m in mjd[w]:continue
         fs = h[5]["FIBERID"][:]
 
         la = 10**h[3].read()
