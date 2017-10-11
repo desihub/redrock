@@ -58,14 +58,17 @@ def read_spectra(spplate_name, spall, targetids=None,spectrum_class=SimpleSpectr
     spall.close()
 
     ## read spplate
+    spplate = fitsio.FITS(spplate_name)
+    plate = spplate[0].read_header()["PLATEID"]
+    mjd = spplate[0].read_header()["MJD"]
     if not use_frames:
         infiles = [spplate_name]
     if use_frames:
         path = os.path.dirname(spplate_name)
-        spplate = fitsio.FITS(spplate_name)
         cameras = ['b1','r1','b2','r2']
 
         infiles = []
+        nexp_tot=0
         for c in cameras:
             try:
                 nexp = spplate[0].read_header()["NEXP_{}".format(c.upper())]
@@ -73,19 +76,22 @@ def read_spectra(spplate_name, spall, targetids=None,spectrum_class=SimpleSpectr
                 print("DEBUG: spplate {} has no exposures in camera {} ".format(spplate_name,c))
                 continue
             for i in range(1,nexp+1):
-                expid = str(i)
-                if i<10:
+                nexp_tot += 1
+                expid = str(nexp_tot)
+                if nexp_tot<10:
                     expid = '0'+expid
-                exp = path+"/spCFrame"+spplate[0].read_header()["EXPID"+expid]
+                exp = path+"/spCFrame-"+spplate[0].read_header()["EXPID"+expid][:11]+".fits"
                 infiles.append(exp)
-
+    
+    for f in infiles:
+        print(f)
+    spplate.close()
     bricknames=[]
     dic_spectra = {}
 
     for infile in infiles:
         h = fitsio.FITS(infile)
-        plate = h[0].read_header()["PLATEID"]
-        mjd = h[0].read_header()["MJD"]
+        assert plate == h[0].read_header()["PLATEID"]
         fs = h[5]["FIBERID"][:]
 
         fl = h[0].read()
@@ -96,7 +102,7 @@ def read_spectra(spplate_name, spall, targetids=None,spectrum_class=SimpleSpectr
         lmin = 3500.
         lmax = 10000.
         if use_frames:
-            la = 10**h[4].read()
+            la = 10**h[3].read()
             if h[0].read_header()["CAMERAS"][0]=="b":
                 lmin = 3500.
                 lmax = 6000.
@@ -129,10 +135,10 @@ def read_spectra(spplate_name, spall, targetids=None,spectrum_class=SimpleSpectr
 
         for i,f in enumerate(fs):
             if np.all(iv[i]==0):
-                print("DEBUG: skipping plate,mjd = {},{} (no data)".format(plate,f))
+                print("DEBUG: skipping plate,fid = {},{} (no data)".format(plate,f))
                 continue
             t = pf2thid[(plate,f)]
-            if t==-1 or np.all(iv[i]==0):
+            if t==-1:
                 sf = str(f)
                 if f<1000:
                     sf = '0'+sf
