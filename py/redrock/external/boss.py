@@ -13,8 +13,11 @@ import numpy as np
 from scipy import sparse
 import desispec.resolution
 from desispec.resolution import Resolution
+import os.path
 
 from .. import Target
+from .. import io
+from .. import zfind
 from ..dataobj import (Target, MultiprocessingSharedSpectrum, 
     SimpleSpectrum, MPISharedTargets)
 
@@ -35,61 +38,87 @@ def write_zbest(outfile, zbest):
     zbest.meta['EXTNAME'] = 'ZBEST'
     zbest.write(outfile, overwrite=True)
 
-def read_spectra(indir, spall,targetids=None,spectrum_class=SimpleSpectrum):
+def read_spectra(spplate_name, spall, targetids=None,spectrum_class=SimpleSpectrum,use_frames=False):
     '''
     Read targets from a list of spectra files
 
     Args:
-        indir : input plate directory
-        spall: name of a fits file with a BinaryTable in HDU[1] containing the columns PLATE,MJD,FIBERID,THING_ID (typically spAll).
-                These columns are used to obtain the TARGETID (= THING_ID) from the PLATE,MJD,FIBERID
+        spplate_name: input spPlate file
+        spall: spAll file. Required to get THING_IDs from (PLATE,FIBER)
 
     Returns tuple of (targets, meta) where
         targets is a list of Target objects and
         meta is a Table of metadata (currently only BRICKNAME)
     '''
-    import glob
-    spcframefiles = glob.glob(indir+"/spCFrame-*.fits")
-
-    assert len(spcframefiles) > 0
-
     spall = fitsio.FITS(spall)
-    pla = spall[1]["PLATE"][:]
-    mjd = spall[1]["MJD"][:]
-    fib = spall[1]["FIBERID"][:]
-    tid = spall[1]["THING_ID"][:]
+    plates = spall[1]["PLATE"][:]
+    fibers = spall[1]["FIBERID"][:]
+    thingid = spall[1]["THING_ID"][:]
+    pf2thid = {(p,f):t for p,f,t in zip(plates,fibers,thingid)}
+    spall.close()
 
-    pmf2tid = {(p,m,f):t for p,m,f,t in zip(pla,mjd,fib,tid)}
+    ## read spplate
+    spplate = fitsio.FITS(spplate_name)
+    plate = spplate[0].read_header()["PLATEID"]
+    mjd = spplate[0].read_header()["MJD"]
+    if not use_frames:
+        infiles = [spplate_name]
+    if use_frames:
+        path = os.path.dirname(spplate_name)
+        cameras = ['b1','r1','b2','r2']
 
-    ## get plate and mjd from the first file
-    h = fitsio.FITS(spcframefiles[0])
-    p = h[0].read_header()["PLATEID"]
+        infiles = []
+        nexp_tot=0
+        for c in cameras:
+            try:
+                nexp = spplate[0].read_header()["NEXP_{}".format(c.upper())]
+            except ValueError:
+                print("DEBUG: spplate {} has no exposures in camera {} ".format(spplate_name,c))
+                continue
+            for i in range(1,nexp+1):
+                nexp_tot += 1
+                expid = str(nexp_tot)
+                if nexp_tot<10:
+                    expid = '0'+expid
+                exp = path+"/spCFrame-"+spplate[0].read_header()["EXPID"+expid][:11]+".fits"
+                infiles.append(exp)
+    
+    for f in infiles:
+        print(f)
+    spplate.close()
+    bricknames=[]
     dic_spectra = {}
 
-    #- Ignore warnings about zdc2 bricks lacking bricknames in header
-    bricknames=[]
-    for infile in spcframefiles:
+    for infile in infiles:
         h = fitsio.FITS(infile)
-        plate = h[0].read_header()["PLATEID"]
-        w = pla == plate
-        m = h[0].read_header()["MJD"]
-        if not m in mjd[w]:continue
+        assert plate == h[0].read_header()["PLATEID"]
         fs = h[5]["FIBERID"][:]
 
-        la = 10**h[3].read()
         fl = h[0].read()
         iv = h[1].read()*(h[2].read()==0)
         wd = h[4].read()
 
-        ## crop to lmin, lmax in blue and red
-        if h[0].read_header()["CAMERAS"][0]=="b":
-            lmin = 3500.
-            lmax = 6000.
+        ## crop to lmin, lmax
+        lmin = 3500.
+        lmax = 10000.
+        if use_frames:
+            la = 10**h[3].read()
+            if h[0].read_header()["CAMERAS"][0]=="b":
+                lmin = 3500.
+                lmax = 6000.
+            else:
+                lmin = 5500.
+                lmax = 10000.
         else:
-            lmin = 5500.
-            lmax = 10000.
+            coeff0 = h[0].read_header()["COEFF0"]
+            coeff1 = h[0].read_header()["COEFF1"]
+            la = 10**(coeff0 + coeff1*np.arange(fl.shape[1]))
+            la = np.broadcast_to(la,fl.shape)
+        
         imin = abs(la-lmin).min(axis=0).argmin()
         imax = abs(la-lmax).min(axis=0).argmin()
+
+        print("DEBUG: imin {} imax {}".format(imin,imax))
 
         la = la[:,imin:imax]
         fl = fl[:,imin:imax]
@@ -105,15 +134,26 @@ def read_spectra(indir, spall,targetids=None,spectrum_class=SimpleSpectrum):
         nbins = wd.shape[1]
 
         for i,f in enumerate(fs):
-            t = pmf2tid[(p,m,f)]
-            if t==-1 or np.all(iv[i]==0):
-                ### print("DEBUG: skipping thing_id {} (no thing_id or no data)".format(t))
+            if np.all(iv[i]==0):
+                print("DEBUG: skipping plate,fid = {},{} (no data)".format(plate,f))
                 continue
+            t = pf2thid[(plate,f)]
+            if t==-1:
+                sf = str(f)
+                if f<1000:
+                    sf = '0'+sf
+                if f<100:
+                    sf = '0'+sf
+                if f<10:
+                    sf = '0'+sf
+                t = int(str(plate)+str(mjd)+sf)
+                print("DEBUG: changing negative thing id to PLATEMJDFIBERID {}".format(t))
             if t not in dic_spectra:
                 dic_spectra[t]=[]
-                brickname = '{}-{}'.format(p,m)
+                brickname = '{}-{}'.format(plate,mjd)
                 bricknames.append(brickname)
 
+            ## build resolution from wdisp
             reso = np.zeros([ndiag,nbins])
             for idiag in range(ndiag):
                 offset = ndiag//2-idiag
@@ -151,15 +191,28 @@ def read_spectra(indir, spall,targetids=None,spectrum_class=SimpleSpectrum):
 
     return targets, meta
 
-def rrboss(options=None):
+def rrboss(options=None, comm=None):
     import redrock
     import optparse
     from astropy.io import fits
     import time
+
+    # Note, in the pure multiprocessing case (comm == None), "rank"
+    # will always be set to zero, which is fine since we are outside
+    # any areas using multiprocessing and this is just used to control
+    # program flow.
+    rank = 0
+    nproc = 1
+    if comm is not None:
+        rank = comm.rank
+        nproc = comm.size
+
     start_time = time.time()
+    pid = os.getpid()
 
     parser = optparse.OptionParser(usage = "%prog [options] spectra1 spectra2...")
-    parser.add_option("--indir", type="string",  help="input plate directory")
+    parser.add_option("--spplate", type="string",  help="input plate directory")
+    parser.add_option("--spall", type="string",  help="spAll file")
     parser.add_option("-t", "--templates", type="string",  help="template file or directory")
     parser.add_option("-o", "--output", type="string",  help="output file")
     parser.add_option("--zbest", type="string",  help="output zbest fits file")
@@ -167,8 +220,7 @@ def rrboss(options=None):
     parser.add_option("--mintarget", type=int,  help="first target to include", default=0)
     parser.add_option("--ncpu", type=int,  help="number of cpu cores for multiprocessing", default=None)
     parser.add_option("--debug", help="debug with ipython", action="store_true")
-    parser.add_option("--allspec", help="use individual spectra instead of coadd", action="store_true")
-    parser.add_option("--spall", type = "string", help="spAll file")
+    parser.add_option("--use-frames", help="use individual spcframes instead of spplate (the spCFrame files are expected to be in the same directory as the spPlate", action="store_true")
 
     if options is None:
         opts, infiles = parser.parse_args()
@@ -179,53 +231,88 @@ def rrboss(options=None):
         print('ERROR: --output or --zbest required')
         sys.exit(1)
 
-    if opts.allspec == False:
-        print('ERROR: coaddition not yet implemented, please set --allspec')
-        sys.exit(1)
+    templates = None
+    targets   = None
+    meta      = None
 
-    spectrum_class = SimpleSpectrum
-    if opts.ncpu is None or opts.ncpu > 1:
-        spectrum_class = MultiprocessingSharedSpectrum
-    targets, meta = read_spectra(opts.indir,opts.spall,spectrum_class=spectrum_class)
-    print("DEBUG: read {} targets".format(len(targets)))
+    if rank == 0:
+        t0 = time.time()
+        print('INFO: reading targets')
+        sys.stdout.flush()
 
-    if not opts.allspec:
-        for t in targets:
-            t.do_coadd()
+        spectrum_class = SimpleSpectrum
 
-    if opts.ntargets is not None:
-        targets = targets[opts.mintarget:opts.mintarget+opts.ntargets]
-        meta = meta[opts.mintarget:opts.mintarget+opts.ntargets]
+        if opts.ncpu is None or opts.ncpu > 1:
+            spectrum_class = MultiprocessingSharedSpectrum
 
-    print('INFO: fitting {} targets'.format(len(targets)))
+        targets, meta = read_spectra(opts.spplate,opts.spall,spectrum_class=spectrum_class,use_frames=opts.use_frames)
+        print("DEBUG: read {} targets".format(len(targets)))
 
-    templates = redrock.io.read_templates(opts.templates)
-    zscan, zfit = redrock.zfind(targets, templates, ncpu=opts.ncpu)
+        if not opts.use_frames:
+            for t in targets:
+                t._all_spectra = t.spectra
+                t.spectra = t.coadd
 
-    if opts.output:
-        print('INFO: writing {}'.format(opts.output))
-        redrock.io.write_zscan(opts.output, zscan, zfit, clobber=True)
+        if opts.ntargets is not None:
+            targets = targets[opts.mintarget:opts.mintarget+opts.ntargets]
+            meta = meta[opts.mintarget:opts.mintarget+opts.ntargets]
 
-    if opts.zbest:
-        zbest = zfit[zfit['znum'] == 0]
+        print('INFO: fitting {} targets'.format(len(targets)))
+        sys.stdout.flush()
 
-        #- Remove extra columns not needed for zbest
-        zbest.remove_columns(['zz', 'zzchi2', 'znum'])
+        templates = io.read_templates(opts.templates)
 
-        #- Change to upper case like DESI
-        for colname in zbest.colnames:
-            if colname.islower():
-                zbest.rename_column(colname, colname.upper())
+        dt = time.time() - t0
+        sys.stdout.flush()
 
-        #- Add brickname column
-        zbest['BRICKNAME'] = meta['BRICKNAME']
+    # all processes get a copy of the templates from rank 0
+    if comm is not None:
+        templates = comm.bcast(templates, root=0)
 
-        print('INFO: writing {}'.format(opts.zbest))
-        write_zbest(opts.zbest, zbest)
+    # Call zfind differently depending on our type of parallelism.
+
+    if comm is not None:
+        # Use MPI
+        with MPISharedTargets(targets, comm) as shared_targets:
+            zscan, zfit = zfind(shared_targets.targets, templates,
+                ncpu=None, comm=comm)
+    else:
+        # Use pure multiprocessing
+        zscan, zfit = zfind(targets, templates, ncpu=opts.ncpu)
+
+    if rank == 0:
+        if opts.output:
+            print('INFO: writing {}'.format(opts.output))
+            io.write_zscan(opts.output, zscan, zfit, clobber=True)
+
+
+        if opts.zbest:
+            zbest = zfit[zfit['znum'] == 0]
+
+            #- Remove extra columns not needed for zbest
+            zbest.remove_columns(['zz', 'zzchi2', 'znum'])
+
+            #- Change to upper case like DESI
+            for colname in zbest.colnames:
+                if colname.islower():
+                    zbest.rename_column(colname, colname.upper())
+
+            #- Add brickname column
+            zbest['BRICKNAME'] = meta['BRICKNAME']
+
+            print('INFO: writing {}'.format(opts.zbest))
+            write_zbest(opts.zbest, zbest)
 
     run_time = time.time() - start_time
-    print('INFO: finished in {:.1f} seconds'.format(run_time))
+
+    if comm is None or comm.rank == 0:
+        print('INFO: finished in {:.1f} seconds'.format(run_time))
 
     if opts.debug:
-        import IPython
-        IPython.embed()
+        if comm is not None:
+            print('INFO: ignoring ipython debugging when using MPI')
+        else:
+            import IPython
+            IPython.embed()
+
+    return
