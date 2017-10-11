@@ -178,7 +178,7 @@ def read_spectra(spplate_name, spall, targetids=None,spectrum_class=SimpleSpectr
     for targetid in targetids:
         spectra = dic_spectra[targetid]
         if len(spectra) > 0:
-            targets.append(Target(targetid, spectra))
+            targets.append(Target(targetid, spectra,do_coadd=False))
         else:
             print('ERROR: Target {} on {} has no good spectra'.format(targetid, os.path.basename(brickfiles[0])))
 

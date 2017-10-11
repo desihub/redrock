@@ -313,7 +313,7 @@ class MPISharedTargets(object):
 
 
 class Target(object):
-    def __init__(self, targetid, spectra, coadd=None):
+    def __init__(self, targetid, spectra, coadd=None,do_coadd = True):
         """
         Create a Target object
 
@@ -330,7 +330,10 @@ class Target(object):
         self.id = targetid
         self.spectra = spectra
 
-        if coadd is None :
+        if not do_coadd:
+            return
+
+        if coadd is None:
         #- Make a basic coadd
             self.coadd = list()
             for key in set([s.wavehash for s in spectra]):
