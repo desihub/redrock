@@ -88,9 +88,9 @@ def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
             zcoeff[i0] = tmpzcoeff[i]
             zchi2penalty[i0] = tmpzchi2penalty[i]
 
-    zchi2 = np.vstack(zchi2)
-    zcoeff = np.vstack(zcoeff)
-    zchi2penalty = np.vstack(zchi2penalty)
+    zchi2 = np.array(zchi2)
+    zcoeff = np.array(zcoeff)
+    zchi2penalty = np.array(zchi2penalty)
 
     #- restore the state of targets
     for t in targets:
