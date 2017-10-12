@@ -104,11 +104,9 @@ def read_spectra(spplate_name, spall, targetids=None,spectrum_class=SimpleSpectr
         if use_frames:
             la = 10**h[3].read()
             if h[0].read_header()["CAMERAS"][0]=="b":
-                lmin = 3500.
                 lmax = 6000.
             else:
                 lmin = 5500.
-                lmax = 10000.
         else:
             coeff0 = h[0].read_header()["COEFF0"]
             coeff1 = h[0].read_header()["COEFF1"]
@@ -178,7 +176,7 @@ def read_spectra(spplate_name, spall, targetids=None,spectrum_class=SimpleSpectr
     for targetid in targetids:
         spectra = dic_spectra[targetid]
         if len(spectra) > 0:
-            targets.append(Target(targetid, spectra,do_coadd=False))
+            targets.append(Target(targetid, spectra, do_coadd=False))
         else:
             print('ERROR: Target {} on {} has no good spectra'.format(targetid, os.path.basename(brickfiles[0])))
 
@@ -247,11 +245,6 @@ def rrboss(options=None, comm=None):
 
         targets, meta = read_spectra(opts.spplate,opts.spall,spectrum_class=spectrum_class,use_frames=opts.use_frames)
         print("DEBUG: read {} targets".format(len(targets)))
-
-        if not opts.use_frames:
-            for t in targets:
-                t._all_spectra = t.spectra
-                t.spectra = t.coadd
 
         if opts.ntargets is not None:
             targets = targets[opts.mintarget:opts.mintarget+opts.ntargets]
