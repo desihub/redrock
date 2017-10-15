@@ -21,6 +21,15 @@ from .. import zfind
 from ..dataobj import (Target, MultiprocessingSharedSpectrum, 
     SimpleSpectrum, MPISharedTargets)
 
+def platemjdfiber2targetid(plate, mjd, fiber):
+    return plate*1000000000 + mjd*10000 + fiber
+
+def targetid2platemjdfiber(targetid):
+    fiber = targetid % 10000
+    mjd = (targetid // 10000) % 100000
+    plate = (targetid // (10000 * 100000))
+    return (plate, mjd, fiber)
+
 def write_zbest(outfile, zbest):
     '''
     Write zbest Table to outfile
@@ -38,25 +47,17 @@ def write_zbest(outfile, zbest):
     zbest.meta['EXTNAME'] = 'ZBEST'
     zbest.write(outfile, overwrite=True)
 
-def read_spectra(spplate_name, spall, targetids=None,spectrum_class=SimpleSpectrum,use_frames=False):
+def read_spectra(spplate_name, targetids=None,spectrum_class=SimpleSpectrum,use_frames=False,fiberid=None):
     '''
     Read targets from a list of spectra files
 
     Args:
         spplate_name: input spPlate file
-        spall: spAll file. Required to get THING_IDs from (PLATE,FIBER)
 
     Returns tuple of (targets, meta) where
         targets is a list of Target objects and
         meta is a Table of metadata (currently only BRICKNAME)
     '''
-    spall = fitsio.FITS(spall)
-    plates = spall[1]["PLATE"][:]
-    fibers = spall[1]["FIBERID"][:]
-    thingid = spall[1]["THING_ID"][:]
-    pf2thid = {(p,f):t for p,f,t in zip(plates,fibers,thingid)}
-    spall.close()
-
     ## read spplate
     spplate = fitsio.FITS(spplate_name)
     plate = spplate[0].read_header()["PLATEID"]
@@ -93,6 +94,9 @@ def read_spectra(spplate_name, spall, targetids=None,spectrum_class=SimpleSpectr
         h = fitsio.FITS(infile)
         assert plate == h[0].read_header()["PLATEID"]
         fs = h[5]["FIBERID"][:]
+        if fiberid is not None:
+            w = np.in1d(fs,fiberid)
+            fs = fs[w]
 
         fl = h[0].read()
         iv = h[1].read()*(h[2].read()==0)
@@ -131,21 +135,16 @@ def read_spectra(spplate_name, spall, targetids=None,spectrum_class=SimpleSpectr
         ndiag = int(4*np.ceil(wd.max())+1)
         nbins = wd.shape[1]
 
-        for i,f in enumerate(fs):
+        for f in fs:
+            i = (f-1)
+            if use_frames:
+                i = i%500
             if np.all(iv[i]==0):
                 print("DEBUG: skipping plate,fid = {},{} (no data)".format(plate,f))
                 continue
-            t = pf2thid[(plate,f)]
-            if t==-1:
-                sf = str(f)
-                if f<1000:
-                    sf = '0'+sf
-                if f<100:
-                    sf = '0'+sf
-                if f<10:
-                    sf = '0'+sf
-                t = int(str(plate)+str(mjd)+sf)
-                print("DEBUG: changing negative thing id to PLATEMJDFIBERID {}".format(t))
+
+            t = platemjdfiber2targetid(plate, mjd, f)
+            print("DEBUG: changing negative thing id to PLATEMJDFIBERID {}".format(t))
             if t not in dic_spectra:
                 dic_spectra[t]=[]
                 brickname = '{}-{}'.format(plate,mjd)
@@ -210,7 +209,6 @@ def rrboss(options=None, comm=None):
 
     parser = optparse.OptionParser(usage = "%prog [options] spectra1 spectra2...")
     parser.add_option("--spplate", type="string",  help="input plate directory")
-    parser.add_option("--spall", type="string",  help="spAll file")
     parser.add_option("-t", "--templates", type="string",  help="template file or directory")
     parser.add_option("-o", "--output", type="string",  help="output file")
     parser.add_option("--zbest", type="string",  help="output zbest fits file")
@@ -243,7 +241,7 @@ def rrboss(options=None, comm=None):
         if opts.ncpu is None or opts.ncpu > 1:
             spectrum_class = MultiprocessingSharedSpectrum
 
-        targets, meta = read_spectra(opts.spplate,opts.spall,spectrum_class=spectrum_class,use_frames=opts.use_frames)
+        targets, meta = read_spectra(opts.spplate,spectrum_class=spectrum_class,use_frames=opts.use_frames)
         print("DEBUG: read {} targets".format(len(targets)))
 
         if opts.ntargets is not None:
