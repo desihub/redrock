@@ -84,8 +84,6 @@ def read_spectra(spplate_name, targetids=None,spectrum_class=SimpleSpectrum,use_
                 exp = path+"/spCFrame-"+spplate[0].read_header()["EXPID"+expid][:11]+".fits"
                 infiles.append(exp)
     
-    for f in infiles:
-        print(f)
     spplate.close()
     bricknames=[]
     dic_spectra = {}
@@ -120,8 +118,6 @@ def read_spectra(spplate_name, targetids=None,spectrum_class=SimpleSpectrum,use_
         imin = abs(la-lmin).min(axis=0).argmin()
         imax = abs(la-lmax).min(axis=0).argmin()
 
-        print("DEBUG: imin {} imax {}".format(imin,imax))
-
         la = la[:,imin:imax]
         fl = fl[:,imin:imax]
         iv = iv[:,imin:imax]
@@ -144,7 +140,6 @@ def read_spectra(spplate_name, targetids=None,spectrum_class=SimpleSpectrum,use_
                 continue
 
             t = platemjdfiber2targetid(plate, mjd, f)
-            print("DEBUG: changing negative thing id to PLATEMJDFIBERID {}".format(t))
             if t not in dic_spectra:
                 dic_spectra[t]=[]
                 brickname = '{}-{}'.format(plate,mjd)
@@ -233,7 +228,6 @@ def rrboss(options=None, comm=None):
 
     if rank == 0:
         t0 = time.time()
-        print('INFO: reading targets')
         sys.stdout.flush()
 
         spectrum_class = SimpleSpectrum
@@ -242,7 +236,7 @@ def rrboss(options=None, comm=None):
             spectrum_class = MultiprocessingSharedSpectrum
 
         targets, meta = read_spectra(opts.spplate,spectrum_class=spectrum_class,use_frames=opts.use_frames)
-        print("DEBUG: read {} targets".format(len(targets)))
+        print("INFO: read {} targets".format(len(targets)))
 
         if opts.ntargets is not None:
             targets = targets[opts.mintarget:opts.mintarget+opts.ntargets]
