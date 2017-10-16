@@ -5,7 +5,10 @@ Redrock change log
 0.5.1 (unreleased)
 ------------------
 
-* No changes yet
+* adds rrboss to process boss spectra (PR `#37`_)
+* refactors multiprocessing parallelism to use less memory (PR `#37`_)
+
+.. _`#37`: https://github.com/desihub/desispec/pull/37
 
 0.5.0 (2017-09-29)
 ------------------
