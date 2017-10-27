@@ -12,6 +12,7 @@ if sys.version_info[0] > 2:
     basestring = str
 
 import numpy as np
+import scipy.sparse
 
 from astropy.io import fits
 from astropy.table import Table
@@ -20,6 +21,8 @@ from desiutil.io import encode_table
 
 import desispec.io
 from desispec.resolution import Resolution
+
+from ..sharedmem_mpi import MPIShared
 
 from ..dataobj import (Target, MultiprocessingSharedSpectrum, 
     SimpleSpectrum, MPISharedTargets)
@@ -43,234 +46,7 @@ def write_zbest(outfile, zbest):
         zbest['SUBTYPE'] = np.zeros(ntargets, dtype='S8')
 
     zbest.meta['EXTNAME'] = 'ZBEST'
-    zbest.write(outfile, overwrite=True)
-
-
-def desi_target_offsets(spectrafiles, targetids=None):
-    '''
-    Read target offsets from a list of spectra files.
-
-    This reads metadata information from a set of spectra files and computes
-    a dictionary of shared memory buffer offsets.  See 
-    redrock.dataobj.target_offsets() for more details on the format.
-   
-    Args:
-        spectrafiles : list of input spectra files, or string glob to match
-        targetids : list of target ids. If set, only those target spectra will
-            be read.
-    
-    Returns tuple of (dict, int):
-        the first element is the dictionary of offsets, and the second is
-        the number of double precision elements required for the shared
-        buffer.
-    '''
-    if isinstance(spectrafiles, basestring):
-        import glob
-        spectrafiles = glob.glob(spectrafiles)
-
-    assert len(spectrafiles) > 0
-
-    input_bands = {}
-    input_fmap = {}
-    input_targetids = set()
-
-    for sfile in spectrafiles:
-        input_bands[sfile] = {}
-        hdus = fits.open(sfile, memmap=True)
-        nhdu = len(hdus)
-        for h in range(1, nhdu):
-            name = hdus[h].header["EXTNAME"]
-            if name == "FIBERMAP":
-                input_fmap[sfile] = encode_table(Table(hdus[h].data, 
-                    copy=True).as_array())
-                input_targetids.update(input_fmap[sfile]['TARGETID'])
-            else:
-                # Find the band based on the name
-                mat = re.match(r"(.*)_(.*)", name)
-                if mat is None:
-                    raise RuntimeError("FITS extension name {} does not contain the band".format(name))
-                band = mat.group(1).lower()
-                type = mat.group(2)
-                if band not in input_bands[sfile]:
-                    input_bands[sfile][band] = {}
-                if type == "WAVELENGTH":
-                    input_bands[sfile][band]["nwave"] = \
-                        int(hdus[h].header["NAXIS1"])
-                elif type == "RESOLUTION":
-                    input_bands[sfile][band]["ndiag"] = \
-                        int(hdus[h].header["NAXIS2"])
-        hdus.close()
-
-    # Construct the target dictionary
-
-    if targetids is None:
-        targetids = input_targetids
-
-    nelem = 0
-    dictionary = OrderedDict()
-
-    for targetid in targetids:
-        dictionary[targetid] = {}
-        spectra_list = list()
-        for sfile in spectrafiles:
-            ii = (input_fmap[sfile]['TARGETID'] == targetid)
-            tspec = np.count_nonzero(ii)
-            if tspec == 0:
-                continue
-            for spec in range(tspec):
-                for band in input_bands[sfile]:
-                    spectrum_dict = {}
-                    # Here we compute the sizes of the data, offsets, and
-                    # shape of sparse resolution matrix.  We want to do this
-                    # without actually constructing the matrix, since that
-                    # would require reading the data.
-                    Rdata_size = input_bands[sfile][band]["nwave"] * \
-                        input_bands[sfile][band]["ndiag"]
-                    halfdiag = input_bands[sfile][band]["ndiag"] // 2
-                    Roffset_size = 2 * halfdiag + 1
-                    Rshape_size = 2
-                    for label, asize in zip(["wave","flux","ivar","rdata",
-                        "roffsets","rshape"], 
-                        [input_bands[sfile][band]["nwave"], 
-                        input_bands[sfile][band]["nwave"],
-                        input_bands[sfile][band]["nwave"],
-                        Rdata_size, Roffset_size, Rshape_size]):
-                        spectrum_dict[label] = [nelem, nelem + asize]
-                        nelem += asize
-                    spectra_list.append(spectrum_dict)
-                dictionary[targetid]["spectra"] = spectra_list
-        
-        # Now compute the size of the coadd- assume same bands
-        # between files and a resolution matrix of the same size
-        spectra_list = list()
-        for band in input_bands[spectrafiles[0]]:
-            spectrum_dict = {}
-            Rdata_size = input_bands[spectrafiles[0]][band]["nwave"] * \
-                input_bands[spectrafiles[0]][band]["ndiag"]
-            halfdiag = input_bands[spectrafiles[0]][band]["ndiag"] // 2
-            Roffset_size = 2 * halfdiag + 1
-            Rshape_size = 2
-            for label, asize in zip(["wave","flux","ivar","rdata",
-                "roffsets","rshape"], 
-                [input_bands[spectrafiles[0]][band]["nwave"], 
-                input_bands[spectrafiles[0]][band]["nwave"],
-                input_bands[spectrafiles[0]][band]["nwave"],
-                Rdata_size, Roffset_size, Rshape_size]):
-                spectrum_dict[label] = [nelem, nelem + asize]
-                nelem += asize
-            spectra_list.append(spectrum_dict)
-        dictionary[targetid]["coadd"] = spectra_list
-
-    return dictionary, nelem
-
-
-def read_spectra_shared(shm, spectrafiles):
-    """
-    """
-    if isinstance(spectrafiles, basestring):
-        import glob
-        spectrafiles = glob.glob(spectrafiles)
-
-    assert len(spectrafiles) > 0
-
-    # We are directly manipulating internal buffers of the shared memory 
-    # object, so it seems fine to use internal variables.
-
-    rank = 0
-    if shm._comm is not None:
-        rank = shm._comm.rank
-
-    offsets = shm.target_offsets
-
-    for sfile in spectrafiles:
-        hdus = None
-        nhdu = None
-        if rank == 0:
-            hdus = fits.open(sfile, memmap=True)
-            nhdu = len(hdus)
-            fmap = encode_table(Table(hdus["FIBERMAP"].data, 
-                copy=True).as_array())
-        if shm._comm is not None:
-            nhdu = shm._comm.bcast(nhdu, root=0)
-
-        for h in range(1, nhdu):
-            name = None
-            if rank == 0:
-                name = hdus[h].header["EXTNAME"]
-            if shm._comm is not None:
-                name = shm._comm.bcast(name, root=0)
-            # Find the band based on the name
-            mat = re.match(r"(.*)_(.*)", name)
-            if mat is None:
-                continue
-            band = mat.group(1).lower()
-            type = mat.group(2)
-
-            if type == "WAVELENGTH":
-                # This is a wavelength HDU, read it and update the
-                # data for all targets.  FIXME:  in the case of multiple
-                # spectra files, do we allow different wavelength ranges
-                # for the same band in different files?
-                wdata = None
-                if shm._root:
-                    wdata = hdus[h].data
-                for id in offsets.keys():
-                    tdict = offsets[id]
-                    for spc in tdict["spectra"]:
-                        begin = spc["wave"][0]
-                        shm.set(wdata, (begin,), fromrank=0)
-                del wdata
-            else:
-                # this is some other type of data, update the individual
-                # spectra.
-                nspec = None
-                if rank == 0:
-                    if type == "RESOLUTION":
-                        nspec = int(hdus[h].header["NAXIS3"])
-                    else:
-                        nspec = int(hdus[h].header["NAXIS2"])
-                if shm._comm is not None:
-                    nspec = shm._comm.bcast(nspec, root=0)
-
-                #need the global spec offset for this target, not just
-                # the offset in THIS FILE!!
-
-                for s in range(nspec):
-                    buffer = None
-                    if rank == 0:
-                        id = fmap[s]["TARGETID"]
-                    if shm._comm is not None:
-                        id = shm._comm.bcast(id, root=0)
-                    if id in offsets:
-                        tdict = offsets[id]
-                        for spc in tdict["spectra"]:
-                            if type == "FLUX":
-                                begin = spc["flux"][s][0]
-                                if shm._root:
-                                    buffer = hdus[h].data[s].ravel()
-                                shm.set(buffer, (begin,), fromrank=0)
-                            elif type == "IVAR":
-                                begin = spc["ivar"][s][0]
-                                if shm._root:
-                                    buffer = hdus[h].data[s].ravel()
-                                shm.set(buffer, (begin,), fromrank=0)
-                            elif type == "RESOLUTION":
-                                res = None
-                                if shm._root:
-                                    res = Resolution(hdus[h].data[s])
-                                begin = spc["rdata"][s][0]
-                                if shm._root:
-                                    buffer = res.data
-                                shm.set(buffer, (begin,), fromrank=0)
-                                begin = spc["roffsets"][s][0]
-                                if shm._root:
-                                    buffer = res.offsets.as_type(np.float64)
-                                shm.set(buffer, (begin,), fromrank=0)
-                                begin = spc["rshape"][s][0]
-                                if shm._root:
-                                    buffer = res.shape.as_type(np.float64)
-                                shm.set(buffer, (begin,), fromrank=0)
-        hdus.close()
+    zbest.write(outfile, format="fits", overwrite=True)
 
 
 def read_spectra(spectrafiles, targetids=None, spectrum_class=SimpleSpectrum):
@@ -453,6 +229,300 @@ def read_bricks(brickfiles, trueflux=False, targetids=None, spectrum_class=Simpl
     return targets, meta
 
 
+class MPISharedTargetsDesi(MPISharedTargets):
+
+    def __init__(self, comm, spectrafiles, targetids=None):
+        """
+        Collection of targets in MPI shared memory.
+
+        This stores a collection of targets that are read from DESI spectra
+        files in a buffered way.  Each HDU is stored unmodified in a separate
+        shared memory buffer.  The target list is then generated as aliases
+        into these shared memory locations.
+        
+        Args:
+            comm (mpi4py.MPI.Comm): the communicator to use (or None).
+            spectrafiles (list): the list of spectra files.
+            targetids (list): (optional) the target IDs to select.
+        """
+        super().__init__(comm)
+
+        # check the file list
+        if isinstance(spectrafiles, basestring):
+            import glob
+            spectrafiles = glob.glob(spectrafiles)
+
+        assert len(spectrafiles) > 0
+
+        self._spectrafiles = spectrafiles
+
+        # This is a dictionary (keyed on the filename) that stores the shared
+        # HDU data.
+
+        self._raw = OrderedDict()
+
+        # This is the mapping between specs to targets for each file
+
+        self._spec_to_target = {}
+        self._target_specs = {}
+        self._spec_keep = {}
+
+        # The bands for each file
+
+        self._bands = {}
+        self._band_map = {}
+
+        # Resolution matrix properties
+
+        self._res_shape = {}
+        self._res_data_size = {}
+        self._res_off_size = {}
+
+        # The full list of targets from all files
+
+        self._targetids = set()
+
+        self._bricknames = {}
+
+        # Loop over files
+
+        for sfile in spectrafiles:
+            self._raw[sfile] = OrderedDict()
+            hdus = None
+            nhdu = None
+            fmap = None
+            if self._root:
+                hdus = fits.open(sfile, memmap=True)
+                nhdu = len(hdus)
+                fmap = encode_table(Table(hdus["FIBERMAP"].data, 
+                    copy=True).as_array())
+            if self._comm is not None:
+                nhdu = self._comm.bcast(nhdu, root=0)
+                fmap = self._comm.bcast(fmap, root=0)
+
+            # Now every process has the fibermap and number of HDUs.  Build the
+            # mapping between spectral rows and target IDs.
+
+            keep_targetids = targetids
+            if targetids is None:
+                keep_targetids = fmap["TARGETID"]
+            self._targetids.update(keep_targetids)
+
+            if "BRICKNAME" in fmap.dtype.names:
+                self._bricknames.update({ x : y for x,y in \
+                    zip(fmap["TARGETID"], fmap["BRICKNAME"]) \
+                    if x in keep_targetids })
+            else:
+                self._bricknames.update({ x : "unknown" for x in \
+                    fmap["TARGETID"] if x in keep_targetids })
+
+            self._spec_to_target[sfile] = [ x if y in keep_targetids else -1 \
+                for x, y in enumerate(fmap["TARGETID"]) ]
+
+            self._spec_keep[sfile] = [ x for x in self._spec_to_target[sfile] \
+                if x >= 0 ]
+
+            self._target_specs[sfile] = {}
+            for id in keep_targetids:
+                self._target_specs[sfile][id] = [ x for x, y in \
+                    enumerate(fmap["TARGETID"]) if y == id ]
+
+            # Find the list of bands in this file
+
+            self._bands[sfile] = []
+            if self._root:
+                for h in range(nhdu):
+                    name = None
+                    if "EXTNAME" not in hdus[h].header:
+                        continue
+                    name = hdus[h].header["EXTNAME"]
+                    mat = re.match(r"(.*)_(.*)", name)
+                    if mat is None:
+                        continue
+                    band = mat.group(1).lower()
+                    if band not in self._bands[sfile]:
+                        self._bands[sfile].append(band)
+            if self._comm is not None:
+                self._bands[sfile] = self._comm.bcast(self._bands[sfile], 
+                    root=0)
+
+            b = 0
+            self._band_map[sfile] = {}
+            for band in self._bands[sfile]:
+                self._band_map[sfile][band] = b
+                b += 1
+
+            self._res_shape[sfile] = {}
+            self._res_data_size[sfile] = {}
+            self._res_off_size[sfile] = {}
+
+            # Iterate over the data in HDU order and copy into the raw data
+            # dictionary.  Only store spectra that match our list of targetids
+
+            for h in range(nhdu):
+                name = None
+                if self._root:
+                    if "EXTNAME" not in hdus[h].header:
+                        name = "none"
+                    else:
+                        name = hdus[h].header["EXTNAME"]
+                if self._comm is not None:
+                    name = self._comm.bcast(name, root=0)
+                # Find the band based on the name
+                mat = re.match(r"(.*)_(.*)", name)
+                if mat is None:
+                    # This is the fibermap or some other HDU we don't recognize
+                    continue
+                band = mat.group(1).lower()
+                type = mat.group(2)
+
+                dims = None
+                if self._root:
+                    dims = hdus[h].data.shape
+                    if len(dims) == 2 and dims[1] == 0:
+                        dims = (dims[0],)
+                    print("hdu {} {} has dims {}".format(h, hdus[h].header["EXTNAME"], dims), flush=True)
+                if self._comm is not None:
+                    dims = self._comm.bcast(dims, root=0)
+
+                if type == "WAVELENGTH":
+                    # This is a wavelength HDU, no need to slice it.
+                    self._raw[sfile][name] = MPIShared(dims, self._dtype, 
+                        self._comm)
+                    indata = None
+                    if self._root:
+                        indata = hdus[h].data.astype(np.float64)
+                        print("data {} has shape {}".format(h, indata.shape), flush=True)
+                    self._raw[sfile][name].set(indata, (0,), 
+                        fromrank=0)
+
+                elif type == "RESOLUTION":
+                    # This is a resolution matrix.  Instead of storing 
+                    # the raw HDU data, we want to store scipy sparse matrix
+                    # data so it is not duplicated later when we reconstruct 
+                    # the spectra for the target list.
+                    rows = self._spec_keep[sfile]
+                    if np.count_nonzero(rows) == 0:
+                        continue
+
+                    # Root process is going to construct the resolution matrix
+                    # for every spectrum, so that we can store those buffers
+                    # in memory.
+
+                    resshape = None
+                    resdatasize = None
+                    resoffsize = None
+                    if self._root:
+                        testres = Resolution(hdus[h].data[rows[0]])
+                        resshape = testres.shape
+                        resoffsize = len(testres.offsets.ravel())
+                        resdatasize = len(testres.data.ravel())
+                        print("res data dims = {},{}".format(len(rows), resoffsize + resdatasize), flush=True)
+                    if self._comm is not None:
+                        resshape = self._comm.bcast(resshape, root=0)
+                        resoffsize = self._comm.bcast(resoffsize, root=0)
+                        resdatasize = self._comm.bcast(resdatasize, root=0)
+
+                    self._res_shape[sfile][band] = resshape
+                    self._res_off_size[sfile][band] = resoffsize
+                    self._res_data_size[sfile][band] = resdatasize
+
+                    self._raw[sfile][name] = MPIShared(
+                        (len(rows), resoffsize + resdatasize),
+                        self._dtype, self._comm)
+
+                    for row in rows:
+                        resdata = None
+                        if self._root:
+                            res = Resolution(hdus[h].data[row])
+                            resdata = np.concatenate( \
+                                (res.offsets.astype(np.float64).ravel(), \
+                                res.data.astype(np.float64).ravel()) \
+                                ).reshape((1,-1))
+                        self._raw[sfile][name].set(resdata, (row,0), 
+                            fromrank=0)
+
+                else:
+                    # This contains per-spectrum data.  Slice at the highest
+                    # dimension to include only selected targets.
+                    rows = self._spec_keep[sfile]
+                    if np.count_nonzero(rows) == 0:
+                        continue
+
+                    self._raw[sfile][name] = MPIShared((len(rows), dims[1]),
+                        self._dtype, self._comm)
+
+                    indata = None
+                    if self._root:
+                        indata = hdus[h].data[rows].astype(np.float64)
+                    self._raw[sfile][name].set(indata, (0,0), 
+                        fromrank=0)
+
+        self._meta_dtype = [('BRICKNAME', 'S8'),]
+        self._meta = np.zeros(len(self._bricknames), dtype=self._meta_dtype)
+        self._meta['BRICKNAME'] = [ self._bricknames[x] for x \
+            in sorted(self._targetids) ]
+
+
+    @property
+    def meta(self):
+        return self._meta
+
+
+    def _get_targets(self):
+        """
+        Generates a set of targets from the shared memory buffers.
+
+        This is called by the base class targets().
+        """
+        targets = list()
+
+        for id in sorted(self._targetids):
+            speclist = list()
+            for sfile in self._spectrafiles:
+                if id not in self._target_specs[sfile]:
+                    # nothing in this file
+                    if self._root:
+                        print("skipping id {}, not in file".format(id), flush=True)
+                    continue
+                rows = self._target_specs[sfile][id]
+                if self._root:
+                    print("id {} in rows {}".format(id, ",".join(["{}".format(x) for x in rows ])),flush=True)
+                memrow = 0
+                for row in rows:
+                    if self._root:
+                        print("Building spec wrapper for {}, row {}".format(id, row), flush=True)
+                    for band in self._bands[sfile]:
+                        wave_name = "{}_WAVELENGTH".format(band.upper())
+                        flux_name = "{}_FLUX".format(band.upper())
+                        ivar_name = "{}_IVAR".format(band.upper())
+                        res_name = "{}_RESOLUTION".format(band.upper())
+                        wave_data = self._raw[sfile][wave_name][:]
+                        flux_data = self._raw[sfile][flux_name][memrow][:]
+                        ivar_data = None
+                        if ivar_name in self._raw[sfile]:
+                            ivar_data = self._raw[sfile][ivar_name][memrow][:]
+                        resmat = None
+                        if res_name in self._raw[sfile]:
+                            res_off = self._raw[sfile][res_name][memrow]\
+                                [0:self._res_off_size[sfile][band]].astype(\
+                                np.int64)
+                            res_data = self._raw[sfile][res_name][memrow]\
+                                [self._res_off_size[sfile][band]:].reshape(\
+                                (len(res_off),-1))
+                            resmat = scipy.sparse.dia_matrix((res_data, 
+                                res_off), shape=self._res_shape[sfile][band])
+                        speclist.append( SimpleSpectrum(wave_data, flux_data,
+                            ivar_data, resmat) 
+                        )
+                    memrow += 1
+            # Create the Target from the list of spectra.  The
+            # coadd is created on construction.
+            targets.append(Target(id, speclist, coadd=None))
+
+        return targets
+
+
 def rrdesi(options=None, comm=None):
     import optparse
     from astropy.io import fits
@@ -525,14 +595,13 @@ def rrdesi(options=None, comm=None):
 
     # Call zfind differently depending on our type of parallelism.
 
+    meta = None
     if comm is not None:
         # Use MPI
-        offsets, nelem = desi_target_offsets(infiles)
-        shared_targets = MPISharedTargets(nelem, offsets, comm)
-        read_spectra_shared(shared_targets, infiles)
-
-        zscan, zfit = zfind(shared_targets.targets, templates, 
-            ncpu=None, comm=comm)
+        with MPISharedTargetsDesi(comm, infiles) as shared_targets:
+            meta = shared_targets.meta
+            zscan, zfit = zfind(shared_targets.targets, templates, 
+            ncpu=None, comm=shared_targets.comm)
     else:
         # Use pure multiprocessing
         try:

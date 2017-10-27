@@ -137,70 +137,17 @@ class SimpleSpectrum(object):
         self.wavehash = hash((len(wave), wave[0], wave[1], wave[-2], wave[-1]))
 
 
-def target_offsets(targets):
-    """
-    Construct a dictionary of buffer offsets.
-
-    This examines the sizes of the data for a list of existing targets and
-    creates a dictionary of offsets to use when packing these into a contiguous
-    memory buffer.  Offsets are computed for the wave, flux, ivar, rdata, 
-    roffsets and rshape data members.
-
-    The dictionary structure is
-    { target_id_1 : { "spectra" : [ {"wave" : [b,e] , "flux" : [b,e] ,  ....}
-    , ... ]} , "coadd" : [ ... ]},  target_id_2 : ... }, i.e. a dictionary of
-    targets identified by their id.
-    
-    Each target has two list of spectra labeled "spectra" and "coadd".  Each
-    spectrum in the two lists of spectra is a dictionary containing, for the
-    keys "wave", "flux", "ivar", "rdata", "roffsets" and "rshape", the begin
-    and end index of the array in the shared memory buffer.
-    
-    Args:
-        targets (list): the list of targets.
-
-    Returns:
-        - dictionary
-        - number of double precision elements in the memory buffer.
-    """
-    n = 0
-    dictionary = OrderedDict() # keep targets as ordered in list
-    for target in targets:
-        dictionary[target.id] = {}
-        for spectra_label, spectra in zip(["spectra", "coadd"], 
-            [target.spectra, target.coadd]):
-            spectra_list = list()
-            for spectrum in spectra :
-                spectrum_dict = {}
-                for label, asize in zip(["wave","flux","ivar","rdata",
-                    "roffsets","rshape"], [spectrum.wave.size, 
-                    spectrum.flux.size, spectrum.ivar.size, 
-                    spectrum.R.data.size, spectrum.R.offsets.size,
-                    len(spectrum.R.shape)]):
-                    spectrum_dict[label] = [n, n + asize]
-                    n += asize
-                spectra_list.append(spectrum_dict)
-            dictionary[target.id][spectra_label] = spectra_list
-    return dictionary, n
-
-
 class MPISharedTargets(object):
 
-    def __init__(self, size, offsets, comm):
+    def __init__(self, comm):
         """
         Collection of targets in MPI shared memory.
 
-        This class wraps a buffer of MPI shared memory that is constructed
-        for a specific set of targets (with specific sizes and data
-        dimensions).  After construction, the target data is populated
-        either directly or by calling the insert method.
-        
+        This base class defines the interface needed by higher-level
+        shared target objects which might store target lists from objects
+        in regular memory or load data from a file.
+
         Args:
-            size (int): the number of double precision elements in the
-                memory buffer.
-            offsets (dict): the dictionary of buffer offsets for each target
-                and its different data vectors.  See target_offsets() for
-                more details.
             comm (mpi4py.MPI.Comm): the communicator to use (or None).
         """
         self._comm = comm
@@ -212,22 +159,9 @@ class MPISharedTargets(object):
         elif self._comm.rank == 0:
             self._root = True
 
-        # We are going to pack the target data into one big memory buffer.
-        # First compute the displacements of the data for each target.
-
-        self._target_dictionary = offsets
-        self._bufsize = size
-        
-        if self._comm is not None:
-            self._target_dictionary = self._comm.bcast(self._target_dictionary,
-                root=0)
-            self._bufsize = self._comm.bcast(self._bufsize, root=0)
-
-        # Allocate the shared buffer
-        self._shared = MPIShared((self._bufsize,), self._dtype, self._comm)
-
-        self._targets = None
         self._remapped = False
+        self._targets = None
+
 
     def __del__(self):
         self.close()
@@ -243,6 +177,10 @@ class MPISharedTargets(object):
         return
 
     @property
+    def comm(self):
+        return self._comm
+
+    @property
     def targets(self):
         """
         Return the re-mapped target list.
@@ -252,6 +190,55 @@ class MPISharedTargets(object):
             self._remapped = True
         return self._targets
 
+    def _get_targets(self):
+        """
+        This internal function should be overloaded by derived classes that
+        store shared targets in a specific way.  We raise an exception here
+        to ensure that no one tries to use the base class directly.
+        """
+        raise NotImplementedError("You should not instantiate an MPISharedTargets base class directly.")
+        return None
+
+
+class MPISharedTargetsCopy(MPISharedTargets):
+
+    def __init__(self, comm, targets):
+        """
+        Collection of targets in MPI shared memory.
+
+        This stores a collection of targets that are copied into shared
+        memory from "normal" per-process memory.  This can be used for a
+        small number of targets that can fit into per-process memory at
+        one time.
+        
+        Args:
+            comm (mpi4py.MPI.Comm): the communicator to use (or None).
+            targets (list): the list of targets.
+        """
+        super().__init__(comm)
+
+        # We are going to pack the target data into one big memory buffer.
+        # First compute the displacements of the data for each target.
+
+        self._target_dictionary = None
+        self._bufsize = None
+
+        if self._root:
+            self._target_dictionary, self._bufsize = \
+                self._target_offsets(targets)
+        
+        if self._comm is not None:
+            self._target_dictionary = self._comm.bcast(self._target_dictionary,
+                root=0)
+            self._bufsize = self._comm.bcast(self._bufsize, root=0)
+
+        # Allocate the shared buffer
+        self._shared = MPIShared((self._bufsize,), self._dtype, self._comm)
+
+        # Fill the shared buffer
+        self._fill(targets)
+
+
     @property
     def target_offsets(self):
         """
@@ -259,7 +246,8 @@ class MPISharedTargets(object):
         """
         return self._target_dictionary
 
-    def insert(self, targets):
+
+    def _fill(self, targets):
         """
         Copy the specified target data into the shared memory.
 
@@ -296,12 +284,61 @@ class MPISharedTargets(object):
                     specnum += 1
         return
 
+    def _target_offsets(self, targets):
+        """
+        Construct a dictionary of buffer offsets.
+
+        This examines the sizes of the data for a list of existing targets and
+        creates a dictionary of offsets to use when packing these into a
+        contiguous memory buffer.  Offsets are computed for the wave, flux,
+        ivar, rdata, roffsets and rshape data members.
+
+        The dictionary structure is
+        { target_id_1 : { "spectra" : [ {"wave" : [b,e] , "flux" : [b,e] ,
+            ....}, ... ]} , "coadd" : [ ... ]},  target_id_2 : ... }, 
+        i.e. a dictionary of targets identified by their id.
+        
+        Each target has two list of spectra labeled "spectra" and "coadd". 
+        Each spectrum in the two lists of spectra is a dictionary containing,
+        for the keys "wave", "flux", "ivar", "rdata", "roffsets" and "rshape",
+        the begin and end index of the array in the shared memory buffer.
+        
+        Args:
+            targets (list): the list of targets.
+
+        Returns:
+            - dictionary
+            - number of double precision elements in the memory buffer.
+        """
+        n = 0
+        dictionary = OrderedDict() # keep targets as ordered in list
+        for target in targets:
+            dictionary[target.id] = {}
+            for spectra_label, spectra in zip(["spectra", "coadd"], 
+                [target.spectra, target.coadd]):
+                spectra_list = list()
+                for spectrum in spectra :
+                    spectrum_dict = {}
+                    for label, asize in zip(["wave","flux","ivar","rdata",
+                        "roffsets","rshape"], [spectrum.wave.size, 
+                        spectrum.flux.size, spectrum.ivar.size, 
+                        spectrum.R.data.size, spectrum.R.offsets.size,
+                        len(spectrum.R.shape)]):
+                        spectrum_dict[label] = [n, n + asize]
+                        n += asize
+                    spectra_list.append(spectrum_dict)
+                dictionary[target.id][spectra_label] = spectra_list
+        return dictionary, n
+
     def _get_targets(self):
         """
-        Generates a set of targets from a shared memory buffer, using
-        self._target_dictionary to get the list of target ids, the number
-        spectra, and the addresses in the memory of each array that defines
-        a spectrum (wave, flux, ivar, rdata).
+        Generates a set of targets from a shared memory buffer.
+
+        This uses using self._target_dictionary to get the list of target ids,
+        the number of spectra, and the addresses in the memory of each array
+        that defines a spectrum (wave, flux, ivar, rdata).
+
+        This is called by the base class targets().
         """
         targets = list()
         for id, tdict in self._target_dictionary.items():
