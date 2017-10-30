@@ -133,7 +133,8 @@ class SimpleSpectrum(object):
         self.flux=flux
         self.ivar=ivar
         self.R=R
-        self.Rcsr = self.R.tocsr()
+        self.Rcsr = R
+        #self.Rcsr = self.R.tocsr()
         self.wavehash = hash((len(wave), wave[0], wave[1], wave[-2], wave[-1]))
 
 
