@@ -62,6 +62,24 @@ class Template(object):
         flux = self.flux.T.dot(coeff).T / (1+z)
         return trapz_rebin(self.wave*(1+z), flux, wave)
 
+    def add_broadband(self,degree):
+        '''
+        Add polynomial terms to this templates.
+        The templates will be added as if they were PCA components.
+        '''
+        if hasattr(self,'broadband'):
+            raise Exception("Multiple calls to broadband not allowed")
+
+        self.broadband = True
+        wave = (self.wave-self.wave.min())/(self.wave.max()-self.wave.min())
+        norm = self.flux[0].sum()
+        for deg in range(degree+1):
+            bb = wave**deg
+            ## adjust the normalization to the first PCA component:
+            bb *= norm/bb.sum()
+
+            self.flux = np.vstack((self.flux,bb))
+            self.nbasis += 1
         
 class MultiprocessingSharedSpectrum(object):
 
