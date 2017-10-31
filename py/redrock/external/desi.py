@@ -266,6 +266,7 @@ class MPISharedTargetsDesi(MPISharedTargets):
         self._spec_to_target = {}
         self._target_specs = {}
         self._spec_keep = {}
+        self._spec_sliced = {}
 
         # The bands for each file
 
@@ -316,11 +317,24 @@ class MPISharedTargetsDesi(MPISharedTargets):
                 self._bricknames.update({ x : "unknown" for x in \
                     fmap["TARGETID"] if x in keep_targetids })
 
+            # This is the spectral row to target mapping using the original
+            # global indices (before slicing).
+
             self._spec_to_target[sfile] = [ x if y in keep_targetids else -1 \
                 for x, y in enumerate(fmap["TARGETID"]) ]
 
+            # The reduced set of spectral rows.
+
             self._spec_keep[sfile] = [ x for x in self._spec_to_target[sfile] \
                 if x >= 0 ]
+
+            # The mapping between original spectral indices and the sliced ones
+
+            self._spec_sliced[sfile] = { x: y for y, x in \
+                enumerate(self._spec_keep[sfile]) }
+
+            # For each target, store the sliced row index of all spectra,
+            # so that we can do a fast lookup later.
 
             self._target_specs[sfile] = {}
             for id in keep_targetids:
@@ -488,10 +502,10 @@ class MPISharedTargetsDesi(MPISharedTargets):
                 rows = self._target_specs[sfile][id]
                 if self._root:
                     print("id {} in rows {}".format(id, ",".join(["{}".format(x) for x in rows ])),flush=True)
-                memrow = 0
                 for row in rows:
+                    memrow = self._spec_sliced[sfile][row]
                     if self._root:
-                        print("Building spec wrapper for {}, row {}".format(id, row), flush=True)
+                        print("Building spec wrapper for {}, row {}, memrow {}".format(id, row, memrow), flush=True)
                     for band in self._bands[sfile]:
                         wave_name = "{}_WAVELENGTH".format(band.upper())
                         flux_name = "{}_FLUX".format(band.upper())
@@ -515,7 +529,6 @@ class MPISharedTargetsDesi(MPISharedTargets):
                         speclist.append( SimpleSpectrum(wave_data, flux_data,
                             ivar_data, resmat) 
                         )
-                    memrow += 1
             # Create the Target from the list of spectra.  The
             # coadd is created on construction.
             targets.append(Target(id, speclist, coadd=None))
