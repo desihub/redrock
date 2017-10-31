@@ -395,7 +395,6 @@ class MPISharedTargetsDesi(MPISharedTargets):
                     dims = hdus[h].data.shape
                     if len(dims) == 2 and dims[1] == 0:
                         dims = (dims[0],)
-                    print("hdu {} {} has dims {}".format(h, hdus[h].header["EXTNAME"], dims), flush=True)
                 if self._comm is not None:
                     dims = self._comm.bcast(dims, root=0)
 
@@ -406,7 +405,6 @@ class MPISharedTargetsDesi(MPISharedTargets):
                     indata = None
                     if self._root:
                         indata = hdus[h].data.astype(np.float64)
-                        print("data {} has shape {}".format(h, indata.shape), flush=True)
                     self._raw[sfile][name].set(indata, (0,), 
                         fromrank=0)
 
@@ -431,7 +429,6 @@ class MPISharedTargetsDesi(MPISharedTargets):
                         resshape = testres.shape
                         resoffsize = len(testres.offsets.ravel())
                         resdatasize = len(testres.data.ravel())
-                        print("res data dims = {},{}".format(len(rows), resoffsize + resdatasize), flush=True)
                     if self._comm is not None:
                         resshape = self._comm.bcast(resshape, root=0)
                         resoffsize = self._comm.bcast(resoffsize, root=0)
@@ -496,16 +493,10 @@ class MPISharedTargetsDesi(MPISharedTargets):
             for sfile in self._spectrafiles:
                 if id not in self._target_specs[sfile]:
                     # nothing in this file
-                    if self._root:
-                        print("skipping id {}, not in file".format(id), flush=True)
                     continue
                 rows = self._target_specs[sfile][id]
-                if self._root:
-                    print("id {} in rows {}".format(id, ",".join(["{}".format(x) for x in rows ])),flush=True)
                 for row in rows:
                     memrow = self._spec_sliced[sfile][row]
-                    if self._root:
-                        print("Building spec wrapper for {}, row {}, memrow {}".format(id, row, memrow), flush=True)
                     for band in self._bands[sfile]:
                         wave_name = "{}_WAVELENGTH".format(band.upper())
                         flux_name = "{}_FLUX".format(band.upper())
