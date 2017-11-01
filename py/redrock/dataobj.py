@@ -425,10 +425,10 @@ class Target(object):
 
         if coadd is None:
             #- Make a basic coadd
-            compute_coadd(spectra, 
+            self.coadd = compute_coadd(spectra, 
                 spectrum_class=MultiprocessingSharedSpectrum)
         else :
-            self.coadd=coadd
+            self.coadd = coadd
 
 
     def sharedmem_pack(self):
