@@ -127,14 +127,15 @@ class MultiprocessingSharedSpectrum(object):
 
 class SimpleSpectrum(object):
 
-    def __init__(self, wave, flux, ivar, R):
+    def __init__(self, wave, flux, ivar, R, Rcsr=None):
         self.nwave=wave.size
         self.wave=wave
         self.flux=flux
         self.ivar=ivar
         self.R=R
-        self.Rcsr = R
-        #self.Rcsr = self.R.tocsr()
+        self.Rcsr = Rcsr
+        if self.Rcsr is None:
+            self.Rcsr = self.R.tocsr()
         self.wavehash = hash((len(wave), wave[0], wave[1], wave[-2], wave[-1]))
 
 
