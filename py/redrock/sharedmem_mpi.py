@@ -253,8 +253,7 @@ class MPIShared(object):
             if comm.rank == 0:
                 print("MPIShared: one or more processes failed: {}".format(
                     msg))
-                sys.stdout.flush()
-                comm.Abort()
+            comm.Abort()
         return
 
 
@@ -291,27 +290,32 @@ class MPIShared(object):
 
         if self._rank == fromrank:
             if len(data.shape) != len(self._shape):
-                msg = "data has incompatible number of dimensions"
+                if len(data.shape) != len(self._shape):
+                    msg = "input data dimensions {} incompatible with "\
+                        "buffer ({})".format(len(data.shape), len(self._shape))
                 if self._comm is not None:
                     print(msg)
                     sys.stdout.flush()
-                    #self._comm.Abort()
+                    self._comm.Abort()
                 else:
                     raise RuntimeError(msg)
             if len(offset) != len(self._shape):
-                msg = "offset tuple has incompatible number of dimensions"
+                msg = "input offset dimensions {} incompatible with "\
+                    "buffer ({})".format(len(offset), len(self._shape))
                 if self._comm is not None:
                     print(msg)
                     sys.stdout.flush()
-                    #self._comm.Abort()
+                    self._comm.Abort()
                 else:
                     raise RuntimeError(msg)
             if data.dtype != self._dtype:
-                msg = "input data has different type than shared array"
+                msg = "input data type ({}, {}) incompatible with "\
+                    "buffer ({}, {})".format(data.dtype.str, data.dtype.num,
+                    self._dtype.str, self._dtype.num)
                 if self._comm is not None:
                     print(msg)
                     sys.stdout.flush()
-                    #self._comm.Abort()
+                    self._comm.Abort()
                 else:
                     raise RuntimeError(msg)
 

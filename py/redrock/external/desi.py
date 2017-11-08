@@ -294,7 +294,14 @@ class MPISharedTargetsDesi(MPISharedTargets):
 
         # Loop over files
 
+        self._shm_size = {}
+
         for sfile in spectrafiles:
+            self._shm_size[sfile] = 0.
+            if self._root:
+                print("INFO: reading {} into shared memory".format(sfile))
+                sys.stdout.flush()
+
             self._raw[sfile] = OrderedDict()
             hdus = None
             nhdu = None
@@ -410,6 +417,8 @@ class MPISharedTargetsDesi(MPISharedTargets):
                     indata = None
                     if self._root:
                         indata = hdus[h].data.astype(np.float64)
+                        self._shm_size[sfile] += np.dtype(np.float64).itemsize\
+                            * dims[0]
                     self._raw[sfile][name].set(indata, (0,), 
                         fromrank=0)
 
@@ -430,31 +439,68 @@ class MPISharedTargetsDesi(MPISharedTargets):
                     resshape = None
                     resdia_datasize = None
                     resdia_offsize = None
+                    resdia_off_dtype = None
+                    resdia_data_dtype = None
+
                     rescsr_datasize = None
                     rescsr_indxsize = None
                     rescsr_iptrsize = None
+                    rescsr_indx_dtype = None
+                    rescsr_iptr_dtype = None
+                    rescsr_data_dtype = None
 
                     if self._root:
+                        # Create a single resolution matrix from one row
                         testdia = Resolution(hdus[h].data[rows[0]])
-                        testcsr = testdia.tocsr()
 
-                        resshape = testdia.shape
+                        resshape = testdia.data.shape
                         resdia_offsize = len(testdia.offsets.ravel())
                         resdia_datasize = len(testdia.data.ravel())
+                        resdia_off_dtype = np.dtype(testdia.offsets.dtype)
+                        resdia_data_dtype = np.dtype(np.float64)
+
+                        self._shm_size[sfile] += len(rows) * \
+                            resdia_off_dtype.itemsize * resdia_offsize
+                        self._shm_size[sfile] += len(rows) * \
+                            resdia_data_dtype.itemsize * resdia_datasize
+                        
+                        testcsr = testdia.tocsr()
+                        rescsr_indx_dtype = np.dtype(testcsr.indices.dtype)
+                        rescsr_iptr_dtype = np.dtype(testcsr.indptr.dtype)
+                        rescsr_data_dtype = np.dtype(np.float64)
+
                         rescsr_indxsize = len(testcsr.indices)
                         rescsr_iptrsize = len(testcsr.indptr)
-                        rescsr_datasize = len(testcsr.data)
+                        rescsr_datasize = len(testcsr.data.ravel())
+
+                        self._shm_size[sfile] += len(rows) * \
+                            rescsr_indx_dtype.itemsize * rescsr_indxsize
+                        self._shm_size[sfile] += len(rows) * \
+                            rescsr_iptr_dtype.itemsize * rescsr_iptrsize
+                        self._shm_size[sfile] += len(rows) * \
+                            rescsr_data_dtype.itemsize * rescsr_datasize
+
                     if self._comm is not None:
                         resshape = self._comm.bcast(resshape, root=0)
                         resdia_offsize = self._comm.bcast(resdia_offsize, 
                             root=0)
                         resdia_datasize = self._comm.bcast(resdia_datasize, 
                             root=0)
+                        resdia_off_dtype = self._comm.bcast(resdia_off_dtype,
+                            root=0)
+                        resdia_data_dtype = self._comm.bcast(resdia_data_dtype,
+                            root=0)
                         rescsr_indxsize = self._comm.bcast(rescsr_indxsize, 
                             root=0)
                         rescsr_iptrsize = self._comm.bcast(rescsr_iptrsize, 
                             root=0)
                         rescsr_datasize = self._comm.bcast(rescsr_datasize, 
+                            root=0)
+                        rescsr_indx_dtype = self._comm.bcast(rescsr_indx_dtype,
+                            root=0)
+                        rescsr_iptr_dtype = self._comm.bcast(rescsr_iptr_dtype,
+                            root=0)
+                        rescsr_data_dtype = self._comm.bcast(rescsr_data_dtype,
                             root=0)
 
                     self._res_shape[sfile][band] = resshape
@@ -471,23 +517,23 @@ class MPISharedTargetsDesi(MPISharedTargets):
                         "{}_RESOLUTION_CSR_IPTR".format(band.upper())
 
                     self._raw[sfile][res_diadata_name] = MPIShared(
-                        (len(rows), resdia_datasize), np.dtype(np.float64),
+                        (len(rows), resdia_datasize), resdia_data_dtype,
                         self._comm)
 
                     self._raw[sfile][res_diaoff_name] = MPIShared(
-                        (len(rows), resdia_offsize), np.dtype(np.int64),
+                        (len(rows), resdia_offsize), resdia_off_dtype,
                         self._comm)
 
                     self._raw[sfile][res_csrdata_name] = MPIShared(
-                        (len(rows), rescsr_datasize), np.dtype(np.float64),
+                        (len(rows), rescsr_datasize), rescsr_data_dtype,
                         self._comm)
 
                     self._raw[sfile][res_csrindx_name] = MPIShared(
-                        (len(rows), rescsr_indxsize), np.dtype(np.int64),
+                        (len(rows), rescsr_indxsize), rescsr_indx_dtype,
                         self._comm)
 
                     self._raw[sfile][res_csriptr_name] = MPIShared(
-                        (len(rows), rescsr_iptrsize), np.dtype(np.int64),
+                        (len(rows), rescsr_iptrsize), rescsr_iptr_dtype,
                         self._comm)
 
                     for row in rows:
@@ -498,14 +544,23 @@ class MPISharedTargetsDesi(MPISharedTargets):
                         csriptr = None
                         if self._root:
                             dia = Resolution(hdus[h].data[row])
-                            csr = testdia.tocsr()
+                            csr = dia.tocsr()
 
-                            diadata = dia.data.astype(np.float64).reshape(1,-1)
-                            diaoff = dia.offsets.astype(np.int64).reshape(1,-1)
-                            csrdata = csr.data.astype(np.float64).reshape(1,-1)
-                            csrindx = csr.indices.astype(np.int64)\
-                                .reshape(1,-1)
-                            csriptr = csr.indptr.astype(np.int64).reshape(1,-1)
+                            diadata = dia.data.ravel().copy()\
+                                .astype(resdia_data_dtype)
+                            diadata.shape = (1, resdia_datasize)
+                            diaoff = dia.offsets.copy()\
+                                .astype(resdia_off_dtype)
+                            diaoff.shape = (1, resdia_offsize)
+                            
+                            csrdata = csr.data.copy().astype(rescsr_data_dtype)
+                            csrdata.shape = (1, rescsr_datasize)
+                            csrindx = csr.indices.copy()\
+                                .astype(rescsr_indx_dtype)
+                            csrindx.shape = (1, rescsr_indxsize)
+                            csriptr = csr.indptr.copy()\
+                                .astype(rescsr_iptr_dtype)
+                            csriptr.shape = (1, rescsr_iptrsize)
 
                         self._raw[sfile][res_diadata_name].set(diadata, 
                             (row, 0), fromrank=0)
@@ -535,8 +590,14 @@ class MPISharedTargetsDesi(MPISharedTargets):
                     indata = None
                     if self._root:
                         indata = hdus[h].data[rows].astype(np.float64)
+                        self._shm_size[sfile] += np.dtype(np.float64).itemsize\
+                            * len(rows) * dims[1]
                     self._raw[sfile][name].set(indata, (0,0), 
                         fromrank=0)
+            if self._root:
+                print("INFO:   data uses {:0.1f}MB of shared memory".format(\
+                    self._shm_size[sfile] / (1024.0 * 1024.0)))
+                sys.stdout.flush()
 
         self._meta_dtype = [('BRICKNAME', 'S8'),]
         self._meta = np.zeros(len(self._bricknames), dtype=self._meta_dtype)
@@ -580,32 +641,115 @@ class MPISharedTargetsDesi(MPISharedTargets):
                             band.upper())
                         res_csriptr_name = "{}_RESOLUTION_CSR_IPTR".format(\
                             band.upper())
-                        wave_data = self._raw[sfile][wave_name][:]
-                        flux_data = self._raw[sfile][flux_name][memrow][:]
+                        wave_data = np.array(self._raw[sfile][wave_name]._data)
+                        flux_data = np.array(self._raw[sfile][flux_name]\
+                            ._data[memrow])
                         ivar_data = None
                         if ivar_name in self._raw[sfile]:
-                            ivar_data = self._raw[sfile][ivar_name][memrow][:]
+                            ivar_data = np.array(self._raw[sfile][ivar_name]\
+                                ._data[memrow])
                         resdia = None
                         rescsr = None
                         if res_diadata_name in self._raw[sfile]:
-                            res_dia_off = self._raw[sfile][res_diaoff_name]\
-                                [memrow]
+                            ndiag = self._res_shape[sfile][band][0]
+                            spdim = self._res_shape[sfile][band][1]
+                            
+                            res_dia_off = np.array(\
+                                self._raw[sfile][res_diaoff_name]\
+                                ._data[memrow])
+                            
                             res_dia_data = self._raw[sfile][res_diadata_name]\
-                                [memrow].reshape((len(res_dia_off),-1))
+                                ._data[memrow].view()
+                            res_dia_data.shape = (ndiag, spdim)
+                            
                             resdia = scipy.sparse.dia_matrix((res_dia_data, 
-                                res_dia_off), 
-                                shape=self._res_shape[sfile][band], 
-                                dtype=np.float64)
-                            res_csr_indx = self._raw[sfile][res_csrindx_name]\
-                                [memrow]
-                            res_csr_iptr = self._raw[sfile][res_csriptr_name]\
-                                [memrow]
-                            res_csr_data = self._raw[sfile][res_csrdata_name]\
-                                [memrow]
+                                res_dia_off), shape=(spdim, spdim), copy=False)
+
+                            # Verify that we constructed the dia matrix
+                            # from the buffers without copying.
+                            diaoffp, rf = \
+                                res_dia_off.__array_interface__['data']
+                            diadatp, rf = \
+                                res_dia_data.__array_interface__['data']
+                            sdiaoffp, rf = \
+                                resdia.offsets.__array_interface__['data']
+                            sdiadatp, rf = \
+                                resdia.data.__array_interface__['data']
+                            if (diaoffp != sdiaoffp) or \
+                                (diadatp != sdiadatp):
+                                print("Proc {}, file {}, band {}, spectrum {}"\
+                                    .format(self._comm.rank, sfile, band,
+                                    memrow))
+                                print("  data was copied:")
+                                print("  off:  {} {} {}".format(\
+                                    res_dia_off.shape, \
+                                    res_dia_off.dtype.str, diaoffp))
+                                print("  data:  {} {} {}".format(\
+                                    res_dia_data.shape, \
+                                    res_dia_data.dtype.str, diadatp))
+                                print("  diaoff:  {} {} {}".format(\
+                                    resdia.offsets.shape, \
+                                    resdia.offsets.dtype.str, sdiaoffp))
+                                print("  diadata:  {} {} {}".format(\
+                                    resdia.data.shape, \
+                                    resdia.data.dtype.str, sdiadatp))
+                                sys.stdout.flush()
+                                self._comm.Abort()
+                            
+                            res_csr_indx = np.array(self._raw[sfile]\
+                                [res_csrindx_name]._data[memrow])
+
+                            res_csr_iptr = np.array(self._raw[sfile]\
+                                [res_csriptr_name]._data[memrow])
+
+                            res_csr_data = np.array(self._raw[sfile]\
+                                [res_csrdata_name]._data[memrow])
+
                             rescsr = scipy.sparse.csr_matrix((res_csr_data, 
-                                res_csr_indx, res_csr_iptr), 
-                                shape=self._res_shape[sfile][band], 
-                                dtype=np.float64)
+                                res_csr_indx, res_csr_iptr), copy=False)
+
+                            # Verify that we constructed the csr matrix
+                            # from the buffers without copying.
+                            csrindxp, rf = \
+                                res_csr_indx.__array_interface__['data']
+                            csriptrp, rf = \
+                                res_csr_iptr.__array_interface__['data']
+                            csrdatp, rf = \
+                                res_csr_data.__array_interface__['data']
+                            scsrindxp, rf = \
+                                rescsr.indices.__array_interface__['data']
+                            scsriptrp, rf = \
+                                rescsr.indptr.__array_interface__['data']
+                            scsrdatp, rf = \
+                                rescsr.data.__array_interface__['data']
+                            if (csrindxp != scsrindxp) or \
+                                (csriptrp != scsriptrp) or \
+                                (csrdatp != scsrdatp):
+                                print("Proc {}, file {}, band {}, spectrum {}"\
+                                    .format(self._comm.rank, sfile, band,
+                                    memrow))
+                                print("  data was copied:")
+                                print("  indices:  {} {} {}".format(\
+                                    res_csr_indx.shape, \
+                                    res_csr_indx.dtype.num, csrindxp))
+                                print("  indptr:  {} {} {}".format(\
+                                    res_csr_iptr.shape, \
+                                    res_csr_iptr.dtype.num, csriptrp))
+                                print("  data:  {} {} {}".format(\
+                                    res_csr_data.shape, \
+                                    res_csr_data.dtype.num, csrdatp))
+                                print("  csrindices:  {} {} {}".format(\
+                                    rescsr.indices.shape, \
+                                    rescsr.indices.dtype.num, scsrindxp))
+                                print("  csrindptr:  {} {} {}".format(\
+                                    rescsr.indptr.shape, \
+                                    rescsr.indptr.dtype.num, scsriptrp))
+                                print("  csrdata:  {} {} {}".format(\
+                                    rescsr.data.shape, \
+                                    rescsr.data.dtype.num, scsrdatp))
+                                sys.stdout.flush()
+                                self._comm.Abort()
+
                         speclist.append( SimpleSpectrum(wave_data, flux_data,
                             ivar_data, resdia, Rcsr=rescsr) )
 
