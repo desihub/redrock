@@ -48,6 +48,12 @@ def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
     ncpu is number of multiprocessing processes to use
     '''
 
+    if len(targets) == 0:
+        raise ValueError('Input target list is empty')
+
+    if len(redshifts) == 0:
+        raise ValueError('Input redshift array is empty')
+
     import multiprocessing as mp
     if ncpu is None:
         ncpu = mp.cpu_count()
