@@ -4,7 +4,7 @@ from:
 
 https://github.com/tskisner/mpi_shmem
 
-revision:  c10498f227db809365c362e13d18a77a429a09ae
+revision:  1479ed76de927b61b896398335569a0c70db7916
 '''
 
 import sys
@@ -116,12 +116,15 @@ class MPIShared(object):
 
         self._mpitype = None
         self._win = None
+
         self._buffer = None
         self._dbuf = None
         self._flat = None
         self._data = None
 
-        if self._comm is not None:
+        if self._comm is None:
+            dsize = self._dtype.itemsize
+        else:
             import mpi4py.MPI as MPI
             # We are actually using MPI, so we need to ensure that
             # our specified numpy dtype has a corresponding MPI datatype.
@@ -136,10 +139,17 @@ class MPIShared(object):
             self._checkabort(self._comm, status, 
                 "numpy to MPI type conversion")
 
-            # Number of bytes in our buffer
             dsize = self._mpitype.Get_size()
-            nbytes = self._nlocal * dsize
 
+        # Number of bytes in our buffer 
+        nbytes = self._nlocal * dsize
+
+        self._buffer = None
+        if self._comm is None:
+            self._buffer = np.ndarray(shape=(nbytes,), dtype=np.dtype("B"),
+                order="C")
+        else:
+            import mpi4py.MPI as MPI
             # Every process allocates a piece of the buffer.  The per-
             # process pieces are guaranteed to be contiguous.
             status = 0
@@ -160,23 +170,20 @@ class MPIShared(object):
                 status = 1
             self._checkabort(self._nodecomm, status, "shared memory query")
 
-            # Create a numpy array which acts as a "view" of the buffer.
-            self._dbuf = np.array(self._buffer, dtype="B", copy=False)
-            self._flat = self._dbuf.view(self._dtype)
-            self._data = self._flat.reshape(self._shape)
+        # Create a numpy array which acts as a "view" of the buffer.
+        self._dbuf = np.array(self._buffer, dtype=np.dtype("B"), copy=False)
+        self._flat = self._dbuf.view(self._dtype)
+        self._data = self._flat.reshape(self._shape)
 
-            # Initialize to zero.  Any of the processes could do this to the
-            # whole buffer, but it is safe and easy for each process to just
-            # initialize its local piece.
+        # Initialize to zero.  Any of the processes could do this to the
+        # whole buffer, but it is safe and easy for each process to just
+        # initialize its local piece.
 
-            # FIXME: change this back once every process is allocating a 
-            # piece of the buffer.            
-            # self._flat[self._localoffset:self._localoffset + self._nlocal] = 0
-            if self._noderank == 0:
-                self._flat[:] = 0
-
-        else:
-            self._data = np.zeros(_n, dtype=_dtype).reshape(_shape)
+        # FIXME: change this back once every process is allocating a 
+        # piece of the buffer.            
+        # self._flat[self._localoffset:self._localoffset + self._nlocal] = 0
+        if self._noderank == 0:
+            self._flat[:] = 0
 
 
     def __del__(self):
