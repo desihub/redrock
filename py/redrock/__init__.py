@@ -3,7 +3,7 @@ Redrock redshift fitter
 '''
 from __future__ import absolute_import, division, print_function
 
-__version__ = '0.6.0'
+__version__ = '0.6.0dev1'
 
 from .dataobj import (Target, MultiprocessingSharedSpectrum, 
 	SimpleSpectrum, MPISharedTargets, Template)
