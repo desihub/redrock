@@ -2,7 +2,12 @@
 Redrock change log
 ==================
 
-0.5.1 (unreleased)
+0.6.1 (unreleased)
+------------------
+
+* No changes yet.
+
+0.6.0 (unreleased)
 ------------------
 
 * adds rrboss to process boss spectra (PR `#37`_)
