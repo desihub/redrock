@@ -753,9 +753,11 @@ class MPISharedTargetsDesi(MPISharedTargets):
                         speclist.append( SimpleSpectrum(wave_data, flux_data,
                             ivar_data, resdia, Rcsr=rescsr) )
 
-            # Create the Target from the list of spectra.  The
-            # coadd is created on construction.
-            targets.append(Target(id, speclist, coadd=None))
+            # Create the Target from the list of spectra.
+            # FIXME: we need to create the coadd as well and store it
+            # in shared memory, indexed by the target ID.  Then we need
+            # to pass that to the Target constructor.
+            targets.append(Target(id, speclist, coadd=None, do_coadd=False))
 
         return targets
 
