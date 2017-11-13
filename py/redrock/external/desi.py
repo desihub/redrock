@@ -25,7 +25,7 @@ from desispec.resolution import Resolution
 from ..sharedmem_mpi import MPIShared
 
 from ..dataobj import (Target, MultiprocessingSharedSpectrum, 
-    SimpleSpectrum, MPISharedTargets)
+    SimpleSpectrum, MPISharedTargets, compute_coadd)
 
 from .. import io
 from .. import zfind
@@ -238,7 +238,7 @@ def read_bricks(brickfiles, trueflux=False, targetids=None,
 
 class MPISharedTargetsDesi(MPISharedTargets):
 
-    def __init__(self, comm, spectrafiles, targetids=None):
+    def __init__(self, comm, spectrafiles, targetids=None, coadd=True):
         """
         Collection of targets in MPI shared memory.
 
@@ -262,6 +262,8 @@ class MPISharedTargetsDesi(MPISharedTargets):
         assert len(spectrafiles) > 0
 
         self._spectrafiles = spectrafiles
+
+        self._coadd = coadd
 
         # This is a dictionary (keyed on the filename) that stores the shared
         # HDU data.
@@ -757,7 +759,11 @@ class MPISharedTargetsDesi(MPISharedTargets):
             # FIXME: we need to create the coadd as well and store it
             # in shared memory, indexed by the target ID.  Then we need
             # to pass that to the Target constructor.
-            targets.append(Target(id, speclist, coadd=None, do_coadd=False))
+            coadd = None
+            if self._coadd:
+                coadd = compute_coadd(speclist)
+            targets.append(Target(id, speclist, coadd=coadd, 
+                do_coadd=(coadd is not None)))
 
         return targets
 
@@ -843,7 +849,8 @@ def rrdesi(options=None, comm=None):
     meta = None
     if comm is not None:
         # Use MPI
-        with MPISharedTargetsDesi(comm, infiles) as shared_targets:
+        with MPISharedTargetsDesi(comm, infiles, coadd=(not opts.allspec)) \
+            as shared_targets:
             meta = shared_targets.meta
             zscan, zfit = zfind(shared_targets.targets, templates, 
             ncpu=None, comm=shared_targets.comm)
