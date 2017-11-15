@@ -87,10 +87,11 @@ class PlotSpec(object):
         zz = zfit[zfit['znum'] == self.znum][0]
         coeff = zz['coeff']
 
-        for tp in self.templates:
-            if (tp.type == zz['spectype']) & (tp.subtype == zz['subtype']):
-                break
-    
+        fulltype = zz['spectype']
+        if zz['subtype'] != '':
+            fulltype = fulltype+":"+zz['subtype']
+        tp = self.templates[fulltype]
+
         if tp.type != zz['spectype']:
             raise ValueError('spectype {} not in templates'.format(zz['spectype']))
 
