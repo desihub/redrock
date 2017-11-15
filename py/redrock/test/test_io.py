@@ -45,7 +45,7 @@ class TestIO(unittest.TestCase):
         
     ### @unittest.skipIf('RR_TEMPLATE_DIR' not in os.environ, '$RR_TEMPLATE_DIR not set')
     def test_read_templates(self):
-        for template in rrio.read_templates():
+        for template in rrio.read_templates().values():
             self.assertIn('wave', template.__dict__)
             self.assertIn('flux', template.__dict__)
             self.assertIn('type', template.__dict__)
@@ -61,7 +61,7 @@ class TestIO(unittest.TestCase):
         t2 = util.get_target(0.5)
         t2.id = 222
         template = util.get_template(subtype='BLAT')
-        zscan1, zfit1 = rrzfind([t1,t2], [template,], ncpu=1)
+        zscan1, zfit1 = rrzfind([t1,t2], {template.fulltype:template}, ncpu=1)
 
         rrio.write_zscan(self.testfile, zscan1, zfit1)
         rrio.write_zscan(self.testfile, zscan1, zfit1, clobber=True)
