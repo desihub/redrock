@@ -5,9 +5,11 @@ Redrock change log
 0.6.1 (unreleased)
 ------------------
 
-* No changes yet.
+* set ivar = 0 where mask != 0 (PR `#42`_)
 
-0.6.0 (unreleased)
+.. _`#42`: https://github.com/desihub/desispec/pull/42
+
+0.6.0 (2017-11-10)
 ------------------
 
 * adds rrboss to process boss spectra (PR `#37`_)
