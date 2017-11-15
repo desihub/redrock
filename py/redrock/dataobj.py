@@ -62,7 +62,7 @@ class Template(object):
         flux = self.flux.T.dot(coeff).T / (1+z)
         return trapz_rebin(self.wave*(1+z), flux, wave)
 
-        
+
 class MultiprocessingSharedSpectrum(object):
 
     def __init__(self, wave, flux, ivar, R):

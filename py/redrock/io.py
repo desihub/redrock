@@ -53,19 +53,29 @@ def read_template(filename):
         wave = 10**wave
 
     flux = native_endian(fx['BASIS_VECTORS'].data)
+
+    ## find out if redshift info is present in the file
+    old_style_templates = True
+    try:
+        redshifts = native_endian(fx['REDSHIFTS'].data)
+        old_style_templates = False
+    except:
+        print("INFO: Can't find redshift range info in template file {}, using default values".format(filename))
+
     fx.close()
 
     rrtype = hdr['RRTYPE'].strip().upper()
-    if rrtype == 'GALAXY':
-        ### redshifts = 10**np.arange(np.log10(1+0.005), np.log10(1+2.0), 1.5e-4) - 1
-        redshifts = 10**np.arange(np.log10(1+0.005), np.log10(1+1.7), 3e-4) - 1
-    elif rrtype == 'STAR':
-        redshifts = np.arange(-0.002, 0.00201, 4e-5)
-    elif rrtype == 'QSO':
-        redshifts = 10**np.arange(np.log10(1+0.5), np.log10(1+4.0), 5e-4) - 1
-        redshifts = 10**np.arange(np.log10(1+0.5), np.log10(1+4.0), 5e-4) - 1
-    else:
-        raise ValueError('Unknown redshift range to use for template type {}'.format(rrtype))
+
+    if old_style_templates:
+        if rrtype == 'GALAXY':
+            ### redshifts = 10**np.arange(np.log10(1+0.005), np.log10(1+2.0), 1.5e-4) - 1
+            redshifts = 10**np.arange(np.log10(1+0.005), np.log10(1+1.7), 3e-4) - 1
+        elif rrtype == 'STAR':
+            redshifts = np.arange(-0.002, 0.00201, 4e-5)
+        elif rrtype == 'QSO':
+            redshifts = 10**np.arange(np.log10(1+0.5), np.log10(1+4.0), 5e-4) - 1
+        else:
+            raise ValueError('Unknown redshift range to use for template type {}'.format(rrtype))
 
     if 'RRSUBTYP' in hdr:
         subtype = hdr['RRSUBTYP'].strip().upper()
@@ -109,12 +119,14 @@ def read_templates(template_list=None, template_dir=None):
     if template_list is None:
         template_list = find_templates(template_dir)
 
-    templates = list()
+    templates = {}
     if isinstance(template_list, basestring):
-        templates.append(read_template(template_list))
+        t = read_template(template_list)
+        templates[t.fulltype] = t
     else:
         for tfile in template_list:
-            templates.append(read_template(tfile))
+            t = read_template(tfile)
+            templates[t.fulltype] = t
     
     if len(templates) == 0:
         raise IOError('No templates found')

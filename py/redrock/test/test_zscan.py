@@ -37,7 +37,7 @@ class TestZScan(unittest.TestCase):
         t2 = util.get_target(z2); t2.id = 222
         template = util.get_template()
         template.redshifts = np.linspace(0.15, 0.3, 50)
-        zscan, zfit = rrzfind([t1,t2], [template,], ncpu=1)
+        zscan, zfit = rrzfind([t1,t2], {template.fulltype:template}, ncpu=1)
 
         zx1 = zfit[zfit['targetid'] == 111][0]
         zx2 = zfit[zfit['targetid'] == 222][0]
@@ -86,7 +86,7 @@ class TestZScan(unittest.TestCase):
         Fstar.redshifts = np.linspace(-1e-3, 1e-3, 25)
         Fstar.redshifts = np.linspace(-1e-3, 1e-3, 25)
         nminima = 3
-        zscan, zfit = rrzfind([t1,t2], [Fstar, Mstar,], ncpu=1, 
+        zscan, zfit = rrzfind([t1,t2], {Fstar.fulltype:Fstar, Mstar.fulltype:Mstar}, ncpu=1, 
             nminima=nminima)
         self.assertEqual(len(zfit), 2*nminima)
         self.assertTrue(np.all(zfit['spectype'] == 'STAR'))

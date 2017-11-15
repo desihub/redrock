@@ -31,7 +31,7 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
     
     Args:
         targets : list of Target objects
-        templates: list of Template objects
+        templates: dictionary of Template objects (template_name: template)
 
     Options:
         ncpu: number of CPU cores to use for multiprocessing
@@ -55,7 +55,7 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
     zscan = dict()
     for target in targets:
         zscan[target.id] = dict()
-        for t in templates:
+        for t in templates.values():
             zscan[target.id][t.fulltype] = dict()
             
     if ncpu is None :
@@ -74,7 +74,7 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
     else:
         print("INFO: not using multiprocessing")
         
-    for t in templates:
+    for t in templates.values():
 
         if comm is not None and (comm.rank == 0) :
             print('INFO: starting zchi2 scan for {}'.format(comm.rank,
