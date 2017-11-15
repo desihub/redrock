@@ -94,7 +94,7 @@ def read_spectra(spectrafiles, targetids=None, spectrum_class=SimpleSpectrum):
             for x in sp.bands:          #- typically 'b', 'r', 'z'
                 wave = sp.wave[x]                
                 flux = sp.flux[x][ii]
-                ivar = sp.ivar[x][ii]
+                ivar = sp.ivar[x][ii]*(sp.mask[x][ii]==0)
                 Rdata = sp.resolution_data[x][ii]
 
                 for i in range(flux.shape[0]):
@@ -181,7 +181,7 @@ def read_bricks(brickfiles, trueflux=False, targetids=None, spectrum_class=Simpl
             else:
                 brickname = 'unknown'
             flux = brick.flux[ii]
-            ivar = brick.ivar[ii]
+            ivar = brick.ivar[ii] * (brick.mask[ii]==0)
             Rdata = brick.resolution_data[ii]
 
             #- work around desispec.io.Brick returning 32-bit non-native endian
