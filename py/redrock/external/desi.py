@@ -289,7 +289,10 @@ def rrdesi(options=None, comm=None):
         print('INFO: reading templates')
         sys.stdout.flush()
         
-        templates = io.read_templates(opts.templates)
+        if not opts.templates is None and os.path.isdir(opts.templates):
+            templates = io.read_templates(template_list=None, template_dir=opts.templates)
+        else:
+            templates = io.read_templates(template_list=opts.templates, template_dir=None)
 
         dt = time.time() - t0
         # print('DEBUG: PID {} read targets and templates in {:.1f} seconds'.format(pid,dt))
