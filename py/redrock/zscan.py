@@ -115,16 +115,14 @@ def mpi_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
     if comm is not None:
         rank = comm.rank
         nproc = comm.size
-                
+
+    # Option 1: parallelize over redshifts- less rebinning of templates,
+    # but more memory use when copying all target data out of shared
+    # memory.
+
     zsplit = np.array_split(redshifts, nproc)
-
-    # print("rank {} : zscan.calc_zchi2_targets for {} redshifts "
-    #     "{}:{}".format(rank, template.fulltype, zsplit[rank][0],
-    #     zsplit[rank][-1]))
-    # sys.stdout.flush() #  this helps seeing something
-    
-    zchi2, zcoeff, zchi2penalty = calc_zchi2_targets(zsplit[rank], targets, template)
-
+    zchi2, zcoeff, zchi2penalty = calc_zchi2_targets(zsplit[rank], 
+        targets, template)
     if comm is not None:
         zchi2        = comm.allgather(zchi2)
         zcoeff       = comm.allgather(zcoeff)
@@ -132,6 +130,20 @@ def mpi_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
         zchi2        = np.hstack(zchi2)
         zcoeff       = np.hstack(zcoeff)
         zchi2penalty = np.hstack(zchi2penalty)
+
+    # Option 2: parallelize over targets- more rebinning of templates,
+    # but less memory use / copying.
+
+    # tsplit = np.array_split(targets, nproc)
+    # zchi2, zcoeff, zchi2penalty = calc_zchi2_targets(redshifts, tsplit[rank], 
+    #     template)
+    # if comm is not None:
+    #     zchi2        = comm.allgather(zchi2)
+    #     zcoeff       = comm.allgather(zcoeff)
+    #     zchi2penalty = comm.allgather(zchi2penalty)
+    #     zchi2        = np.vstack(zchi2)
+    #     zcoeff       = np.vstack(zcoeff)
+    #     zchi2penalty = np.vstack(zchi2penalty)
     
     return zchi2, zcoeff, zchi2penalty
 

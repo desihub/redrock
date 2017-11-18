@@ -4,16 +4,28 @@ redrock wrapper tools for DESI
 from __future__ import absolute_import, division, print_function
 
 import os, sys
+import re
 import warnings
+from collections import OrderedDict
+
 if sys.version_info[0] > 2:
     basestring = str
 
 import numpy as np
+import scipy.sparse
+
+from astropy.io import fits
+from astropy.table import Table
+
+from desiutil.io import encode_table
+
 import desispec.io
 from desispec.resolution import Resolution
 
+from ..sharedmem_mpi import MPIShared
+
 from ..dataobj import (Target, MultiprocessingSharedSpectrum, 
-    SimpleSpectrum, MPISharedTargets)
+    SimpleSpectrum, MPISharedTargets, compute_coadd)
 
 from .. import io
 from .. import zfind
@@ -34,26 +46,28 @@ def write_zbest(outfile, zbest):
         zbest['SUBTYPE'] = np.zeros(ntargets, dtype='S8')
 
     zbest.meta['EXTNAME'] = 'ZBEST'
-    zbest.write(outfile, overwrite=True)
+    zbest.write(outfile, format="fits", overwrite=True)
 
 
 def read_spectra(spectrafiles, targetids=None, spectrum_class=SimpleSpectrum):
     '''
     Read targets from a list of spectra files.
+
+    The spectrum_class argument is needed to use the same read_spectra routine
+    for the two parallelism approaches for redrock. The multiprocessing version
+    uses a shared memory at the spectrum class initialization, see the
+    redrock.dataobj.MultiprocessingSharedSpectrum class, whereas the MPI
+    version implements the shared memory after all spectra have been read by
+    the root process, and so the MPI version used another more simple spectrum
+    class (see redrock.dataobj.SimpleSpectrum).
    
-
-
     Args:
         spectrafiles : list of input spectra files, or string glob to match
 
     Options:
-        targetids : list of target ids. If set, only those target spectra will be read.
-        spectrum_class :  The spectrum_class argument is needed to use the same read_spectra
-        routine for the two parallelism approaches for redrock. The multiprocessing version
-        uses a shared memory at the spectrum class initialization, see
-        the redrock.dataobj.MultiprocessingSharedSpectrum class, whereas the MPI version
-        implements the shared memory after all spectra have been read by the root process,
-        and so the MPI version used another more simple spectrum class (see redrock.dataobj.SimpleSpectrum).
+        targetids : list of target ids. If set, only those target spectra will
+            be read.
+        spectrum_class : the class to use for individual spectra.
     
     Returns tuple of (targets, meta) where
         targets is a list of Target objects and
@@ -99,11 +113,9 @@ def read_spectra(spectrafiles, targetids=None, spectrum_class=SimpleSpectrum):
 
                 for i in range(flux.shape[0]):
                     if np.all(flux[i] == 0):
-                        # print('WARNING: Skipping spectrum {} of target {} on brick {} with flux=0'.format(i, targetid, brick.brickname))
                         continue
 
                     if np.all(ivar[i] == 0):
-                        # print('WARNING: Skipping spectrum {} of target {} on brick {} with ivar=0'.format(i, targetid, brick.brickname))
                         continue
 
                     R = Resolution(Rdata[i])
@@ -115,7 +127,8 @@ def read_spectra(spectrafiles, targetids=None, spectrum_class=SimpleSpectrum):
         if len(spectra) > 0:
             targets.append(Target(targetid, spectra))
         else:
-            print('ERROR: Target {} on {} has no good spectra'.format(targetid, os.path.basename(brickfiles[0])))
+            print('ERROR: Target {} on {} has no good spectra'.format(\
+                targetid, os.path.basename(brickfiles[0])))
 
     #- Create a metadata table in case we might want to add other columns
     #- in the future
@@ -127,21 +140,26 @@ def read_spectra(spectrafiles, targetids=None, spectrum_class=SimpleSpectrum):
     return targets, meta
 
 
-def read_bricks(brickfiles, trueflux=False, targetids=None, spectrum_class=SimpleSpectrum):
+def read_bricks(brickfiles, trueflux=False, targetids=None, 
+    spectrum_class=SimpleSpectrum):
     '''
     Read targets from a list of brickfiles
+
+    The spectrum_class argument is needed to use the same read_spectra routine
+    for the two parallelism approaches for redrock. The multiprocessing version
+    uses a shared memory at the spectrum class initialization, see the
+    redrock.dataobj.MultiprocessingSharedSpectrum class, whereas the MPI
+    version implements the shared memory after all spectra have been read by
+    the root process, and so the MPI version used another more simple spectrum
+    class (see redrock.dataobj.SimpleSpectrum).
 
     Args:
         brickfiles : list of input brick files, or string glob to match
     
     Options:
-        targetids : list of target ids. If set, only those target spectra will be read.
-        spectrum_class :  The spectrum_class argument is needed to use the same read_spectra
-        routine for the two parallelism approaches for redrock. The multiprocessing version
-        uses a shared memory at the spectrum class initialization, see
-        the redrock.dataobj.MultiprocessingSharedSpectrum class, whereas the MPI version
-        implements the shared memory after all spectra have been read by the root process,
-        and so the MPI version used another more simple spectrum class (see redrock.dataobj.SimpleSpectrum).
+        targetids : list of target ids. If set, only those target spectra will
+            be read.
+        spectrum_class : the class to use for individual spectra.
     
     Returns list of Target objects
 
@@ -191,11 +209,9 @@ def read_bricks(brickfiles, trueflux=False, targetids=None, spectrum_class=Simpl
 
             for i in range(flux.shape[0]):
                 if np.all(flux[i] == 0):
-                    # print('WARNING: Skipping spectrum {} of target {} on brick {} with flux=0'.format(i, targetid, brick.brickname))
                     continue
 
                 if np.all(ivar[i] == 0):
-                    # print('WARNING: Skipping spectrum {} of target {} on brick {} with ivar=0'.format(i, targetid, brick.brickname))
                     continue
 
                 R = Resolution(Rdata[i])
@@ -207,7 +223,8 @@ def read_bricks(brickfiles, trueflux=False, targetids=None, spectrum_class=Simpl
             bricknames.append(brickname)
             targets.append(Target(targetid, spectra))
         else:
-            print('ERROR: Target {} on {} has no good spectra'.format(targetid, os.path.basename(brickfiles[0])))
+            print('ERROR: Target {} on {} has no good spectra'.format(\
+                targetid, os.path.basename(brickfiles[0])))
 
     #- Create a metadata table in case we might want to add other columns
     #- in the future
@@ -217,6 +234,759 @@ def read_bricks(brickfiles, trueflux=False, targetids=None, spectrum_class=Simpl
     meta['BRICKNAME'] = bricknames
 
     return targets, meta
+
+
+class MPISharedTargetsDesi(MPISharedTargets):
+
+    def __init__(self, comm, spectrafiles, targetids=None, coadd=True):
+        """
+        Collection of targets in MPI shared memory.
+
+        This stores a collection of targets that are read from DESI spectra
+        files in a buffered way.  Each HDU is stored unmodified in a separate
+        shared memory buffer.  The target list is then generated as aliases
+        into these shared memory locations.
+        
+        Args:
+            comm (mpi4py.MPI.Comm): the communicator to use (or None).
+            spectrafiles (list): the list of spectra files.
+            targetids (list): (optional) the target IDs to select.
+        """
+        super().__init__(comm)
+
+        # check the file list
+        if isinstance(spectrafiles, basestring):
+            import glob
+            spectrafiles = glob.glob(spectrafiles)
+
+        assert len(spectrafiles) > 0
+
+        self._spectrafiles = spectrafiles
+
+        self._coadd = coadd
+
+        # This is a dictionary (keyed on the filename) that stores the shared
+        # HDU data.
+
+        self._raw = OrderedDict()
+
+        # This is the mapping between specs to targets for each file
+
+        self._spec_to_target = {}
+        self._target_specs = {}
+        self._spec_keep = {}
+        self._spec_sliced = {}
+
+        # The bands for each file
+
+        self._bands = {}
+        self._band_map = {}
+
+        # Resolution matrix properties
+
+        self._res_shape = {}
+        self._res_data_size = {}
+        self._res_off_size = {}
+
+        # The full list of targets from all files
+
+        self._targetids = set()
+
+        self._bricknames = {}
+
+        # Loop over files
+
+        self._shm_size = {}
+
+        for sfile in spectrafiles:
+            self._shm_size[sfile] = 0.
+            if self._root:
+                print("INFO: reading {} into shared memory".format(sfile))
+                sys.stdout.flush()
+
+            self._raw[sfile] = OrderedDict()
+            hdus = None
+            nhdu = None
+            fmap = None
+            if self._root:
+                hdus = fits.open(sfile, memmap=True)
+                nhdu = len(hdus)
+                fmap = encode_table(Table(hdus["FIBERMAP"].data, 
+                    copy=True).as_array())
+            if self._comm is not None:
+                nhdu = self._comm.bcast(nhdu, root=0)
+                fmap = self._comm.bcast(fmap, root=0)
+
+            # Now every process has the fibermap and number of HDUs.  Build the
+            # mapping between spectral rows and target IDs.
+
+            keep_targetids = targetids
+            if targetids is None:
+                keep_targetids = fmap["TARGETID"]
+            self._targetids.update(keep_targetids)
+
+            if "BRICKNAME" in fmap.dtype.names:
+                self._bricknames.update({ x : y for x,y in \
+                    zip(fmap["TARGETID"], fmap["BRICKNAME"]) \
+                    if x in keep_targetids })
+            else:
+                self._bricknames.update({ x : "unknown" for x in \
+                    fmap["TARGETID"] if x in keep_targetids })
+
+            # This is the spectral row to target mapping using the original
+            # global indices (before slicing).
+
+            self._spec_to_target[sfile] = [ x if y in keep_targetids else -1 \
+                for x, y in enumerate(fmap["TARGETID"]) ]
+
+            # The reduced set of spectral rows.
+
+            self._spec_keep[sfile] = [ x for x in self._spec_to_target[sfile] \
+                if x >= 0 ]
+
+            # The mapping between original spectral indices and the sliced ones
+
+            self._spec_sliced[sfile] = { x: y for y, x in \
+                enumerate(self._spec_keep[sfile]) }
+
+            # For each target, store the sliced row index of all spectra,
+            # so that we can do a fast lookup later.
+
+            self._target_specs[sfile] = {}
+            for id in keep_targetids:
+                self._target_specs[sfile][id] = [ x for x, y in \
+                    enumerate(fmap["TARGETID"]) if y == id ]
+
+            # Find the list of bands in this file
+
+            self._bands[sfile] = []
+            if self._root:
+                for h in range(nhdu):
+                    name = None
+                    if "EXTNAME" not in hdus[h].header:
+                        continue
+                    name = hdus[h].header["EXTNAME"]
+                    mat = re.match(r"(.*)_(.*)", name)
+                    if mat is None:
+                        continue
+                    band = mat.group(1).lower()
+                    if band not in self._bands[sfile]:
+                        self._bands[sfile].append(band)
+            if self._comm is not None:
+                self._bands[sfile] = self._comm.bcast(self._bands[sfile], 
+                    root=0)
+
+            b = 0
+            self._band_map[sfile] = {}
+            for band in self._bands[sfile]:
+                self._band_map[sfile][band] = b
+                b += 1
+
+            self._res_shape[sfile] = {}
+
+            # Iterate over the data in HDU order and copy into the raw data
+            # dictionary.  Only store spectra that match our list of targetids
+
+            for h in range(nhdu):
+                name = None
+                if self._root:
+                    if "EXTNAME" not in hdus[h].header:
+                        name = "none"
+                    else:
+                        name = hdus[h].header["EXTNAME"]
+                if self._comm is not None:
+                    name = self._comm.bcast(name, root=0)
+                # Find the band based on the name
+                mat = re.match(r"(.*)_(.*)", name)
+                if mat is None:
+                    # This is the fibermap or some other HDU we don't recognize
+                    continue
+                band = mat.group(1).lower()
+                type = mat.group(2)
+
+                dims = None
+                if self._root:
+                    dims = hdus[h].data.shape
+                    if len(dims) == 2 and dims[1] == 0:
+                        dims = (dims[0],)
+                if self._comm is not None:
+                    dims = self._comm.bcast(dims, root=0)
+
+                if type == "WAVELENGTH":
+                    # This is a wavelength HDU, no need to slice it.
+                    self._raw[sfile][name] = MPIShared(dims, 
+                        np.dtype(np.float64), self._comm)
+                    indata = None
+                    if self._root:
+                        indata = hdus[h].data.astype(np.float64)
+                        self._shm_size[sfile] += np.dtype(np.float64).itemsize\
+                            * dims[0]
+                    self._raw[sfile][name].set(indata, (0,), 
+                        fromrank=0)
+
+                elif type == "RESOLUTION":
+                    # This is a resolution matrix.  Instead of storing 
+                    # the raw HDU data, we want to store scipy sparse matrix
+                    # data so it is not duplicated later when we reconstruct 
+                    # the spectra for the target list.
+                    rows = self._spec_keep[sfile]
+                    if np.count_nonzero(rows) == 0:
+                        continue
+
+                    # Root process is going to construct the resolution matrix
+                    # for every spectrum, so that we can store those buffers
+                    # in memory.  We will have separate buffers for all the
+                    # "pieces" of the matrix data.
+
+                    resshape = None
+                    resdia_datasize = None
+                    resdia_offsize = None
+                    resdia_off_dtype = None
+                    resdia_data_dtype = None
+
+                    rescsr_datasize = None
+                    rescsr_indxsize = None
+                    rescsr_iptrsize = None
+                    rescsr_indx_dtype = None
+                    rescsr_iptr_dtype = None
+                    rescsr_data_dtype = None
+
+                    if self._root:
+                        # Create a single resolution matrix from one row
+                        testdia = Resolution(hdus[h].data[rows[0]])
+
+                        # Ensure that all elements are not equal to zero, so
+                        # that when this is converted to a CSR matrix, it will
+                        # have a fixed number of non-zeros.
+                        testdia.data[(np.abs(testdia.data) < 1.0e-15)] = \
+                            1.0e-15
+
+                        resshape = testdia.data.shape
+                        resdia_offsize = len(testdia.offsets.ravel())
+                        resdia_datasize = len(testdia.data.ravel())
+                        resdia_off_dtype = np.dtype(testdia.offsets.dtype)
+                        resdia_data_dtype = np.dtype(np.float64)
+
+                        self._shm_size[sfile] += len(rows) * \
+                            resdia_off_dtype.itemsize * resdia_offsize
+                        self._shm_size[sfile] += len(rows) * \
+                            resdia_data_dtype.itemsize * resdia_datasize
+                        
+                        testcsr = testdia.tocsr()
+                        rescsr_indx_dtype = np.dtype(testcsr.indices.dtype)
+                        rescsr_iptr_dtype = np.dtype(testcsr.indptr.dtype)
+                        rescsr_data_dtype = np.dtype(np.float64)
+
+                        rescsr_indxsize = len(testcsr.indices)
+                        rescsr_iptrsize = len(testcsr.indptr)
+                        rescsr_datasize = len(testcsr.data.ravel())
+
+                        self._shm_size[sfile] += len(rows) * \
+                            rescsr_indx_dtype.itemsize * rescsr_indxsize
+                        self._shm_size[sfile] += len(rows) * \
+                            rescsr_iptr_dtype.itemsize * rescsr_iptrsize
+                        self._shm_size[sfile] += len(rows) * \
+                            rescsr_data_dtype.itemsize * rescsr_datasize
+
+                    if self._comm is not None:
+                        resshape = self._comm.bcast(resshape, root=0)
+                        resdia_offsize = self._comm.bcast(resdia_offsize, 
+                            root=0)
+                        resdia_datasize = self._comm.bcast(resdia_datasize, 
+                            root=0)
+                        resdia_off_dtype = self._comm.bcast(resdia_off_dtype,
+                            root=0)
+                        resdia_data_dtype = self._comm.bcast(resdia_data_dtype,
+                            root=0)
+                        rescsr_indxsize = self._comm.bcast(rescsr_indxsize, 
+                            root=0)
+                        rescsr_iptrsize = self._comm.bcast(rescsr_iptrsize, 
+                            root=0)
+                        rescsr_datasize = self._comm.bcast(rescsr_datasize, 
+                            root=0)
+                        rescsr_indx_dtype = self._comm.bcast(rescsr_indx_dtype,
+                            root=0)
+                        rescsr_iptr_dtype = self._comm.bcast(rescsr_iptr_dtype,
+                            root=0)
+                        rescsr_data_dtype = self._comm.bcast(rescsr_data_dtype,
+                            root=0)
+
+                    self._res_shape[sfile][band] = resshape
+
+                    res_diadata_name = \
+                        "{}_RESOLUTION_DIA_DATA".format(band.upper())
+                    res_diaoff_name = \
+                        "{}_RESOLUTION_DIA_OFF".format(band.upper())
+                    res_csrdata_name = \
+                        "{}_RESOLUTION_CSR_DATA".format(band.upper())
+                    res_csrindx_name = \
+                        "{}_RESOLUTION_CSR_INDX".format(band.upper())
+                    res_csriptr_name = \
+                        "{}_RESOLUTION_CSR_IPTR".format(band.upper())
+
+                    self._raw[sfile][res_diadata_name] = MPIShared(
+                        (len(rows), resdia_datasize), resdia_data_dtype,
+                        self._comm)
+
+                    self._raw[sfile][res_diaoff_name] = MPIShared(
+                        (len(rows), resdia_offsize), resdia_off_dtype,
+                        self._comm)
+
+                    self._raw[sfile][res_csrdata_name] = MPIShared(
+                        (len(rows), rescsr_datasize), rescsr_data_dtype,
+                        self._comm)
+
+                    self._raw[sfile][res_csrindx_name] = MPIShared(
+                        (len(rows), rescsr_indxsize), rescsr_indx_dtype,
+                        self._comm)
+
+                    self._raw[sfile][res_csriptr_name] = MPIShared(
+                        (len(rows), rescsr_iptrsize), rescsr_iptr_dtype,
+                        self._comm)
+
+                    for row in rows:
+                        diadata = None
+                        diaoff = None
+                        csrdata = None
+                        csrindx = None
+                        csriptr = None
+                        if self._root:
+                            dia = Resolution(hdus[h].data[row])
+                            # Ensure that all elements are not equal to zero,
+                            # so that when this is converted to a CSR matrix,
+                            # it will have a fixed number of non-zeros.
+                            dia.data[(np.abs(dia.data) < 1.0e-15)] = 1.0e-15
+
+                            csr = dia.tocsr()
+
+                            diadata = dia.data.ravel().copy()\
+                                .astype(resdia_data_dtype)
+                            diadata.shape = (1, resdia_datasize)
+                            diaoff = dia.offsets.copy()\
+                                .astype(resdia_off_dtype)
+                            diaoff.shape = (1, resdia_offsize)
+                            
+                            csrdata = csr.data.copy().astype(rescsr_data_dtype)
+                            csrdata.shape = (1, rescsr_datasize)
+                            csrindx = csr.indices.copy()\
+                                .astype(rescsr_indx_dtype)
+                            csrindx.shape = (1, rescsr_indxsize)
+                            csriptr = csr.indptr.copy()\
+                                .astype(rescsr_iptr_dtype)
+                            csriptr.shape = (1, rescsr_iptrsize)
+
+                        self._raw[sfile][res_diadata_name].set(diadata, 
+                            (row, 0), fromrank=0)
+
+                        self._raw[sfile][res_diaoff_name].set(diaoff, 
+                            (row, 0), fromrank=0)
+
+                        self._raw[sfile][res_csrdata_name].set(csrdata, 
+                            (row, 0), fromrank=0)
+
+                        self._raw[sfile][res_csrindx_name].set(csrindx, 
+                            (row, 0), fromrank=0)
+
+                        self._raw[sfile][res_csriptr_name].set(csriptr, 
+                            (row, 0), fromrank=0)
+
+                else:
+                    # This contains per-spectrum data.  Slice at the highest
+                    # dimension to include only selected targets.
+                    rows = self._spec_keep[sfile]
+                    if np.count_nonzero(rows) == 0:
+                        continue
+
+                    self._raw[sfile][name] = MPIShared((len(rows), dims[1]),
+                        np.dtype(np.float64), self._comm)
+
+                    indata = None
+                    if self._root:
+                        indata = hdus[h].data[rows].astype(np.float64)
+                        self._shm_size[sfile] += np.dtype(np.float64).itemsize\
+                            * len(rows) * dims[1]
+                    self._raw[sfile][name].set(indata, (0,0), 
+                        fromrank=0)
+            if self._root:
+                print("INFO:   data uses {:0.1f}MB of shared memory".format(\
+                    self._shm_size[sfile] / (1024.0 * 1024.0)))
+                sys.stdout.flush()
+
+        self._meta_dtype = [('BRICKNAME', 'S8'),]
+        self._meta = np.zeros(len(self._bricknames), dtype=self._meta_dtype)
+        self._meta['BRICKNAME'] = [ self._bricknames[x] for x \
+            in sorted(self._targetids) ]
+
+
+    @property
+    def meta(self):
+        return self._meta
+
+
+    def _verify_Rdiag(self, msg, offsets, data, R):
+        # Verify that we constructed the dia matrix
+        # from the buffers without copying.
+        offp, rf = \
+            offsets.__array_interface__['data']
+        datp, rf = \
+            data.__array_interface__['data']
+        soffp, rf = \
+            R.offsets.__array_interface__['data']
+        sdatp, rf = \
+            R.data.__array_interface__['data']
+        if (offp != soffp) or (datp != sdatp):
+            print("Proc {}, {}".format(self._comm.rank, msg))
+            print("  data was copied:")
+            print("  off:  {} {} {}".format(\
+                offsets.shape, offsets.dtype.str, offp))
+            print("  data:  {} {} {}".format(\
+                data.shape, data.dtype.str, datp))
+            print("  Rdiag.off:  {} {} {}".format(\
+                R.offsets.shape, R.offsets.dtype.str, soffp))
+            print("  Rdiag.data:  {} {} {}".format(\
+                R.data.shape, R.data.dtype.str, sdatp))
+            sys.stdout.flush()
+            self._comm.Abort()
+        return
+
+
+    def _verify_Rcsr(self, msg, indices, indptr, data, R):
+        # Verify that we constructed the dia matrix
+        # from the buffers without copying.
+        indxp, rf = \
+            indices.__array_interface__['data']
+        iptrp, rf = \
+            indptr.__array_interface__['data']
+        datp, rf = \
+            data.__array_interface__['data']
+        sindxp, rf = \
+            R.indices.__array_interface__['data']
+        siptrp, rf = \
+            R.indptr.__array_interface__['data']
+        sdatp, rf = \
+            R.data.__array_interface__['data']
+        if (indxp != sindxp) or (iptrp != siptrp) or \
+            (datp != sdatp):
+            print("Proc {}, {}".format(self._comm.rank, msg))
+            print("  data was copied:")
+            print("  indices:  {} {} {}".format(\
+                indices.shape, indices.dtype.num, indxp))
+            print("  indptr:  {} {} {}".format(\
+                indptr.shape, indptr.dtype.num, iptrp))
+            print("  data:  {} {} {}".format(\
+                data.shape, data.dtype.num, datp))
+            print("  Rcsr.indices:  {} {} {}".format(\
+                R.indices.shape, R.indices.dtype.num, sindxp))
+            print("  Rcsr.indptr:  {} {} {}".format(\
+                R.indptr.shape, R.indptr.dtype.num, siptrp))
+            print("  Rcsr.data:  {} {} {}".format(\
+                R.data.shape, R.data.dtype.num, sdatp))
+            sys.stdout.flush()
+            self._comm.Abort()
+        return
+
+
+    def _verify_buffer(self, msg, input, output):
+        # Verify that two buffers share the same memory.
+        inp, rf = \
+            input.__array_interface__['data']
+        outp, rf = \
+            output.__array_interface__['data']
+        if (inp != outp):
+            print("Proc {}, {}".format(self._comm.rank, msg))
+            print("  data was copied:")
+            print("  input:  {} {} {}".format(\
+                input.shape, input.dtype.num, inp))
+            print("  output:  {} {} {}".format(\
+                output.shape, output.dtype.num, outp))
+            sys.stdout.flush()
+            self._comm.Abort()
+        return
+
+
+    def _get_targets(self):
+        """
+        Generates a set of targets from the shared memory buffers.
+
+        This is called by the base class targets().
+        """
+        targets = list()
+
+        for id in sorted(self._targetids):
+            speclist = list()
+            for sfile in self._spectrafiles:
+                if id not in self._target_specs[sfile]:
+                    # nothing in this file
+                    continue
+                rows = self._target_specs[sfile][id]
+                for row in rows:
+                    memrow = self._spec_sliced[sfile][row]
+                    for band in self._bands[sfile]:
+                        wave_name = "{}_WAVELENGTH".format(band.upper())
+                        flux_name = "{}_FLUX".format(band.upper())
+                        ivar_name = "{}_IVAR".format(band.upper())
+                        mask_name = "{}_MASK".format(band.upper())
+                        res_diadata_name = "{}_RESOLUTION_DIA_DATA".format(\
+                            band.upper())
+                        res_diaoff_name = "{}_RESOLUTION_DIA_OFF".format(\
+                            band.upper())
+                        res_csrdata_name = "{}_RESOLUTION_CSR_DATA".format(\
+                            band.upper())
+                        res_csrindx_name = "{}_RESOLUTION_CSR_INDX".format(\
+                            band.upper())
+                        res_csriptr_name = "{}_RESOLUTION_CSR_IPTR".format(\
+                            band.upper())
+                        wave_data = np.array(self._raw[sfile][wave_name]._data)
+                        flux_data = np.array(self._raw[sfile][flux_name]\
+                            ._data[memrow])
+                        ivar_data = None
+                        if ivar_name in self._raw[sfile]:
+                            ivar_data = np.array(self._raw[sfile][ivar_name]\
+                                ._data[memrow])
+                        if mask_name in self._raw[sfile]:
+                            mask_data = np.array(self._raw[sfile][mask_name]\
+                                ._data[memrow])
+                            if ivar_data is not None:
+                                ivar_data *= (mask_data==0)
+                        
+                        res_dia_off = None
+                        res_dia_data = None
+                        resdia = None
+                        res_csr_indx = None
+                        res_csr_iptr = None
+                        res_csr_data = None
+                        rescsr = None
+                        if res_diadata_name in self._raw[sfile]:
+                            ndiag = self._res_shape[sfile][band][0]
+                            spdim = self._res_shape[sfile][band][1]
+                            
+                            res_dia_off = np.array(\
+                                self._raw[sfile][res_diaoff_name]\
+                                ._data[memrow])
+                            
+                            res_dia_data = self._raw[sfile][res_diadata_name]\
+                                ._data[memrow].view()
+                            res_dia_data.shape = (ndiag, spdim)
+                            
+                            resdia = scipy.sparse.dia_matrix((res_dia_data, 
+                                res_dia_off), shape=(spdim, spdim), copy=False)
+                            
+                            res_csr_indx = np.array(self._raw[sfile]\
+                                [res_csrindx_name]._data[memrow])
+
+                            res_csr_iptr = np.array(self._raw[sfile]\
+                                [res_csriptr_name]._data[memrow])
+
+                            res_csr_data = np.array(self._raw[sfile]\
+                                [res_csrdata_name]._data[memrow])
+
+                            rescsr = scipy.sparse.csr_matrix((res_csr_data, 
+                                res_csr_indx, res_csr_iptr), copy=False)
+
+                        speclist.append( SimpleSpectrum(wave_data, flux_data,
+                            ivar_data, resdia, Rcsr=rescsr) )
+
+                        if res_diadata_name in self._raw[sfile]:
+                            self._verify_Rdiag("file {}, band {}, spectrum {}"\
+                                .format(sfile, band, memrow), res_dia_off,
+                                res_dia_data, speclist[-1].R)
+                            self._verify_Rcsr("file {}, band {}, spectrum {}"\
+                                .format(sfile, band, memrow), res_csr_indx,
+                                res_csr_iptr, res_csr_data, speclist[-1].Rcsr)
+
+
+            # Create the Target from the list of spectra.
+            targets.append(Target(id, speclist, coadd=None, 
+                do_coadd=False))
+
+        if self._coadd:
+            # compute the coadds in shared memory
+            self._pack_coadds(targets)
+
+        if self._root:
+            print("INFO:  Finished loading {} targets".format(len(targets)))
+            sys.stdout.flush()
+
+        return targets
+
+
+    def _pack_coadds(self, targets):
+        """
+        Take a set of targets and compute the coadds in shared
+        memory.  This is optionally called by _get_targets after
+        the targets are created if we are using coadds.
+        """
+        # To minimize the number of buffers, we are going to pack the coadd
+        # data in buffers organized by wavehash and data type.
+        nspec = dict()
+        for t in targets:
+            tcount = set()
+            for s in t.spectra:
+                h = s.wavehash
+                tcount.add(h)
+            for h in tcount:
+                if h not in nspec:
+                    tco = compute_coadd([ s for s in t.spectra \
+                        if s.wavehash == h ])[0]
+                    nspec[h] = dict()
+                    nspec[h]["nwave"] = tco.nwave
+                    nspec[h]["ndiag"] = tco.R.data.shape[0]
+                    nspec[h]["splen"] = tco.R.data.shape[1]
+                    nspec[h]["ndiadata"] = len(tco.R.data.ravel())
+                    nspec[h]["ndiaoff"] = len(tco.R.offsets.ravel())
+                    nspec[h]["diaofftype"] = tco.R.offsets.dtype
+                    nspec[h]["csrindxtype"] = tco.Rcsr.indices.dtype
+                    nspec[h]["csriptrtype"] = tco.Rcsr.indptr.dtype
+                    nspec[h]["csrdatatype"] = tco.Rcsr.data.dtype
+                    nspec[h]["ncsrindx"] = len(tco.Rcsr.indices)
+                    nspec[h]["ncsriptr"] = len(tco.Rcsr.indptr)
+                    nspec[h]["ncsrdata"] = len(tco.Rcsr.data)
+                    nspec[h]["n"] = 0
+                
+                nspec[h]["n"] += 1
+
+        # Now that we know the number of spectra we are packing, create the
+        # buffers.
+        self._cosize = 0
+        self._craw = dict()
+        coffsets = dict()
+        for h, d in nspec.items():
+            if self._root:
+                print("allocating buffers for {} with {} spectra".format(h, d["n"]), flush=True)
+
+            coffsets[h] = 0
+            self._craw[h] = dict()
+            
+            self._craw[h]["wave"] = MPIShared((d["nwave"],), 
+                np.dtype(np.float64), self._comm)
+            self._cosize += np.dtype(np.float64).itemsize * d["nwave"]
+
+            self._craw[h]["flux"] = MPIShared((d["n"], d["nwave"]), 
+                np.dtype(np.float64), self._comm)
+            self._cosize += np.dtype(np.float64).itemsize * d["nwave"] \
+                * d["n"]
+            
+            self._craw[h]["ivar"] = MPIShared((d["n"], d["nwave"]), 
+                np.dtype(np.float64), self._comm)
+            self._cosize += np.dtype(np.float64).itemsize * d["nwave"] \
+                * d["n"]
+            
+            self._craw[h]["diaoff"] = MPIShared((d["n"], d["ndiaoff"]), 
+                d["diaofftype"], self._comm)
+            self._cosize += d["diaofftype"].itemsize * d["ndiaoff"] \
+                * d["n"]
+
+            self._craw[h]["diadata"] = MPIShared((d["n"], 
+                d["ndiadata"]), np.dtype(np.float64), self._comm)
+            self._cosize += np.dtype(np.float64).itemsize * d["ndiadata"] \
+                * d["n"]
+            
+            self._craw[h]["csrindx"] = MPIShared((d["n"], d["ncsrindx"]), 
+                d["csrindxtype"], self._comm)
+            self._cosize += d["csrindxtype"].itemsize * d["ncsrindx"] \
+                * d["n"]
+
+            self._craw[h]["csriptr"] = MPIShared((d["n"], d["ncsriptr"]), 
+                d["csriptrtype"], self._comm)
+            self._cosize += d["csriptrtype"].itemsize * d["ncsriptr"] \
+                * d["n"]
+            
+            self._craw[h]["csrdata"] = MPIShared((d["n"], d["ncsrdata"]), 
+                d["csrdatatype"], self._comm)
+            self._cosize += d["csrdatatype"].itemsize * d["ncsrdata"] \
+                * d["n"]
+
+        if self._root:
+            print("INFO:   coadds use {:0.1f}MB of shared memory".format(\
+                self._cosize / (1024.0 * 1024.0)))
+            sys.stdout.flush()
+
+        # Now go back through the targets, create the coadd, store in
+        # shared memory, and wrap this by spectra stored in the Target.
+
+        for t in targets:
+            tempco = compute_coadd(t.spectra)
+            t.coadd = list()
+            for s in tempco:
+                h = s.wavehash
+                info = nspec[h]
+                raw = self._craw[h]
+
+                assert info["nwave"] == s.nwave
+                assert info["ndiag"] == s.R.data.shape[0]
+                assert info["splen"] == s.R.data.shape[1]
+                assert info["ndiadata"] == len(s.R.data.ravel())
+                assert info["ndiaoff"] == len(s.R.offsets.ravel())
+                assert info["diaofftype"] == s.R.offsets.dtype
+                assert info["csrindxtype"] == s.Rcsr.indices.dtype
+                assert info["csriptrtype"] == s.Rcsr.indptr.dtype
+                assert info["csrdatatype"] == s.Rcsr.data.dtype
+                assert info["ncsrindx"] == len(s.Rcsr.indices)
+                assert info["ncsriptr"] == len(s.Rcsr.indptr)
+                assert info["ncsrdata"] == len(s.Rcsr.data)
+
+                if coffsets[h] == 0:
+                    raw["wave"].set(s.wave, (0,), fromrank=0)
+                raw["flux"].set(s.flux.reshape((1,-1)), 
+                    (coffsets[h], 0), fromrank=0)
+                raw["ivar"].set(s.ivar.reshape((1,-1)), 
+                    (coffsets[h], 0), fromrank=0)
+                
+                raw["diaoff"].set(s.R.offsets.ravel().reshape((1,-1)), 
+                    (coffsets[h], 0), fromrank=0)
+                raw["diadata"].set(s.R.data.ravel().reshape((1,-1)), 
+                    (coffsets[h], 0), fromrank=0)
+
+                csrindx = s.Rcsr.indices.copy().astype(info["csrindxtype"])
+                csrindx.shape = (1, info["ncsrindx"])
+                raw["csrindx"].set(csrindx, (coffsets[h], 0), fromrank=0)
+
+                csriptr = s.Rcsr.indptr.copy().astype(info["csriptrtype"])
+                csriptr.shape = (1, info["ncsriptr"])
+                raw["csriptr"].set(csriptr, (coffsets[h], 0), fromrank=0)
+                
+                csrdata = s.Rcsr.data.copy().astype(info["csrdatatype"])
+                csrdata.shape = (1, info["ncsrdata"])
+                raw["csrdata"].set(csrdata, (coffsets[h], 0), fromrank=0)
+
+                mwave = np.array(raw["wave"]._data, copy=False)
+                mflux = np.array(raw["flux"]._data[coffsets[h]], copy=False)
+                mivar = np.array(raw["ivar"]._data[coffsets[h]], copy=False)
+
+                mRoffsets = np.array(raw["diaoff"]._data[coffsets[h]], copy=False)
+                mRdata = raw["diadata"]._data[coffsets[h]].view()
+                mRdata.shape = (info["ndiag"], info["splen"])
+                mR = scipy.sparse.dia_matrix((mRdata, mRoffsets), 
+                    shape=(info["splen"], info["splen"]), copy=False)
+
+                mRcsrindx = np.array(raw["csrindx"]._data[coffsets[h]], copy=False)
+                mRcsriptr = np.array(raw["csriptr"]._data[coffsets[h]], copy=False)
+                mRcsrdata = np.array(raw["csrdata"]._data[coffsets[h]], copy=False)
+                mRcsr = scipy.sparse.csr_matrix((mRcsrdata, mRcsrindx,
+                    mRcsriptr), copy=False)
+
+                t.coadd.append(SimpleSpectrum(mwave, mflux, mivar, mR, 
+                    Rcsr=mRcsr))
+
+                self._verify_buffer("coadd wave for target {}".format(t.id),
+                    raw["wave"]._data, t.coadd[-1].wave)
+                self._verify_buffer("coadd flux for target {}".format(t.id),
+                    raw["flux"]._data[coffsets[h]], t.coadd[-1].flux)
+                self._verify_buffer("coadd ivar for target {}".format(t.id),
+                    raw["ivar"]._data[coffsets[h]], t.coadd[-1].ivar)
+                self._verify_Rdiag("coadd for target {}".format(t.id),
+                    raw["diaoff"]._data[coffsets[h]], 
+                    raw["diadata"]._data[coffsets[h]], 
+                    t.coadd[-1].R)
+                self._verify_Rcsr("coadd for target {}".format(t.id),
+                    raw["csrindx"]._data[coffsets[h]], 
+                    raw["csriptr"]._data[coffsets[h]], 
+                    raw["csrdata"]._data[coffsets[h]], 
+                    t.coadd[-1].Rcsr)
+
+                coffsets[h] += 1
+            del tempco
+        return
 
 
 def rrdesi(options=None, comm=None):
@@ -237,16 +1007,24 @@ def rrdesi(options=None, comm=None):
     start_time = time.time()
     pid = os.getpid()
     
-    parser = optparse.OptionParser(usage = "%prog [options] spectra1 spectra2...")
-    parser.add_option("-t", "--templates", type="string",  help="template file or directory")
-    parser.add_option("-o", "--output", type="string",  help="output file")
-    parser.add_option("--zbest", type="string",  help="output zbest fits file")
-    parser.add_option("-n", "--ntargets", type=int,  help="number of targets to process")
-    parser.add_option("--mintarget", type=int,  help="first target to include", default=0)
-    parser.add_option("--ncpu", type=int,  help="number of cpu cores for multiprocessing", default=None)
-    parser.add_option("--debug", help="debug with ipython", action="store_true")
-    ### parser.add_option("--coadd", help="use coadd instead of individual spectra", action="store_true")
-    parser.add_option("--allspec", help="use individual spectra instead of coadd", action="store_true")
+    parser = optparse.OptionParser(usage = \
+        "%prog [options] spectra1 spectra2...")
+    parser.add_option("-t", "--templates", type="string",
+        help="template file or directory")
+    parser.add_option("-o", "--output", type="string",
+        help="output file")
+    parser.add_option("--zbest", type="string",
+        help="output zbest fits file")
+    parser.add_option("-n", "--ntargets", type=int,
+        help="number of targets to process")
+    parser.add_option("--mintarget", type=int,
+        help="first target to include", default=0)
+    parser.add_option("--ncpu", type=int,
+        help="number of cpu cores for multiprocessing", default=None)
+    parser.add_option("--debug", help="debug with ipython", 
+        action="store_true")
+    parser.add_option("--allspec", 
+        help="use individual spectra instead of coadd", action="store_true")
 
     if options is None:
         opts, infiles = parser.parse_args()
@@ -272,19 +1050,6 @@ def rrdesi(options=None, comm=None):
         spectrum_class = SimpleSpectrum
         if opts.ncpu is None or opts.ncpu > 1:
             spectrum_class = MultiprocessingSharedSpectrum
-        try:
-            targets, meta = read_spectra(infiles,spectrum_class=spectrum_class)
-        except RuntimeError:
-            targets, meta = read_bricks(infiles,spectrum_class=spectrum_class)
-            
-        if not opts.allspec:
-            for t in targets:
-                t._all_spectra = t.spectra
-                t.spectra = t.coadd
-
-        if opts.ntargets is not None:
-            targets = targets[opts.mintarget:opts.mintarget+opts.ntargets]
-            meta = meta[opts.mintarget:opts.mintarget+opts.ntargets]
         
         print('INFO: reading templates')
         sys.stdout.flush()
@@ -295,8 +1060,6 @@ def rrdesi(options=None, comm=None):
             templates = io.read_templates(template_list=opts.templates, template_dir=None)
 
         dt = time.time() - t0
-        # print('DEBUG: PID {} read targets and templates in {:.1f} seconds'.format(pid,dt))
-        sys.stdout.flush()
         
     # all processes get a copy of the templates from rank 0
     if comm is not None:
@@ -304,13 +1067,32 @@ def rrdesi(options=None, comm=None):
 
     # Call zfind differently depending on our type of parallelism.
 
+    meta = None
     if comm is not None:
         # Use MPI
-        with MPISharedTargets(targets, comm) as shared_targets:
+        with MPISharedTargetsDesi(comm, infiles, coadd=(not opts.allspec)) \
+            as shared_targets:
+            meta = shared_targets.meta
             zscan, zfit = zfind(shared_targets.targets, templates, 
-                ncpu=None, comm=comm)
+            ncpu=None, comm=shared_targets.comm)
     else:
         # Use pure multiprocessing
+        try:
+            targets, meta = read_spectra(infiles, 
+                spectrum_class=spectrum_class)
+        except RuntimeError:
+            targets, meta = read_bricks(infiles, 
+                spectrum_class=spectrum_class)
+            
+        if not opts.allspec:
+            for t in targets:
+                t._all_spectra = t.spectra
+                t.spectra = t.coadd
+
+        if opts.ntargets is not None:
+            targets = targets[opts.mintarget:opts.mintarget+opts.ntargets]
+            meta = meta[opts.mintarget:opts.mintarget+opts.ntargets]
+
         zscan, zfit = zfind(targets, templates, ncpu=opts.ncpu)
     
     if rank == 0:
@@ -338,7 +1120,8 @@ def rrdesi(options=None, comm=None):
     run_time = time.time() - start_time
     
     if comm is None or comm.rank == 0:
-        print('INFO: finished {} in {:.1f} seconds'.format(os.path.basename(infiles[0]), run_time))
+        print('INFO: finished {} in {:.1f} seconds'.format(\
+            os.path.basename(infiles[0]), run_time))
     
     if opts.debug:
         if comm is not None:

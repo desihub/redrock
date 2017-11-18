@@ -127,102 +127,42 @@ class MultiprocessingSharedSpectrum(object):
 
 class SimpleSpectrum(object):
 
-    def __init__(self, wave, flux, ivar, R):
+    def __init__(self, wave, flux, ivar, R, Rcsr=None):
         self.nwave=wave.size
         self.wave=wave
         self.flux=flux
         self.ivar=ivar
         self.R=R
-        self.Rcsr = self.R.tocsr()
+        self.Rcsr = Rcsr
+        if self.Rcsr is None:
+            self.Rcsr = self.R.tocsr()
         self.wavehash = hash((len(wave), wave[0], wave[1], wave[-2], wave[-1]))
 
 
 class MPISharedTargets(object):
 
-    def __init__(self, targets, comm):
+    def __init__(self, comm):
         """
-        Place a list of targets into MPI shared memory.
-        This goes as follows.
-        1) The root process reads the targets, fills a dictionary containing
-        for each spectrum of each target, the indices of
-        the wave, flux, ivar, rdata, roffsets and rshape arrays in the shared
-        memory buffer ( see self._fill_target_dictionary for more details
-        on the format of this dictionary ).
-        2) The dictionary is broadcasted to all processes.
-        3) The root process allocates and fill the memory buffer with data.
-        4) All processes recreate the target list, using references to portions of 
-           the memory buffer for all wave, flux, ivar, rdata arrays.
-        
+        Collection of targets in MPI shared memory.
+
+        This base class defines the interface needed by higher-level
+        shared target objects which might store target lists from objects
+        in regular memory or load data from a file.
+
         Args:
-            targets (list): the list of targets.  This is ONLY meaningful
-                on the rank zero process.  Data on other processes is
-                ignored.
             comm (mpi4py.MPI.Comm): the communicator to use (or None).
         """
-
         self._comm = comm
         self._dtype = np.dtype(np.float64)
 
-        root = False
+        self._root = False
         if self._comm is None:
-            root = True
+            self._root = True
         elif self._comm.rank == 0:
-            root = True
+            self._root = True
 
-        # We are going to pack the target data into one big memory buffer.
-        # First compute the displacements of the data for each target.
-
-        self._target_dictionary = None
-        self._bufsize = None
-
-        if root:
-            self._target_dictionary, self._bufsize = \
-                self._fill_target_dictionary(targets)
-        
-        if self._comm is not None:
-            self._target_dictionary = self._comm.bcast(self._target_dictionary,
-                root=0)
-            self._bufsize = self._comm.bcast(self._bufsize, root=0)
-
-        # Allocate the shared buffer
-        self._shared = MPIShared((self._bufsize,), self._dtype, self._comm)
-
-        # Now set the shared data buffer, one target at a time
-
-        targetnum = 0
-        for id, tdict in self._target_dictionary.items():
-            for spectra_label in ["spectra", "coadd"]:
-                specnum = 0
-                for spectra_dict in tdict[spectra_label]:
-                    target_begin = spectra_dict["wave"][0]
-                    target_end = spectra_dict["rshape"][1]
-                    target_buffer = None
-                    if root:
-                        assert targets[targetnum].id == id
-                        target_buffer = np.empty((target_end - target_begin,),
-                            dtype=np.float64)
-                        spectrum = None
-                        if spectra_label == "spectra":
-                            spectrum = targets[targetnum].spectra[specnum]
-                        elif spectra_label == "coadd":
-                            spectrum = targets[targetnum].coadd[specnum]
-                        for label, an_array in zip(["wave", "flux", "ivar", 
-                            "rdata", "roffsets", "rshape"], [spectrum.wave,
-                            spectrum.flux, spectrum.ivar, spectrum.R.data, 
-                            spectrum.R.offsets.astype(self._dtype),
-                            np.array(spectrum.R.shape).astype(self._dtype)]):
-                            begin = spectra_dict[label][0] - target_begin
-                            end = spectra_dict[label][1] - target_begin
-                            target_buffer[begin:end] = an_array.ravel()
-                    self._shared.set(target_buffer, (target_begin,), 
-                        fromrank=0)
-                    specnum += 1
-            targetnum += 1
-
-        # Wrap the target data in a friendlier format.  This will likely
-        # duplicate some data from the resolution matrix.
-
-        self.targets = self._get_targets()
+        self._remapped = False
+        self._targets = None
 
 
     def __del__(self):
@@ -238,31 +178,143 @@ class MPISharedTargets(object):
     def close(self):
         return
 
+    @property
+    def comm(self):
+        return self._comm
 
-    def _fill_target_dictionary(self, targets):
+    @property
+    def targets(self):
         """
-        Reads a list of targets, fills a dictionary containing
-        for each spectrum of each target, the indices of
-        the wave, flux, ivar, rdata, roffsets and rshape arrays in an array to be allocated.
+        Return the re-mapped target list.
+        """
+        if not self._remapped:
+            self._targets = self._get_targets()
+            self._remapped = True
+        return self._targets
+
+    def _get_targets(self):
+        """
+        This internal function should be overloaded by derived classes that
+        store shared targets in a specific way.  We raise an exception here
+        to ensure that no one tries to use the base class directly.
+        """
+        raise NotImplementedError("You should not instantiate an MPISharedTargets base class directly.")
+        return None
+
+
+class MPISharedTargetsCopy(MPISharedTargets):
+
+    def __init__(self, comm, targets):
+        """
+        Collection of targets in MPI shared memory.
+
+        This stores a collection of targets that are copied into shared
+        memory from "normal" per-process memory.  This can be used for a
+        small number of targets that can fit into per-process memory at
+        one time.
+        
+        Args:
+            comm (mpi4py.MPI.Comm): the communicator to use (or None).
+            targets (list): the list of targets.
+        """
+        super().__init__(comm)
+
+        # We are going to pack the target data into one big memory buffer.
+        # First compute the displacements of the data for each target.
+
+        self._target_dictionary = None
+        self._bufsize = None
+
+        if self._root:
+            self._target_dictionary, self._bufsize = \
+                self._target_offsets(targets)
+        
+        if self._comm is not None:
+            self._target_dictionary = self._comm.bcast(self._target_dictionary,
+                root=0)
+            self._bufsize = self._comm.bcast(self._bufsize, root=0)
+
+        # Allocate the shared buffer
+        self._shared = MPIShared((self._bufsize,), self._dtype, self._comm)
+
+        # Fill the shared buffer
+        self._fill(targets)
+
+
+    @property
+    def target_offsets(self):
+        """
+        Return the target offset dictionary.
+        """
+        return self._target_dictionary
+
+
+    def _fill(self, targets):
+        """
+        Copy the specified target data into the shared memory.
+
+        Args:
+            targets (list): the list of targets.
+        """
+        for target in targets:
+            id = target.id
+            tdict = self._target_dictionary[id]
+            for spectra_label in ["spectra", "coadd"]:
+                specnum = 0
+                for spectra_dict in tdict[spectra_label]:
+                    target_begin = spectra_dict["wave"][0]
+                    target_end = spectra_dict["rshape"][1]
+                    target_buffer = None
+                    if root:
+                        target_buffer = np.empty((target_end - target_begin,),
+                            dtype=np.float64)
+                        spectrum = None
+                        if spectra_label == "spectra":
+                            spectrum = targets[id].spectra[specnum]
+                        elif spectra_label == "coadd":
+                            spectrum = targets[id].coadd[specnum]
+                        for label, an_array in zip(["wave", "flux", "ivar", 
+                            "rdata", "roffsets", "rshape"], [spectrum.wave,
+                            spectrum.flux, spectrum.ivar, spectrum.R.data, 
+                            spectrum.R.offsets.astype(self._dtype),
+                            np.array(spectrum.R.shape).astype(self._dtype)]):
+                            begin = spectra_dict[label][0] - target_begin
+                            end = spectra_dict[label][1] - target_begin
+                            target_buffer[begin:end] = an_array.ravel()
+                    self._shared.set(target_buffer, (target_begin,), 
+                        fromrank=0)
+                    specnum += 1
+        return
+
+    def _target_offsets(self, targets):
+        """
+        Construct a dictionary of buffer offsets.
+
+        This examines the sizes of the data for a list of existing targets and
+        creates a dictionary of offsets to use when packing these into a
+        contiguous memory buffer.  Offsets are computed for the wave, flux,
+        ivar, rdata, roffsets and rshape data members.
+
         The dictionary structure is
-        { target_id_1 : { "spectra" : [ {"wave" : [b,e] , "flux" : [b,e] ,  ....} , ... ]} , "coadd" : [ ... ]},  target_id_2 : ... },
-        i.e. a dictionary of targets identified by their id
-             - each target has two list of spectra labeled "spectra" and "coadd"
-             - each spectrum in the two lists of spectra is a dictionary containing, for the keys
-                "wave", "flux", "ivar", "rdata", "roffsets" and "rshape" , the begin and end index of the array in the shared 
-               memory buffer.
+        { target_id_1 : { "spectra" : [ {"wave" : [b,e] , "flux" : [b,e] ,
+            ....}, ... ]} , "coadd" : [ ... ]},  target_id_2 : ... }, 
+        i.e. a dictionary of targets identified by their id.
+        
+        Each target has two list of spectra labeled "spectra" and "coadd". 
+        Each spectrum in the two lists of spectra is a dictionary containing,
+        for the keys "wave", "flux", "ivar", "rdata", "roffsets" and "rshape",
+        the begin and end index of the array in the shared memory buffer.
         
         Args:
             targets (list): the list of targets.
 
         Returns:
-            - dictionnary
-            - size of the memory array
-        
+            - dictionary
+            - number of double precision elements in the memory buffer.
         """
         n = 0
         dictionary = OrderedDict() # keep targets as ordered in list
-        for target in targets :
+        for target in targets:
             dictionary[target.id] = {}
             for spectra_label, spectra in zip(["spectra", "coadd"], 
                 [target.spectra, target.coadd]):
@@ -280,14 +332,16 @@ class MPISharedTargets(object):
                 dictionary[target.id][spectra_label] = spectra_list
         return dictionary, n
 
-
     def _get_targets(self):
         """
-        Generates a set of targets from a shared memory buffer, using self._target_dictionary
-        to get the list of target ids, the number spectra, and the addresses in the memory
-        of each array that defines a spectrum (wave, flux, ivar, rdata).
+        Generates a set of targets from a shared memory buffer.
+
+        This uses using self._target_dictionary to get the list of target ids,
+        the number of spectra, and the addresses in the memory of each array
+        that defines a spectrum (wave, flux, ivar, rdata).
+
+        This is called by the base class targets().
         """
-        
         targets = list()
         for id, tdict in self._target_dictionary.items():
             spectra = list()
@@ -312,8 +366,52 @@ class MPISharedTargets(object):
         return targets
 
 
+def compute_coadd(spectra, spectrum_class=SimpleSpectrum):
+    coadd = list()
+    for key in set([s.wavehash for s in spectra]):
+        wave = None
+        unweightedflux = None
+        weightedflux = None
+        weights = None
+        R = None
+        nspec = 0
+        for s in spectra:
+            if s.wavehash != key: continue
+            nspec += 1
+            n = len(s.ivar)
+            if weightedflux is None:
+                wave = s.wave
+                unweightedflux = s.flux.copy()
+                weightedflux = s.flux * s.ivar
+                weights = s.ivar.copy()
+                W = scipy.sparse.dia_matrix((s.ivar, [0,]), shape=(n,n))
+                weightedR = W * s.R
+            else:
+                unweightedflux += s.flux
+                weightedflux += s.flux * s.ivar
+                weights += s.ivar
+                W = scipy.sparse.dia_matrix((s.ivar, [0,]), shape=(n,n))
+                weightedR += W * s.R
+
+        isbad = (weights == 0)
+        flux = weightedflux / (weights + isbad)
+        flux[isbad] = unweightedflux[isbad] / nspec
+        Winv = scipy.sparse.dia_matrix((1/(weights+isbad), [0,]), shape=(n,n))
+        R = Winv * weightedR
+        R = R.todia()
+        # Ensure that all elements are not equal to zero, so that
+        # when this is converted to a CSR matrix, it will have a
+        # fixed number of non-zeros.
+        R.data[(np.abs(R.data) < 1.0e-15)] = 1.0e-15
+
+        coadd.append(spectrum_class(wave, flux, weights, R))
+
+    return coadd
+
+
 class Target(object):
-    def __init__(self, targetid, spectra, coadd=None,do_coadd = True):
+    
+    def __init__(self, targetid, spectra, coadd=None, do_coadd=True):
         """
         Create a Target object
 
@@ -334,44 +432,13 @@ class Target(object):
             return
 
         if coadd is None:
-        #- Make a basic coadd
-            self.coadd = list()
-            for key in set([s.wavehash for s in spectra]):
-                wave = None
-                unweightedflux = None
-                weightedflux = None
-                weights = None
-                R = None
-                nspec = 0
-                for s in spectra:
-                    if s.wavehash != key: continue
-                    nspec += 1
-                    if weightedflux is None:
-                        wave = s.wave
-                        unweightedflux = s.flux.copy()
-                        weightedflux = s.flux * s.ivar
-                        weights = s.ivar.copy()
-                        n = len(s.ivar)
-                        W = scipy.sparse.dia_matrix((s.ivar, [0,]), (n,n))
-                        weightedR = W * s.R
-                    else:
-                        assert len(s.ivar) == n
-                        unweightedflux += s.flux
-                        weightedflux += s.flux * s.ivar
-                        weights += s.ivar
-                        W = scipy.sparse.dia_matrix((s.ivar, [0,]), (n,n))
-                        weightedR += W * s.R
-
-                isbad = (weights == 0)
-                flux = weightedflux / (weights + isbad)
-                flux[isbad] = unweightedflux[isbad] / nspec
-                Winv = scipy.sparse.dia_matrix((1/(weights+isbad), [0,]), (n,n))
-                R = Winv * weightedR
-                R = R.todia()
-                self.coadd.append(MultiprocessingSharedSpectrum(wave, flux, weights, R))
+            #- Make a basic coadd
+            self.coadd = compute_coadd(spectra, 
+                spectrum_class=MultiprocessingSharedSpectrum)
         else :
-            self.coadd=coadd
-    
+            self.coadd = coadd
+
+
     def sharedmem_pack(self):
         '''Prepare underlying numpy arrays for sending to a new process;
         call self.sharedmem_unpack() to restore to original state.'''
