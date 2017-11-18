@@ -384,26 +384,33 @@ def compute_coadd(spectra, spectrum_class=SimpleSpectrum):
                 unweightedflux = s.flux.copy()
                 weightedflux = s.flux * s.ivar
                 weights = s.ivar.copy()
-                W = scipy.sparse.dia_matrix((s.ivar, [0,]), (n,n))
+                W = scipy.sparse.dia_matrix((s.ivar, [0,]), shape=(n,n))
                 weightedR = W * s.R
             else:
                 unweightedflux += s.flux
                 weightedflux += s.flux * s.ivar
                 weights += s.ivar
-                W = scipy.sparse.dia_matrix((s.ivar, [0,]), (n,n))
+                W = scipy.sparse.dia_matrix((s.ivar, [0,]), shape=(n,n))
                 weightedR += W * s.R
 
         isbad = (weights == 0)
         flux = weightedflux / (weights + isbad)
         flux[isbad] = unweightedflux[isbad] / nspec
-        Winv = scipy.sparse.dia_matrix((1/(weights+isbad), [0,]), (n,n))
+        Winv = scipy.sparse.dia_matrix((1/(weights+isbad), [0,]), shape=(n,n))
         R = Winv * weightedR
         R = R.todia()
+        # Ensure that all elements are not equal to zero, so that
+        # when this is converted to a CSR matrix, it will have a
+        # fixed number of non-zeros.
+        R.data[(np.abs(R.data) < 1.0e-15)] = 1.0e-15
+
         coadd.append(spectrum_class(wave, flux, weights, R))
+
     return coadd
 
 
 class Target(object):
+    
     def __init__(self, targetid, spectra, coadd=None, do_coadd=True):
         """
         Create a Target object
