@@ -1,30 +1,45 @@
-'''
+"""
 redrock.external.boss
 =====================
 
 redrock wrapper tools for BOSS
-'''
+"""
 
 from __future__ import absolute_import, division, print_function
 
-import os, sys, fitsio
+import os
+import sys
+import re
 import warnings
-if sys.version_info[0] > 2:
-    basestring = str
+import traceback
+
+import argparse
 
 import numpy as np
 from scipy import sparse
+
+from astropy.io import fits
+from astropy.table import Table
+
+import fitsio
+
 import desispec.resolution
 from desispec.resolution import Resolution
-import os.path
 
-from .. import io
-from .. import zfind
-from ..dataobj import (Target, MultiprocessingSharedSpectrum,
-    SimpleSpectrum, MPISharedTargets)
+from ..utils import elapsed, get_mp, distribute_work
+
+from ..targets import Spectrum, Target, DistTargetsCopy
+
+from ..templates import load_dist_templates
+
+from ..results import write_zscan
+
+from ..zfind import zfind
+
 
 def platemjdfiber2targetid(plate, mjd, fiber):
     return plate*1000000000 + mjd*10000 + fiber
+
 
 def targetid2platemjdfiber(targetid):
     fiber = targetid % 10000
@@ -32,13 +47,14 @@ def targetid2platemjdfiber(targetid):
     plate = (targetid // (10000 * 100000))
     return (plate, mjd, fiber)
 
+
 def write_zbest(outfile, zbest):
-    '''
-    Write zbest Table to outfile
+    """Write zbest Table to outfile
 
     Adds blank BRICKNAME and SUBTYPE columns if needed
     Adds zbest.meta['EXTNAME'] = 'ZBEST'
-    '''
+
+    """
     ntargets = len(zbest)
     if 'BRICKNAME' not in zbest.colnames:
         zbest['BRICKNAME'] = np.zeros(ntargets, dtype='S8')
@@ -47,19 +63,30 @@ def write_zbest(outfile, zbest):
         zbest['SUBTYPE'] = np.zeros(ntargets, dtype='S8')
 
     zbest.meta['EXTNAME'] = 'ZBEST'
-    zbest.write(outfile, overwrite=True)
 
-def read_spectra(spplate_name, targetids=None,spectrum_class=SimpleSpectrum,use_frames=False,fiberid=None):
-    '''
-    Read targets from a list of spectra files
+    hx = fits.HDUList()
+    hx.append(fits.PrimaryHDU())
+    hx.append(fits.convenience.table_to_hdu(zbest))
+    hx.writeto(outfile, overwrite=True)
+    return
+
+
+def read_spectra(spplate_name, targetids=None, use_frames=False,
+    fiberid=None, coadd=False):
+    """Read targets from a list of spectra files
 
     Args:
-        spplate_name: input spPlate file
+        spplate_name (str): input spPlate file
+        targetids (list): restrict targets to this subset.
+        use_frames (bool): if True, use frames.
+        fiberid (int): Use this fiber ID.
+        coadd (bool): if True, compute and use the coadds.
 
-    Returns tuple of (targets, meta) where
-        targets is a list of Target objects and
-        meta is a Table of metadata (currently only BRICKNAME)
-    '''
+    Returns:
+        tuple: (targets, meta) where targets is a list of Target objects and
+        meta is a Table of metadata (currently only BRICKNAME).
+
+    """
     ## read spplate
     spplate = fitsio.FITS(spplate_name)
     plate = spplate[0].read_header()["PLATEID"]
@@ -87,7 +114,7 @@ def read_spectra(spplate_name, targetids=None,spectrum_class=SimpleSpectrum,use_
                 infiles.append(exp)
 
     spplate.close()
-    bricknames=[]
+    bricknames={}
     dic_spectra = {}
 
     for infile in infiles:
@@ -145,7 +172,7 @@ def read_spectra(spplate_name, targetids=None,spectrum_class=SimpleSpectrum,use_
             if t not in dic_spectra:
                 dic_spectra[t]=[]
                 brickname = '{}-{}'.format(plate,mjd)
-                bricknames.append(brickname)
+                bricknames[t] = brickname
 
             ## build resolution from wdisp
             reso = np.zeros([ndiag,nbins])
@@ -160,149 +187,246 @@ def read_spectra(spplate_name, targetids=None,spectrum_class=SimpleSpectrum,use_
             R = Resolution(reso)
             ccd = sparse.spdiags(1./R.sum(axis=1).T, 0, *R.shape)
             R = (ccd*R).todia()
-            dic_spectra[t].append(spectrum_class(la[i],fl[i],iv[i],R))
+            dic_spectra[t].append(Spectrum(la[i], fl[i], iv[i], R, R.tocsr()))
 
         h.close()
         print("DEBUG: read {} ".format(infile))
 
     if targetids == None:
-        targetids = dic_spectra.keys()
+        targetids = sorted(list(dic_spectra.keys()))
 
     targets = []
     for targetid in targetids:
         spectra = dic_spectra[targetid]
         if len(spectra) > 0:
-            targets.append(Target(targetid, spectra, do_coadd=False))
+            targets.append(Target(targetid, spectra, coadd=coadd))
         else:
             print('ERROR: Target {} on {} has no good spectra'.format(targetid, os.path.basename(brickfiles[0])))
 
     #- Create a metadata table in case we might want to add other columns
     #- in the future
-    assert len(bricknames) == len(targets)
-    dtype = [('BRICKNAME', 'S8'),]
-    meta = np.zeros(len(bricknames), dtype=dtype)
-    meta['BRICKNAME'] = bricknames
+    assert len(bricknames.keys()) == len(targets)
 
-    return targets, meta
+    metatable = Table(names=("TARGETID", "BRICKNAME"), dtype=("i8", "S8",))
+    for t in targetids:
+        metatable.add_row( (t, bricknames[t]) )
+
+    return targets, metatable
+
 
 def rrboss(options=None, comm=None):
-    import redrock
-    import optparse
-    from astropy.io import fits
-    import time
+    """Estimate redshifts for BOSS targets.
 
-    # Note, in the pure multiprocessing case (comm == None), "rank"
-    # will always be set to zero, which is fine since we are outside
-    # any areas using multiprocessing and this is just used to control
-    # program flow.
-    rank = 0
-    nproc = 1
-    if comm is not None:
-        rank = comm.rank
-        nproc = comm.size
+    This loads targets serially and copies them into a DistTargets class.
+    It then runs redshift fitting and writes the output to a catalog.
 
-    start_time = time.time()
-    pid = os.getpid()
+    Args:
+        options (list): optional list of commandline options to parse.
+        comm (mpi4py.Comm): MPI communicator to use.
 
-    parser = optparse.OptionParser(usage = "%prog [options] spectra1 spectra2...")
-    parser.add_option("--spplate", type="string",  help="input plate directory")
-    parser.add_option("-t", "--templates", type="string",  help="template file or directory")
-    parser.add_option("-o", "--output", type="string",  help="output file")
-    parser.add_option("--zbest", type="string",  help="output zbest fits file")
-    parser.add_option("-n", "--ntargets", type=int,  help="number of targets to process")
-    parser.add_option("--mintarget", type=int,  help="first target to include", default=0)
-    parser.add_option("--ncpu", type=int,  help="number of cpu cores for multiprocessing", default=None)
-    parser.add_option("--debug", help="debug with ipython", action="store_true")
-    parser.add_option("--use-frames", help="use individual spcframes instead of spplate (the spCFrame files are expected to be in the same directory as the spPlate", action="store_true")
+    """
+    global_start = elapsed(None, "", comm=comm)
 
+    parser = argparse.ArgumentParser(description="Estimate redshifts from"
+        " BOSS target spectra.")
+
+    parser.add_argument("--spplate", type=str, default=None,
+        required=True, help="input plate directory")
+
+    parser.add_argument("-t", "--templates", type=str, default=None,
+        required=False, help="template file or directory")
+
+    parser.add_argument("-o", "--output", type=str, default=None,
+        required=False, help="output file")
+
+    parser.add_argument("--zbest", type=str, default=None,
+        required=False, help="output zbest FITS file")
+
+    parser.add_argument("--targetids", type=str, default=None,
+        required=False, help="comma-separated list of target IDs")
+
+    parser.add_argument("--mintarget", type=int, default=None,
+        required=False, help="first target to process")
+
+    parser.add_argument("-n", "--ntargets", type=int,
+        required=False, help="the number of targets to process")
+
+    parser.add_argument("--nminima", type=int, default=3,
+        required=False, help="the number of redshift minima to search")
+
+    parser.add_argument("--allspec", default=False, action="store_true",
+        required=False, help="use individual spectra instead of coadd")
+
+    parser.add_argument("--mp", type=int, default=0,
+        required=False, help="if not using MPI, the number of multiprocessing"
+            " processes to use (defaults to half of the hardware threads)")
+
+    parser.add_argument("--use-frames", default=False, action="store_true",
+        required=False, help="use individual spcframes instead of spplate "
+        "(the spCFrame files are expected to be in the same directory as "
+        "the spPlate")
+
+    parser.add_argument("--debug", default=False, action="store_true",
+        required=False, help="debug with ipython (only if communicator has a "
+        "single process)")
+
+    args = None
     if options is None:
-        opts, infiles = parser.parse_args()
+        args = parser.parse_args()
     else:
-        opts, infiles = parser.parse_args(options)
+        args = parser.parse_args(options)
 
-    if (opts.output is None) and (opts.zbest is None):
-        print('ERROR: --output or --zbest required')
-        sys.exit(1)
+    comm_size = 1
+    comm_rank = 0
+    if comm is not None:
+        comm_size = comm.size
+        comm_rank = comm.rank
 
-    templates = None
-    targets   = None
-    meta      = None
+    # Check arguments- all processes have this, so just check on the first
+    # process
 
-    if rank == 0:
-        t0 = time.time()
-        sys.stdout.flush()
+    if comm_rank == 0:
+        if args.debug and comm_size != 1:
+            print("--debug can only be used if the communicator has one "
+                " process")
+            sys.stdout.flush()
+            if comm is not None:
+                comm.Abort()
 
-        spectrum_class = SimpleSpectrum
+        if (args.output is None) and (args.zbest is None):
+            print("--output or --zbest required")
+            sys.stdout.flush()
+            if comm is not None:
+                comm.Abort()
 
-        if opts.ncpu is None or opts.ncpu > 1:
-            spectrum_class = MultiprocessingSharedSpectrum
+        if (args.targetids is not None) and ((args.mintarget is not None) \
+            or (args.ntargets is not None)):
+            print("cannot select targets by both ID and range")
+            sys.stdout.flush()
+            if comm is not None:
+                comm.Abort()
 
-        targets, meta = read_spectra(opts.spplate,spectrum_class=spectrum_class,use_frames=opts.use_frames)
-        print("INFO: read {} targets".format(len(targets)))
+    targetids = None
+    if args.targetids is not None:
+        targetids = [ int(x) for x in args.targetids.split(",") ]
 
-        if opts.ntargets is not None:
-            targets = targets[opts.mintarget:opts.mintarget+opts.ntargets]
-            meta = meta[opts.mintarget:opts.mintarget+opts.ntargets]
+    n_target = None
+    if args.ntargets is not None:
+        n_target = args.ntargets
 
-        print('INFO: fitting {} targets'.format(len(targets)))
-        sys.stdout.flush()
+    first_target = None
+    if args.mintarget is not None:
+        first_target = args.mintarget
+    elif n_target is not None:
+        first_target = 0
 
-        if not opts.templates is None and os.path.isdir(opts.templates):
-            templates = io.read_templates(template_list=None, template_dir=opts.templates)
+    # Multiprocessing processes to use if MPI is disabled.
+    mpprocs = 0
+    if comm is None:
+        mpprocs = get_mp(args.mp)
+        print("Running with {} processes".format(mpprocs))
+        if "OMP_NUM_THREADS" in os.environ:
+            nthread = int(os.environ["OMP_NUM_THREADS"])
+            if nthread != 1:
+                print("WARNING:  {} multiprocesses running, each with "
+                    "{} threads ({} total)".format(mpprocs, nthread,
+                    mpprocs*nthread))
+                print("WARNING:  Please ensure this is <= the number of "
+                    "physical cores on the system")
         else:
-            templates = io.read_templates(template_list=opts.templates, template_dir=None)
-
-        dt = time.time() - t0
+            print("WARNING:  using multiprocessing, but the OMP_NUM_THREADS")
+            print("WARNING:  environment variable is not set- your system may")
+            print("WARNING:  be oversubscribed.")
+        sys.stdout.flush()
+    elif comm_rank == 0:
+        print("Running with {} processes".format(comm_size))
         sys.stdout.flush()
 
-    # all processes get a copy of the templates from rank 0
-    if comm is not None:
-        templates = comm.bcast(templates, root=0)
+    try:
+        # Load and distribute the targets
+        if comm_rank == 0:
+            print("Loading targets...")
+            sys.stdout.flush()
 
-    # Call zfind differently depending on our type of parallelism.
+        start = elapsed(None, "", comm=comm)
 
-    if comm is not None:
-        # Use MPI
-        with MPISharedTargets(targets, comm) as shared_targets:
-            zscan, zfit = zfind(shared_targets.targets, templates,
-                ncpu=None, comm=comm)
-    else:
-        # Use pure multiprocessing
-        zscan, zfit = zfind(targets, templates, ncpu=opts.ncpu)
+        # Read the spectra on the root process
+        targets, meta = read_spectra(args.spplate, targetids=targetids,
+            use_frames=args.use_frames, coadd=(not args.allspec))
 
-    if rank == 0:
-        if opts.output:
-            print('INFO: writing {}'.format(opts.output))
-            io.write_zscan(opts.output, zscan, zfit, clobber=True)
+        if args.ntargets is not None:
+            targets = targets[first_target:first_target+n_targets]
+            meta = meta[first_target:first_target+n_targets]
 
+        stop = elapsed(start, "Read of {} targets"\
+            .format(len(targets)), comm=comm)
 
-        if opts.zbest:
-            zbest = zfit[zfit['znum'] == 0]
+        # Distribute the targets.
 
-            #- Remove extra columns not needed for zbest
-            zbest.remove_columns(['zz', 'zzchi2', 'znum'])
+        start = elapsed(None, "", comm=comm)
 
-            #- Change to upper case like DESI
-            for colname in zbest.colnames:
-                if colname.islower():
-                    zbest.rename_column(colname, colname.upper())
+        dtargets = DistTargetsCopy(targets, meta=meta, comm=comm, root=0)
 
-            #- Add brickname column
-            zbest['BRICKNAME'] = meta['BRICKNAME']
+        # Get the dictionary of wavelength grids
+        dwave = dtargets.wavegrids()
 
-            print('INFO: writing {}'.format(opts.zbest))
-            write_zbest(opts.zbest, zbest)
+        stop = elapsed(start, "Distribution of {} targets"\
+            .format(len(dtargets.all_target_ids)), comm=comm)
 
-    run_time = time.time() - start_time
+        # Read the template data
 
-    if comm is None or comm.rank == 0:
-        print('INFO: finished in {:.1f} seconds'.format(run_time))
+        dtemplates = load_dist_templates(dwave, templates=args.templates,
+            comm=comm, mp_procs=mpprocs)
 
-    if opts.debug:
+        # Compute the redshifts, including both the coarse scan and the
+        # refinement.  This function only returns data on the rank 0 process.
+
+        start = elapsed(None, "", comm=comm)
+
+        scandata, zfit = zfind(dtargets, dtemplates, mpprocs,
+            nminima=args.nminima)
+
+        stop = elapsed(start, "Computing redshifts took", comm=comm)
+
+        # Write the outputs
+
+        if args.output is not None:
+            start = elapsed(None, "", comm=comm)
+            if comm_rank == 0:
+                write_zscan(args.output, scandata, zfit, clobber=True)
+            stop = elapsed(start, "Writing zscan data took", comm=comm)
+
+        if args.zbest:
+            start = elapsed(None, "", comm=comm)
+            if comm_rank == 0:
+                zbest = zfit[zfit['znum'] == 0]
+
+                # Remove extra columns not needed for zbest
+                zbest.remove_columns(['zz', 'zzchi2', 'znum'])
+
+                # Change to upper case like DESI
+                for colname in zbest.colnames:
+                    if colname.islower():
+                        zbest.rename_column(colname, colname.upper())
+
+                # Add brickname column
+                zbest['BRICKNAME'] = dtargets.meta['BRICKNAME']
+
+                write_zbest(args.zbest, zbest)
+
+            stop = elapsed(start, "Writing zbest data took", comm=comm)
+
+    except:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+        lines = [ "Proc {}: {}".format(comm_rank, x) for x in lines ]
+        print("".join(lines))
+        sys.stdout.flush()
         if comm is not None:
-            print('INFO: ignoring ipython debugging when using MPI')
-        else:
-            import IPython
-            IPython.embed()
+            comm.Abort()
 
-    return
+    global_stop = elapsed(global_start, "Total run time", comm=comm)
+
+    if args.debug:
+        import IPython
+        IPython.embed()

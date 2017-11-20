@@ -4,140 +4,197 @@ redrock.zfind
 
 Redshift finding algorithms.
 """
+
 from __future__ import division, print_function
-import time
-import os, sys
+
+import os
+import sys
+import traceback
 
 import time
+
 import numpy as np
 
-from . import zscan as rrzscan
-from . import fitz
+import astropy.table
+
 from . import constants
+
+from .utils import elapsed
+
+from .targets import Spectrum, Target, DistTargets, distribute_targets
+
+from .templates import Template, DistTemplate
+
+from .zscan import calc_zchi2_targets
+
+from .fitz import fitz, get_dv
+
 from .zwarning import ZWarningMask as ZW
 
-import multiprocessing as mp
 
-
-def _wrap_calc_zchi2(args):
+def _mp_fitz(chi2, target_data, t, nminima, qout):
+    """Wrapper for multiprocessing version of fitz.
+    """
     try:
-        return rrzscan.calc_zchi2_targets(*args)
-    except Exception as oops:
-        print('-'*60)
-        print('ERROR: calc_zchi2_targets raised exception; original traceback:')
-        import traceback
-        traceback.print_exc()
-        print('...propagating exception upwards')
-        print('-'*60)
-        raise oops
+        # Unpack targets from shared memory
+        for tg in target_data:
+            tg.sharedmem_unpack()
+        results = list()
+        for i, tg in enumerate(target_data):
+            zfit = fitz(chi2[i], t.template.redshifts, tg.spectra,
+                t.template, nminima=nminima)
+            npix = 0
+            for spc in tg.spectra:
+                npix += (spc.ivar > 0.).sum()
+            results.append( (tg.id, zfit, npix) )
+        qout.put(results)
+    except:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+        lines = [ "MP calc_zchi2: {}".format(x) for x in lines ]
+        print("".join(lines))
+        sys.stdout.flush()
 
 
-def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
-    '''
-    Given a list of targets and a list of templates, find redshifts
+def zfind(targets, templates, mp_procs=1, nminima=3):
+    """Compute all redshift fits for the local set of targets and collect.
+
+    Given targets and templates distributed across a set of MPI processes,
+    compute the redshift fits for all redshifts and our local set of targets.
+    Each process computes the fits for a slice of redshift range and then
+    cycles through redshift slices by passing the interpolated templates along
+    to the next process in order.
+
+    Note:
+        If using MPI, only the rank 0 process will return results- all other
+        processes with return a tuple of (None, None).
 
     Args:
-        targets : list of Target objects
-        templates: dictionary of Template objects (template_name: template)
+        targets (DistTargets): distributed targets.
+        templates (list): list of DistTemplate objects.
+        mp_procs (int): if not using MPI, this is the number of multiprocessing
+            processes to use.
+        nminima (int): number of chi^2 minima to consider.  Passed to fitz().
 
-    Options:
-        ncpu: number of CPU cores to use for multiprocessing
-        nminima: number of minima per spectype to return
+    Returns:
+        tuple: (allresults, allzfit), where "allresults" is a dictionary of the
+            full chi^2 fit information, suitable for writing to a redrock scan
+            file.  "allzfit" is an astropy Table of only the best fit parameters
+            for a limited set of minima.
 
-    Returns nested dictionary results[targetid][templatetype] with keys
-        - z: array of redshifts scanned
-        - zchi2: array of chi2 fit at each z
-        - zbest: best fit redshift (finer resolution fit around zchi2 minimum)
-        - minchi2: chi2 at zbest
-        - zerr: uncertainty on zbest
-        - zwarn: 0=good, non-0 is a warning flag
-    '''
-    # redshifts = dict(
-    #     GALAXY  = 10**np.arange(np.log10(0.1), np.log10(2.0), 4e-4),
-    #     STAR = np.arange(-0.001, 0.00101, 0.0001),
-    #     QSO  = 10**np.arange(np.log10(0.5), np.log10(4.0), 5e-4),
-    # )
+    """
 
-    pid = os.getpid()
-    zscan = dict()
-    for target in targets:
-        zscan[target.id] = dict()
-        for t in templates.values():
-            zscan[target.id][t.fulltype] = dict()
+    # Find most likely candidate redshifts by scanning over the
+    # pre-interpolated templates on a coarse redshift spacing.
 
-    if ncpu is None :
-        if comm is None :
-            # use multiprocessing by default
-            ncpu = max(mp.cpu_count() // 2, 1)
-        else :
-            ncpu = 1
+    # See if we are the process that should be printing stuff...
+    am_root = False
+    if targets.comm is None:
+        am_root = True
+    elif targets.comm.rank == 0:
+        am_root = True
 
-    if comm is not None :
-        if comm.rank == 0 :
-            print("INFO: using MPI with {} processes".format(comm.size))
+    # If we are not using MPI, our DistTargets object will have all the targets
+    # on the main process.  In that case, we would like to distribute our
+    # targets across multiprocesses.  Here we compute that distribution, if
+    # needed.
+
+    mpdist = None
+    if targets.comm is None:
+        mpdist = distribute_targets(targets.local(), mp_procs)
+
+    # Compute the coarse-binned chi2 for all local targets.
+
+    results = calc_zchi2_targets(targets, templates, mp_procs=mp_procs)
+
+    # For each of our local targets, refine the redshift fit close to the
+    # minima in the coarse fit.
+
+    for t in templates:
+        ft = t.template.full_type
+
+        if am_root:
+            print("  Finding best fits for template {}"\
+                .format(t.template.full_type))
             sys.stdout.flush()
-    elif ncpu > 1:
-        print("INFO: using multiprocessing with {} cores".format(ncpu))
-    else:
-        print("INFO: not using multiprocessing")
 
-    for t in templates.values():
+        start = elapsed(None, "", comm=t.comm)
 
-        if comm is not None and (comm.rank == 0) :
-            print('INFO: starting zchi2 scan for {}'.format(comm.rank,
-                t.fulltype))
-            sys.stdout.flush() #  this helps seeing something
+        # Here we have another parallelization choice between MPI and
+        # multiprocessing.
 
-        t0 = time.time()
-        if ncpu > 1:
-            zchi2, zcoeff, penalty = rrzscan.parallel_calc_zchi2_targets(t.redshifts, targets, t, ncpu=ncpu)
-        elif comm is not None:
-            zchi2, zcoeff, penalty = rrzscan.mpi_calc_zchi2_targets(t.redshifts, targets, t, comm=comm)
+        if targets.comm is not None:
+            # MPI case.  Every process just works with its local targets.
+            for tg in targets.local():
+                zfit = fitz(results[tg.id][ft]['zchi2'] \
+                    + results[tg.id][ft]['penalty'],
+                    t.template.redshifts, tg.spectra,
+                    t.template, nminima=nminima)
+                results[tg.id][ft]['zfit'] = zfit
+                results[tg.id][ft]['zfit']['npixels'] = 0
+                for spectrum in tg.spectra:
+                    results[tg.id][ft]['zfit']['npixels'] += \
+                        (spectrum.ivar>0.).sum()
+
         else:
-            zchi2, zcoeff, penalty = rrzscan.calc_zchi2_targets(t.redshifts, targets, t)
-        dt = time.time() - t0
+            # Multiprocessing case.
+            import multiprocessing as mp
 
-        if comm is None or comm.rank==0 :
-            print('DEBUG: PID {} {} zscan in {:.1f} seconds'.format(pid, t.fulltype, dt))
+            # Ensure that all targets are packed into shared memory
+            for tg in targets.local():
+                tg.sharedmem_pack()
 
-        t0 = time.time()
-        if comm is None : # multiprocessing version
-            zfits = fitz.parallel_fitz_targets(
-                zchi2+penalty, t.redshifts, targets, t,
-                ncpu=ncpu, nminima=nminima)
-        else : # mpi version
-            zfits = fitz.mpi_fitz_targets(
-                zchi2+penalty, t.redshifts, targets, t,
-                comm=comm, nminima=nminima)
-        dt = time.time() - t0
+            qout = mp.Queue()
 
-        if comm is None or comm.rank==0 :
-            print('DEBUG: PID {} {} fitz in {:.1f} seconds'.format(pid, t.fulltype, dt))
+            procs = list()
+            for i in range(mp_procs):
+                if len(mpdist[i]) == 0:
+                    continue
+                target_data = [ x for x in targets.local() if x.id in mpdist[i] ]
+                eff_chi2 = np.zeros((len(target_data),
+                    len(t.template.redshifts)), dtype=np.float64)
 
-        if comm is None or comm.rank == 0 :
+                for i, tg in enumerate(target_data):
+                    eff_chi2[i,:] = results[tg.id][ft]['zchi2'] \
+                        + results[tg.id][ft]['penalty']
+                p = mp.Process(target=_mp_fitz, args=(eff_chi2,
+                    target_data, t, nminima, qout))
+                procs.append(p)
+                p.start()
 
-            for i,zfit in enumerate(zfits) :
-                zscan[targets[i].id][t.fulltype]['zfit'] = zfit
+            # Extract the output
+            for i in range(mp_procs):
+                if len(mpdist[i]) == 0:
+                    continue
+                res = qout.get()
+                for rs in res:
+                    results[rs[0]][ft]['zfit'] = rs[1]
+                    results[rs[0]][ft]['zfit']['npixels'] = rs[2]
 
-            for i in range(len(targets)):
-                zscan[targets[i].id][t.fulltype]['redshifts'] = t.redshifts
-                zscan[targets[i].id][t.fulltype]['zchi2'] = zchi2[i]
-                zscan[targets[i].id][t.fulltype]['penalty'] = penalty[i]
-                zscan[targets[i].id][t.fulltype]['zcoeff'] = zcoeff[i]
+        stop = elapsed(start, "    Finished in", comm=t.comm)
 
-    sys.stdout.flush()
+    # Gather our results to the root process and split off the zfit data.
+    # Only process zero returns data- other ranks return None.
 
-    if comm is None or comm.rank == 0 :
-        #- Convert individual zfit results into a zall array
-        t0 = time.time()
-        ### print('DEBUG: PID {} Making zall'.format(pid))
-        sys.stdout.flush()
-        import astropy.table
-        zfit = list()
-        for target in targets:
+    allresults = None
+    allzfit = None
+
+    if targets.comm is not None:
+        results = targets.comm.gather(results, root=0)
+    else:
+        results = [ results ]
+
+    if am_root:
+        allresults = dict()
+        for p in results:
+            allresults.update(p)
+        del results
+
+        allzfit = list()
+        for tid in targets.all_target_ids:
             tzfit = list()
-            for fulltype in zscan[target.id]:
-                tmp = zscan[target.id][fulltype]['zfit']
+            for fulltype in allresults[tid]:
+                tmp = allresults[tid][fulltype]['zfit']
                 #- TODO: reconsider fragile parsing of fulltype
                 if fulltype.count(':') > 0:
                     spectype, subtype = fulltype.split(':')
@@ -145,12 +202,9 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
                     spectype, subtype = (fulltype, '')
                 tmp['spectype'] = spectype
                 tmp['subtype'] = subtype
-                tmp['npixels'] = 0
-                for spectrum in target.spectra:
-                    tmp['npixels'] += (spectrum.ivar>0.).sum()
                 tmp['ncoeff'] = tmp['coeff'].shape[1]
                 tzfit.append(tmp)
-                del zscan[target.id][fulltype]['zfit']
+                del allresults[tid][fulltype]['zfit']
 
             maxncoeff = max([tmp['coeff'].shape[1] for tmp in tzfit])
             for tmp in tzfit:
@@ -161,21 +215,26 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
 
             tzfit = astropy.table.vstack(tzfit)
             tzfit.sort('chi2')
-            tzfit['targetid'] = target.id
+            tzfit['targetid'] = tid
             tzfit['znum'] = np.arange(len(tzfit))
             tzfit['deltachi2'] = np.ediff1d(tzfit['chi2'], to_end=0.0)
-            tzfit['zwarn'][ (tzfit['npixels']<10*tzfit['ncoeff']) ] |= ZW.LITTLE_COVERAGE
+            tzfit['zwarn'][ (tzfit['npixels']<10*tzfit['ncoeff']) ] |= \
+                ZW.LITTLE_COVERAGE
 
             #- set ZW.SMALL_DELTA_CHI2 flag
             for i in range(len(tzfit)-1):
-                noti         = (np.arange(len(tzfit))!=i)
+                noti = (np.arange(len(tzfit))!=i)
                 alldeltachi2 = np.absolute(tzfit['chi2'][noti]-tzfit['chi2'][i])
-                alldv        = np.absolute(fitz.get_dv(z=tzfit['z'][noti], zref=tzfit['z'][i]))
-                zwarn        = np.any( (alldeltachi2<9.) & (alldv>=constants.max_velo_diff) )
-                if zwarn: tzfit['zwarn'][i] |= ZW.SMALL_DELTA_CHI2
+                alldv = np.absolute(get_dv(z=tzfit['z'][noti],
+                    zref=tzfit['z'][i]))
+                zwarn = np.any( (alldeltachi2<9.) & \
+                    (alldv>=constants.max_velo_diff) )
+                if zwarn:
+                    tzfit['zwarn'][i] |= ZW.SMALL_DELTA_CHI2
 
-            #- Trim down cases of multiple subtypes for a single type (e.g. STARs)
-            #- tzfit is already sorted by chi2, so keep first nminima of each type
+            # Trim down cases of multiple subtypes for a single type (e.g.
+            # STARs) tzfit is already sorted by chi2, so keep first nminima of
+            # each type.
             iikeep = list()
             for spectype in np.unique(tzfit['spectype']):
                 ii = np.where(tzfit['spectype'] == spectype)[0]
@@ -185,16 +244,8 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
                 #- grouping by spectype could get chi2 out of order; resort
                 tzfit.sort('chi2')
 
-            zfit.append(tzfit)
+            allzfit.append(tzfit)
 
-        zfit = astropy.table.vstack(zfit)
-        dt = time.time() - t0
-        #print('DEBUG: PID {} zall in {:.1f} seconds'.format(pid, dt))
-    else :
-       zscan = None
-       zfit = None
+        allzfit = astropy.table.vstack(allzfit)
 
-    # no need to broadcast at the end of this routine
-    # because only rank 0 will write the results
-
-    return zscan, zfit
+    return allresults, allzfit

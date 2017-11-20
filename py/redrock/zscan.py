@@ -4,284 +4,349 @@ redrock.zscan
 
 Algorithms for scanning redshifts.
 """
-from __future__ import division, print_function
-import time
 
-import os,sys
+from __future__ import division, print_function
+
+import os
+import sys
+import traceback
+
 import numpy as np
 import scipy.sparse
 
 from . import rebin
 
-from .dataobj import (MultiprocessingSharedSpectrum,
-    SimpleSpectrum, MPISharedTargets, Target)
+from .utils import elapsed
+
+from .targets import Spectrum, Target, DistTargets, distribute_targets
+
+from .templates import Template, DistTemplate
+
+from ._zscan import _zchi2_one
 
 
-def calc_zchi2(redshifts, spectra, template):
-    '''
-    Calculates chi2 vs. redshift for these spectra and this template.
+def spectral_data(spectra):
+    """Compute concatenated spectral data products.
 
-    returns chi2[nz], coeff[nz,ncoeff], penalty[nz]
-
-    `chi2[i]` is best fit chi2 at `redshifts[i]`.
-    `coeff[i]` is array of best fit template coefficients at `redshifts[i]`.
-    `penalty` is array of penalty priors, e.g. to penalize unphysical fits.
-    '''
-    targets = [Target(0, spectra), ]
-    zchi2, zcoeff, penalty = calc_zchi2_targets(redshifts, targets, template)
-    return zchi2[0], zcoeff[0], penalty[0]
-
-
-def _wrap_zchi2(redshifts, targets, template, qout):
-    for t in targets:
-        t.sharedmem_unpack()
-    try:
-        results = calc_zchi2_targets(redshifts, targets, template)
-    except Exception as err:
-        import traceback, sys
-        message = "".join(traceback.format_exception(*sys.exc_info()))
-        results = (err, message)
-
-    tids = [t.id for t in targets]
-    qout.put((tids, results))
-
-
-def parallel_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
-    ncpu=None):
-    '''
-    Parallel version of calc_zchi2_targets; see that docstring for details
-
-    ncpu is number of multiprocessing processes to use
-    '''
-
-    if len(targets) == 0:
-        raise ValueError('Input target list is empty')
-
-    if len(redshifts) == 0:
-        raise ValueError('Input redshift array is empty')
-
-    import multiprocessing as mp
-    if ncpu is None:
-        ncpu = mp.cpu_count()
-
-    if ncpu > len(targets):
-        ncpu = len(targets)
-        print('WARNING: Using {} cores for {} redshifts'.format(ncpu, ncpu))
-
-    #- Pack targets for passing to multiprocessing function without pickling
-    #- large numpy arrays of spectra
-    for t in targets:
-        t.sharedmem_pack()
-
-    #- launch processes, returning results via Queue.  This is largely for
-    #- historical reasons; mp.Pool.map probably would have been fine too.
-    qout = mp.Queue()
-    target_split = np.array_split(targets, ncpu)
-    for i in range(ncpu):
-        p = mp.Process(target=_wrap_zchi2, args=(redshifts, target_split[i], template, qout))
-        p.start()
-
-    #- Get results, one per process
-    results = list()
-    for i in range(ncpu):
-        results.append(qout.get())
-
-    #- Figure out what order the results arrived in the output queue
-    tids = [t.id for t in targets]
-
-    zchi2 = [None]*len(targets)
-    zcoeff = [None]*len(targets)
-    zchi2penalty = [None]*len(targets)
-    for r in results:
-        tmpzchi2, tmpzcoeff, tmpzchi2penalty = r[1]
-        for i,t in enumerate(r[0]):
-            i0 = tids.index(t)
-            zchi2[i0] = tmpzchi2[i]
-            zcoeff[i0] = tmpzcoeff[i]
-            zchi2penalty[i0] = tmpzchi2penalty[i]
-
-    zchi2 = np.array(zchi2)
-    zcoeff = np.array(zcoeff)
-    zchi2penalty = np.array(zchi2penalty)
-
-    #- restore the state of targets
-    for t in targets:
-        t.sharedmem_unpack()
-
-    return zchi2, zcoeff, zchi2penalty
-
-
-def mpi_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
-    comm=None):
-    '''
-    MPI Parallel version of calc_zchi2_targets
-    '''
-    rank = 0
-    nproc = 1
-    if comm is not None:
-        rank = comm.rank
-        nproc = comm.size
-
-    zsplit = np.array_split(redshifts, nproc)
-
-    # print("rank {} : zscan.calc_zchi2_targets for {} redshifts "
-    #     "{}:{}".format(rank, template.fulltype, zsplit[rank][0],
-    #     zsplit[rank][-1]))
-    # sys.stdout.flush() #  this helps seeing something
-
-    zchi2, zcoeff, zchi2penalty = calc_zchi2_targets(zsplit[rank], targets, template)
-
-    if comm is not None:
-        zchi2        = comm.allgather(zchi2)
-        zcoeff       = comm.allgather(zcoeff)
-        zchi2penalty = comm.allgather(zchi2penalty)
-        zchi2        = np.hstack(zchi2)
-        zcoeff       = np.hstack(zcoeff)
-        zchi2penalty = np.hstack(zchi2penalty)
-
-    return zchi2, zcoeff, zchi2penalty
-
-
-def calc_zchi2_targets(redshifts, targets, template, verbose=False):
-    '''Calculates chi2 vs. redshift for a given PCA template.
+    This helper function builds full length array quantities needed for the
+    chi2 fit.
 
     Args:
-        redshifts: array of redshifts to evaluate
-        targets : list of Target objects
-        template: dictionary with keys
-            - wave : array of wavelengths [Angstroms]
-            - flux[i,wave] : template basis vectors of flux densities
+        spectra (list): list of Spectrum objects.
 
-    Returns: zchi2, zcoeff
-        zchi2[ntargets, nz] array with one element per target per redshift
-        zcoeff[ntargets, nz, ncoeff]
+    Returns:
+        tuple: (weights, flux, wflux) concatenated values used for single
+            redshift chi^2 fits.
 
-    Notes:
-        template.flux is a basis set; spectra will be modeled as
-        flux = sum_i a[i] template.flux[i]
-        To use an archetype, provide a template with dimensions [1,nwave]
-    '''
-    nz = len(redshifts)
-    ntargets = len(targets)
-    nbasis = template.flux.shape[0]
+    """
+    weights = np.concatenate([ s.ivar for s in spectra ])
+    flux = np.concatenate([ s.flux for s in spectra ])
+    wflux = weights * flux
+    return (weights, flux, wflux)
+
+
+def calc_zchi2_one(spectra, weights, flux, wflux, tdata):
+    """Calculate a single chi2.
+
+    For one redshift and a set of spectra, compute the chi2 for template
+    data that is already on the correct grid.
+
+    Args:
+        spectra (list): list of Spectrum objects.
+        weights (array): concatenated spectral weights (ivar).
+        flux (array): concatenated flux values.
+        wflux (array): concatenated weighted flux values.
+        tdata (dict): dictionary of interpolated template values for each
+            wavehash.
+
+    Returns:
+        tuple: chi^2 and coefficients.
+
+    """
+    Tb = list()
+    nbasis = None
+    for s in spectra:
+        key = s.wavehash
+        if nbasis is None:
+            nbasis = tdata[key].shape[1]
+            #print("using ",nbasis," basis vectors", flush=True)
+        Tb.append(s.Rcsr.dot(tdata[key]))
+    Tb = np.vstack(Tb)
+    zcoeff = np.zeros(nbasis, dtype=np.float64)
+    zchi2 = _zchi2_one(Tb, weights, flux, wflux, zcoeff)
+
+    return zchi2, zcoeff
+
+
+def calc_zchi2(target_ids, target_data, dtemplate, progress=None):
+    """Calculate chi2 vs. redshift for a given PCA template.
+
+    Args:
+        target_ids (list): targets IDs.
+        target_data (list): list of Target objects.
+        dtemplate (DistTemplate): distributed template data
+        progress (multiprocessing.Queue): optional queue for tracking
+            progress, only used if MPI is disabled.
+
+    Returns:
+        tuple: (zchi2, zcoeff, zchi2penalty) with:
+            - zchi2[ntargets, nz]: array with one element per target per
+                redshift
+            - zcoeff[ntargets, nz, ncoeff]: array of best fit template
+                coefficients for each target at each redshift
+            - zchi2penalty[ntargets, nz]: array of penalty priors per target
+                and redshift, e.g. to penalize unphysical fits
+
+    """
+    nz = len(dtemplate.local.redshifts)
+    ntargets = len(target_ids)
+    nbasis = dtemplate.template.nbasis
+
     zchi2 = np.zeros( (ntargets, nz) )
     zchi2penalty = np.zeros( (ntargets, nz) )
     zcoeff = np.zeros( (ntargets, nz, nbasis) )
 
-    #- Regroup fluxes and ivars into 1D arrays per target
-    fluxlist = list()
-    wfluxlist = list()
-    weightslist = list()
-    Wlist = list()
-    for t in targets:
-        weights = np.concatenate( [s.ivar for s in t.spectra] )
-        weightslist.append( weights )
-        nflux = len(weights)
-        Wlist.append( scipy.sparse.dia_matrix((weights, 0), (nflux, nflux)) )
-        flux = np.concatenate( [s.flux for s in t.spectra] )
-        fluxlist.append(flux)
-        wfluxlist.append(weights*flux)
+    # Redshifts near [OII]; used only for galaxy templates
+    isOII = (3724 <= dtemplate.template.wave) & \
+        (dtemplate.template.wave <= 3733)
+    OIItemplate = dtemplate.template.flux[:,isOII].T
 
-    #- Gather reference spectra for projecting templates to data wavelengths
-    refspectra = dict()
-    for t in targets:
-        for s in t.spectra:
-            if s.wavehash not in refspectra:
-                refspectra[s.wavehash] = s
+    for j in range(ntargets):
+        (weights, flux, wflux) = spectral_data(target_data[j].spectra)
 
-    refspectra = list(refspectra.values())
+        # Loop over redshifts, solving for template fit
+        # coefficients.  We use the pre-interpolated templates for each
+        # unique wavelength range.
+        for i, z in enumerate(dtemplate.local.redshifts):
+            zchi2[j,i], zcoeff[j,i] = calc_zchi2_one(target_data[j].spectra,
+                weights, flux, wflux, dtemplate.local.data[i])
 
-    #- Redshifts near [OII]; used only for galaxy templates
-    isOII = (3724 <= template.wave) & (template.wave <= 3733)
-    OIItemplate = template.flux[:,isOII].T
-
-    #- Loop over redshifts, solving for template fit coefficients
-    nflux = len(fluxlist[0])
-    Tb = np.zeros( (nflux, nbasis) )
-    for i, z in enumerate(redshifts):
-        if verbose and i in istatus:
-            print('{} {:d}% done'.format(time.asctime(), round(100.0*i/len(redshifts))))
-        #- if all targets have the same number of spectra with the same
-        #- wavelength grids, we only need to calculate this once per redshift.
-        Tx = rebin_template(template, z, refspectra)
-
-        for j in range(ntargets):
-            Tb = list()
-            for k, s in enumerate(targets[j].spectra):
-                key = s.wavehash
-                Tb.append(s.Rcsr.dot(Tx[key]))
-
-            Tb = np.vstack(Tb)
-
-            flux = fluxlist[j]
-            wflux = wfluxlist[j]
-            weights = weightslist[j]
-            W = Wlist[j]
-            M = Tb.T.dot(W.dot(Tb))
-            y = Tb.T.dot(wflux)
-            a = np.linalg.solve(M, y)
-
-            model = Tb.dot(a)
-            zchi2[j,i] = np.sum( (flux - model)**2 * weights )
-            zcoeff[j,i] = a
-
-            #- Penalize chi2 for negative [OII] flux; ad-hoc
-            if template.type == 'GALAXY':
-                OIIflux = np.sum( OIItemplate.dot(a) )
+        #- Penalize chi2 for negative [OII] flux; ad-hoc
+        for i, z in enumerate(dtemplate.local.redshifts):
+            if dtemplate.template.template_type == 'GALAXY':
+                OIIflux = np.sum( OIItemplate.dot(zcoeff[j,i]) )
                 if OIIflux < 0:
                     zchi2penalty[j,i] = -OIIflux
+
+        if dtemplate.comm is None:
+            progress.put(1)
 
     return zchi2, zcoeff, zchi2penalty
 
 
-#- DEBUG: duplicated code, but provide a direct way to fit a template to a
-#- set of spectra at a given redshift
-def template_fit(spectra, z, template):
-    Tb = list()
-    Tx = rebin_template(template, z, spectra)
-    for k, s in enumerate(spectra):
-        Tb.append(s.Rcsr.dot(Tx[s.wavehash]))
-        ### Tb.append(s.R.dot(Tx[key]))
-
-    Tbx = np.vstack(Tb)
-
-    weights = np.concatenate( [s.ivar for s in spectra] )
-    flux = np.concatenate( [s.flux for s in spectra] )
-    nflux = len(flux)
-    wflux = weights * flux
-    W = scipy.sparse.dia_matrix((weights, 0), (nflux, nflux))
-    a = np.linalg.solve(Tbx.T.dot(W.dot(Tbx)), Tbx.T.dot(wflux))
-
-    return [T.dot(a) for T in Tb], a
+def _mp_calc_zchi2(indx, target_ids, target_data, t, qout, qprog):
+    """Wrapper for multiprocessing version of calc_zchi2.
+    """
+    try:
+        # Unpack targets from shared memory
+        for tg in target_data:
+            tg.sharedmem_unpack()
+        tzchi2, tzcoeff, tpenalty = calc_zchi2(target_ids, target_data, t,
+            progress=qprog)
+        qout.put( (indx, tzchi2, tzcoeff, tpenalty) )
+    except:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+        lines = [ "MP calc_zchi2: {}".format(x) for x in lines ]
+        print("".join(lines))
+        sys.stdout.flush()
 
 
-def rebin_template(template, z, spectra):
-    '''rebin template to match the wavelengths of the input spectra'''
-    nbasis = template.flux.shape[0]  #- number of template basis vectors
-    Tx = dict()
-    for i, s in enumerate(spectra):
-        key = s.wavehash
-        if key not in Tx:
-            Ti = np.zeros((s.nwave, nbasis))
-            for j in range(nbasis):
-                t = rebin.trapz_rebin((1+z)*template.wave, template.flux[j], s.wave)
-                Ti[:,j] = t
+def calc_zchi2_targets(targets, templates, mp_procs=1):
+    """Compute all chi2 fits for the local set of targets and collect.
 
-            Tx[key] = Ti
+    Given targets and templates distributed across a set of MPI processes,
+    compute the coarse-binned chi^2 fit for all redshifts and our local set
+    of targets.  Each process computes the fits for a slice of redshift range
+    and then cycles through redshift slices by passing the interpolated
+    templates along to the next process in order.
 
-    return Tx
+    Args:
+        targets (DistTargets): distributed targets.
+        templates (list): list of DistTemplate objects.
+        mp_procs (int): if not using MPI, this is the number of multiprocessing
+            processes to use.
 
-# def _orig_rebin_template(template, z, spectra):
-#     '''rebin template to match the wavelengths of the input spectra'''
-#     nbasis = template.flux.shape[0]  #- number of template basis vectors
-#     Tx = list()
-#     nspec = len(spectra)
-#     for i, s in enumerate(spectra):
-#         Ti = np.zeros((s.nwave, nbasis))
-#         for j in range(nbasis):
-#             t = rebin.trapz_rebin((1+z)*template.wave, template.flux[j], s.wave)
-#             Ti[:,j] = t
-#
-#         Tx.append(Ti)
-#
-#     return Tx
+    Returns:
+        dict: dictionary of results for each local target ID.
+
+    """
+
+    # Find most likely candidate redshifts by scanning over the
+    # pre-interpolated templates on a coarse redshift spacing.
+
+    # See if we are the process that should be printing stuff...
+    am_root = False
+    if targets.comm is None:
+        am_root = True
+    elif targets.comm.rank == 0:
+        am_root = True
+
+    # If we are not using MPI, our DistTargets object will have all the targets
+    # on the main process.  In that case, we would like to distribute our
+    # targets across multiprocesses.  Here we compute that distribution, if
+    # needed.
+
+    mpdist = None
+    if targets.comm is None:
+        mpdist = distribute_targets(targets.local(), mp_procs)
+
+    results = dict()
+    for tid in targets.local_target_ids():
+        results[tid] = dict()
+
+    if am_root:
+        print("Computing redshifts")
+        sys.stdout.flush()
+
+    for t in templates:
+        ft = t.template.full_type
+
+        if am_root:
+            print("  Scanning redshifts for template {}"\
+                .format(t.template.full_type))
+            sys.stdout.flush()
+
+        start = elapsed(None, "", comm=t.comm)
+
+        # There are 2 parallelization techniques supported here (MPI and
+        # multiprocessing).
+
+        zchi2 = None
+        zcoeff = None
+        penalty = None
+
+        if targets.comm is not None:
+            # MPI case.
+            # The following while-loop will cycle through the redshift slices
+            # (one per MPI process) until all processes have computed the chi2
+            # for all redshifts for their local targets.
+
+            if am_root:
+                sys.stdout.write("    Progress: {:3d} %\n".format(0))
+                sys.stdout.flush()
+
+            zchi2 = dict()
+            zcoeff = dict()
+            penalty = dict()
+
+            mpi_prog_frac = 1.0
+            prog_chunk = 10
+            if t.comm is not None:
+                mpi_prog_frac = 1.0 / t.comm.size
+                if t.comm.size < prog_chunk:
+                    prog_chunk = 100 // t.comm.size
+            proglast = 0
+            prog = 1
+
+            done = False
+            while not done:
+                # Compute the fit for our current redshift slice.
+                tzchi2, tzcoeff, tpenalty = \
+                    calc_zchi2(targets.local_target_ids(), targets.local(), t)
+
+                # Save the results into a dict keyed on the redshift chunk index
+                # for easy sorting at the end.
+                zchi2[t.local.index] = tzchi2
+                zcoeff[t.local.index] = tzcoeff
+                penalty[t.local.index] = tpenalty
+
+                prg = int(100.0 * prog * mpi_prog_frac)
+                if prg >= proglast + prog_chunk:
+                    proglast += prog_chunk
+                    if am_root and (t.comm is not None):
+                        sys.stdout.write("    Progress: {:3d} %\n"\
+                            .format(proglast))
+                        sys.stdout.flush()
+                prog += 1
+
+                # Cycle through the redshift slices
+                done = t.cycle()
+
+            # Concatenate the results, so that we end up with data for all
+            # redshifts for our local targets.
+
+            zchi2 = np.concatenate([ zchi2[p] for p in sorted(zchi2.keys()) ],
+                axis=1)
+            zcoeff = np.concatenate([ zcoeff[p] for p in sorted(zcoeff.keys()) ],
+                axis=1)
+            penalty = np.concatenate([ penalty[p] for p in \
+                sorted(penalty.keys()) ], axis=1)
+
+        else:
+            # Multiprocessing case.
+            import multiprocessing as mp
+
+            # Ensure that all targets are packed into shared memory
+            for tg in targets.local():
+                tg.sharedmem_pack()
+
+            # We explicitly spawn processes here (rather than using a pool.map)
+            # so that we can communicate the read-only objects once and send
+            # a whole list of redshifts to each process.
+
+            qout = mp.Queue()
+            qprog = mp.Queue()
+
+            procs = list()
+            for i in range(mp_procs):
+                if len(mpdist[i]) == 0:
+                    continue
+                target_ids = mpdist[i]
+                target_data = [ x for x in targets.local() if x.id in mpdist[i] ]
+                p = mp.Process(target=_mp_calc_zchi2,
+                    args=(i, target_ids, target_data, t, qout, qprog))
+                procs.append(p)
+                p.start()
+
+            # Track progress
+            sys.stdout.write("    Progress: {:3d} %\n".format(0))
+            sys.stdout.flush()
+            ntarget = len(targets.local_target_ids())
+            progincr = 10
+            if mp_procs > ntarget:
+                progincr = int(100.0 / ntarget)
+            tot = 0
+            proglast = 0
+            while (tot < ntarget):
+                cnt = qprog.get()
+                tot += cnt
+                prg = int(100.0 * tot / ntarget)
+                if prg >= proglast + progincr:
+                    proglast += progincr
+                    sys.stdout.write("    Progress: {:3d} %\n".format(proglast))
+                    sys.stdout.flush()
+
+            # Extract the output
+            zchi2 = dict()
+            zcoeff = dict()
+            penalty = dict()
+
+            for i in range(mp_procs):
+                if len(mpdist[i]) == 0:
+                    continue
+                res = qout.get()
+                zchi2[res[0]] = res[1]
+                zcoeff[res[0]] = res[2]
+                penalty[res[0]] = res[3]
+
+            # Concatenate the results, so that we end up with data for all
+            # redshifts for all targets.
+
+            zchi2 = np.concatenate([ zchi2[p] for p in sorted(zchi2.keys()) ],
+                axis=0)
+            zcoeff = np.concatenate([ zcoeff[p] for p in \
+                sorted(zcoeff.keys()) ], axis=0)
+            penalty = np.concatenate([ penalty[p] for p in \
+                sorted(penalty.keys()) ], axis=0)
+
+        stop = elapsed(start, "    Finished in", comm=t.comm)
+
+        for i, tg in enumerate(targets.local()):
+            results[tg.id][ft] = dict()
+            results[tg.id][ft]['redshifts'] = t.template.redshifts
+            results[tg.id][ft]['zchi2'] = zchi2[i]
+            results[tg.id][ft]['penalty'] = penalty[i]
+            results[tg.id][ft]['zcoeff'] = zcoeff[i]
+
+    return results
