@@ -137,7 +137,11 @@ class PlotSpec(object):
             
         self._ax2.clear()
         ymin = ymax = 0.0
-        for spec in target.coadd:
+        if hasattr(target,"coadd") and not target.coadd is None:
+            specs_to_read = target.coadd
+        else:
+            specs_to_read = target.spectra
+        for spec in specs_to_read:
             mx = tp.eval(coeff[0:tp.nbasis], spec.wave, zz['z']) * (1+zz['z'])
             model = spec.R.dot(mx)
             flux = spec.flux.copy()
