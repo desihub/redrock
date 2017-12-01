@@ -138,6 +138,8 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
                     spectype, subtype = (fulltype, '')
                 tmp['spectype'] = spectype
                 tmp['subtype'] = subtype
+                tmp['npixels'] = target.nvalidwave
+                tmp['ncoeff'] = tmp['coeff'].shape[1]
                 tzfit.append(tmp)
                 del zscan[target.id][fulltype]['zfit']
 
