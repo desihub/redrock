@@ -167,6 +167,15 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
                 #- grouping by spectype could get chi2 out of order; resort
                 tzfit.sort('chi2')
 
+            #- Unflag zwarn |= ZW.SMALL_DELTA_CHI2 when znum0 and znum1 have same spectype,
+            #- and different subtype
+            if len(tzfit)>1:
+                cond = (tzfit['zwarn'][0] & ZW.SMALL_DELTA_CHI2)!=0
+                cond &= (tzfit['zwarn'][1] & ZW.SMALL_DELTA_CHI2)==0
+                cond &= (tzfit['spectype'][0]==tzfit['spectype'][1])
+                cond &= (tzfit['subtype'][0]!=tzfit['subtype'][1])
+                if cond: tzfit['zwarn'][0] -= ZW.SMALL_DELTA_CHI2
+
             zfit.append(tzfit)
 
         zfit = astropy.table.vstack(zfit)
