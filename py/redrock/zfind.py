@@ -7,6 +7,7 @@ import numpy as np
 
 from . import zscan as rrzscan
 from . import fitz
+from . import constants
 from .zwarning import ZWarningMask as ZW
 
 import multiprocessing as mp
@@ -169,12 +170,14 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
 
             #- Unflag zwarn |= ZW.SMALL_DELTA_CHI2 when znum0 and znum1 have same spectype,
             #- and different subtype
-            if len(tzfit)>1:
-                cond = (tzfit['zwarn'][0] & ZW.SMALL_DELTA_CHI2)!=0
-                cond &= (tzfit['zwarn'][1] & ZW.SMALL_DELTA_CHI2)==0
-                cond &= (tzfit['spectype'][0]==tzfit['spectype'][1])
-                cond &= (tzfit['subtype'][0]!=tzfit['subtype'][1])
-                if cond: tzfit['zwarn'][0] -= ZW.SMALL_DELTA_CHI2
+            for i in range(len(tzfit)-1):
+                cond = (tzfit['zwarn'][i] & ZW.SMALL_DELTA_CHI2)!=0
+                cond &= (tzfit['zwarn'][i+1] & ZW.SMALL_DELTA_CHI2)==0
+                cond &= (tzfit['spectype'][i]==tzfit['spectype'][i+1])
+                cond &= (tzfit['subtype'][i]!=tzfit['subtype'][i+1])
+                dv = (constants.speed_light/1000.) * (tzfit['z'][i]-tzfit['z'][i+1]) / (1.+(tzfit['z'][i]+tzfit['z'][i+1])/2. )
+                cond &= (np.absolute(dv) < constants.max_velo_diff)
+                if cond: tzfit['zwarn'][i] -= ZW.SMALL_DELTA_CHI2
 
             zfit.append(tzfit)
 

@@ -5,6 +5,7 @@ import numpy as np
 
 from . import sharedmem
 from . import zscan
+from . import constants
 from .zwarning import ZWarningMask as ZW
 
 
@@ -213,10 +214,11 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3):
         if len(results) == nminima:
             break
 
-        #- Skip this minimum if it is within 1000 km/s of a previous one
+        #- Skip this minimum if it is within constants.max_velo_diff km/s of a previous one
+        #- dv is in km/s
         zprev = np.array([tmp['z'] for tmp in results])
-        dv = 3e5 * (redshifts[imin] - zprev) / (1+redshifts[imin])
-        if np.any(np.abs(dv) < 1000):
+        dv = (constants.speed_light/1000.) * (redshifts[imin] - zprev) / (1.+redshifts[imin])
+        if np.any(np.abs(dv) < constants.max_velo_diff):
             continue
 
         #- Sample more finely around the minimum
