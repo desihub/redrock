@@ -107,6 +107,20 @@ def read_spectra(spectrafiles, targetids=None, spectrum_class=SimpleSpectrum):
                         continue
 
                     R = Resolution(Rdata[i])
+
+                    meta = dict()
+                    meta['NIGHT'] = sp.meta['NIGHT']
+                    meta['EXPID'] = sp.meta['EXPID']
+                    if 'HPXPIXEL' in sp.meta:
+                        meta['HPXPIXEL'] = sp.meta['HPXPIXEL']
+                        meta['HPXNSIDE'] = sp.meta['HPXNSIDE']
+                    else:
+                        import desimodel.footprint
+                        meta['HPXNSIDE'] = 64
+                        ra = sp.fibermap['RA_TARGET'][ii[i]]
+                        dec = sp.fibermap['DEC_TARGET'][ii[i]]
+                        meta['HPXPIXEL'] = desimodel.footprint.radec2pix(64, ra, dec)
+
                     spectra.append(spectrum_class(wave, flux[i], ivar[i], R))
 
         bricknames.append(brickname)
@@ -331,6 +345,14 @@ def rrdesi(options=None, comm=None):
 
             #- Add brickname column
             zbest['BRICKNAME'] = meta['BRICKNAME']
+
+            #- Move TARGETID to be first column as primary key
+            zbest.columns.move_to_end('TARGETID', last=False)
+
+            #--- DEBUG ---
+            import IPython
+            IPython.embed()
+            #--- DEBUG ---
 
             print('INFO: writing {}'.format(opts.zbest))
             write_zbest(opts.zbest, zbest)
