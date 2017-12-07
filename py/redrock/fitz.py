@@ -51,6 +51,8 @@ def minfit(x,y):
     zwarn = 0
     if (x0 <= np.min(x)) or (np.max(x) <= x0):
         zwarn |= ZW.BAD_MINFIT
+    if (y0<=0.):
+        zwarn |= ZW.BAD_MINFIT
 
     if a > 0.0:
         xerr = 1 / np.sqrt(a)
