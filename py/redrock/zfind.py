@@ -140,6 +140,10 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
                     spectype, subtype = (fulltype, '')
                 tmp['spectype'] = spectype
                 tmp['subtype'] = subtype
+                tmp['npixels'] = 0
+                for spectrum in target.spectra:
+                    tmp['npixels'] += (spectrum.ivar>0.).sum()
+                tmp['ncoeff'] = tmp['coeff'].shape[1]
                 tzfit.append(tmp)
                 del zscan[target.id][fulltype]['zfit']
 
@@ -155,6 +159,7 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
             tzfit['targetid'] = target.id
             tzfit['znum'] = np.arange(len(tzfit))
             tzfit['deltachi2'] = np.ediff1d(tzfit['chi2'], to_end=0.0)
+            tzfit['zwarn'][ (tzfit['npixels']<10*tzfit['ncoeff']) ] |= ZW.LITTLE_COVERAGE
 
             #- Trim down cases of multiple subtypes for a single type (e.g. STARs)
             #- tzfit is already sorted by chi2, so keep first nminima of each type
