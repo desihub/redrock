@@ -157,7 +157,7 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
             tzfit['deltachi2'] = np.ediff1d(tzfit['chi2'], to_end=0.0)
             ii = np.where(tzfit['deltachi2'] < 9)[0]
             tzfit['zwarn'][ii] |= ZW.SMALL_DELTA_CHI2
-            tzfit['zwarn'][ (tzfit['npixels']<10.*tzfit['ncoeff']) ] |= ZW.LITTLE_COVERAGE
+            tzfit['zwarn'][ (tzfit['npixels']<10*tzfit['ncoeff']) ] |= ZW.LITTLE_COVERAGE
 
             #- Trim down cases of multiple subtypes for a single type (e.g. STARs)
             #- tzfit is already sorted by chi2, so keep first nminima of each type
