@@ -329,9 +329,6 @@ class Target(object):
         """
         self.id = targetid
         self.spectra = spectra
-        self.nvalidwave = 0
-        for s in self.spectra:
-            self.nvalidwave += (s.ivar>0.).sum()
 
         if not do_coadd:
             return
