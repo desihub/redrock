@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import sys
 import numpy as np
+import scipy.constants
 
 from . import sharedmem
 from . import zscan
@@ -217,7 +218,7 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3):
         #- Skip this minimum if it is within constants.max_velo_diff km/s of a previous one
         #- dv is in km/s
         zprev = np.array([tmp['z'] for tmp in results])
-        dv = (constants.speed_light/1000.) * (redshifts[imin] - zprev) / (1.+redshifts[imin])
+        dv = (scipy.constants.speed_of_light/1000.) * (redshifts[imin] - zprev) / (1.+redshifts[imin])
         if np.any(np.abs(dv) < constants.max_velo_diff):
             continue
 

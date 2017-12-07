@@ -4,6 +4,7 @@ import os, sys
 
 import time
 import numpy as np
+import scipy.constants
 
 from . import zscan as rrzscan
 from . import fitz
@@ -175,7 +176,7 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
                 cond &= (tzfit['zwarn'][i+1] & ZW.SMALL_DELTA_CHI2)==0
                 cond &= (tzfit['spectype'][i]==tzfit['spectype'][i+1])
                 cond &= (tzfit['subtype'][i]!=tzfit['subtype'][i+1])
-                dv = (constants.speed_light/1000.) * (tzfit['z'][i]-tzfit['z'][i+1]) / (1.+(tzfit['z'][i]+tzfit['z'][i+1])/2. )
+                dv = (scipy.constants.speed_of_light/1000.) * (tzfit['z'][i]-tzfit['z'][i+1]) / (1.+(tzfit['z'][i]+tzfit['z'][i+1])/2. )
                 cond &= (np.absolute(dv) < constants.max_velo_diff)
                 if cond: tzfit['zwarn'][i] -= ZW.SMALL_DELTA_CHI2
 
