@@ -155,8 +155,6 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
             tzfit['targetid'] = target.id
             tzfit['znum'] = np.arange(len(tzfit))
             tzfit['deltachi2'] = np.ediff1d(tzfit['chi2'], to_end=0.0)
-            ii = np.where(tzfit['deltachi2'] < 9)[0]
-            tzfit['zwarn'][ii] |= ZW.SMALL_DELTA_CHI2
 
             #- Trim down cases of multiple subtypes for a single type (e.g. STARs)
             #- tzfit is already sorted by chi2, so keep first nminima of each type
@@ -169,16 +167,17 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
                 #- grouping by spectype could get chi2 out of order; resort
                 tzfit.sort('chi2')
 
-            #- Unflag zwarn |= ZW.SMALL_DELTA_CHI2 when znum0 and znum1 have same spectype,
-            #- and different subtype
-            for i in range(len(tzfit)-1):
-                cond = (tzfit['zwarn'][i] & ZW.SMALL_DELTA_CHI2)!=0
-                cond &= (tzfit['zwarn'][i+1] & ZW.SMALL_DELTA_CHI2)==0
-                cond &= (tzfit['spectype'][i]==tzfit['spectype'][i+1])
-                cond &= (tzfit['subtype'][i]!=tzfit['subtype'][i+1])
-                dv = (scipy.constants.speed_of_light/1000.) * (tzfit['z'][i]-tzfit['z'][i+1]) / (1.+(tzfit['z'][i]+tzfit['z'][i+1])/2. )
-                cond &= (np.absolute(dv) < constants.max_velo_diff)
-                if cond: tzfit['zwarn'][i] -= ZW.SMALL_DELTA_CHI2
+            #- set flag ZW.SMALL_DELTA_CHI2
+            for i in range(len(tzfit)):
+                if (tzfit['deltachi2'][i]<9.):
+                    if (i==len(tzfit)-1):
+                        tzfit['zwarn'][i] |= ZW.SMALL_DELTA_CHI2
+                    else:
+                        dv = scipy.constants.speed_of_light/1000.*(tzfit['z'][i]-tzfit['z'][i+1])/(1.+(tzfit['z'][i]+tzfit['z'][i+1])/2.)
+                        if np.absolute(dv)>=constants.max_velo_diff:
+                            tzfit['zwarn'][i] |= ZW.SMALL_DELTA_CHI2
+                        #- else do something in the future on subtype
+                        # for exemple if i==QSO and i+1==GALAXY
 
             zfit.append(tzfit)
 
