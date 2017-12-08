@@ -173,7 +173,7 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
             #- set flag ZW.SMALL_DELTA_CHI2
             tzfit['deltachi2'] = np.ediff1d(tzfit['chi2'], to_end=0.0)
             dv = np.absolute(sp.append( fitz.get_dv(z=tzfit['z'][1:], zref=tzfit['z'][:-1]),[constants.max_velo_diff]))
-            tzfit['deltachi2'][ (tzfit['deltachi2']<9.) & (dv>=constants.max_velo_diff) ] |= ZW.SMALL_DELTA_CHI2
+            tzfit['zwarn'][ (tzfit['deltachi2']<9.) & (dv>=constants.max_velo_diff) ] |= ZW.SMALL_DELTA_CHI2
 
             zfit.append(tzfit)
 
