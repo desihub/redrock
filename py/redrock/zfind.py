@@ -178,7 +178,7 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
                     if (i==len(tzfit)-1):
                         tzfit['zwarn'][i] |= ZW.SMALL_DELTA_CHI2
                     else:
-                        dv = scipy.constants.speed_of_light/1000.*(tzfit['z'][i]-tzfit['z'][i+1])/(1.+(tzfit['z'][i]+tzfit['z'][i+1])/2.)
+                        dv = fitz.get_dv(z=tzfit['z'][i+1], zref=tzfit['z'][i])
                         if np.absolute(dv)>=constants.max_velo_diff:
                             tzfit['zwarn'][i] |= ZW.SMALL_DELTA_CHI2
                         #- else do something in the future on subtype

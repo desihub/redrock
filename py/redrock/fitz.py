@@ -10,6 +10,16 @@ from . import constants
 from .zwarning import ZWarningMask as ZW
 
 
+def get_dv(z, zref):
+    '''
+    returns velocity difference in km/s for two redshifts
+    '''
+
+    c = (scipy.constants.speed_of_light/1000.) #- km/s
+    dv = c * (z - zref) / (1.0 + zref)
+
+    return dv
+
 def find_minima(x):
     '''
     return indices of local minima of x, including edges, sorted small to large
@@ -220,7 +230,7 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3):
         #- Skip this minimum if it is within constants.max_velo_diff km/s of a previous one
         #- dv is in km/s
         zprev = np.array([tmp['z'] for tmp in results])
-        dv = (scipy.constants.speed_of_light/1000.) * (redshifts[imin] - zprev) / (1.+redshifts[imin])
+        dv = get_dv(z=zprev,zref=redshifts[imin])
         if np.any(np.abs(dv) < constants.max_velo_diff):
             continue
 
