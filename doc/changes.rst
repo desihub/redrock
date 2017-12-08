@@ -2,12 +2,13 @@
 Redrock change log
 ==================
 
-0.6.1 (unreleased)
+0.7.0 (unreleased)
 ------------------
 
 * Allow templates to optionally include redshift range (PR `#41`_)
 * API CHANGE: redrock.io.read_templates() returns dict not list (PR `#41`_)
 * set ivar = 0 where mask != 0 (PR `#42`_)
+* Add NUMEXP and NUMTILE to zbest output
 
 .. _`#41`: https://github.com/desihub/desispec/pull/41
 .. _`#42`: https://github.com/desihub/desispec/pull/42

@@ -117,7 +117,7 @@ def read_spectra(spectrafiles, targetids=None, spectrum_class=SimpleSpectrum):
 
                     if 'HPXPIXEL' in sp.fibermap.dtype.names:
                         meta['HPXPIXEL'] = sp.fibermap['HPXPIXEL'][ifiber]
-                        meta['HPXNSIDE'] = sp.fibermap['HPXNSIDE'][ifiber]
+                        meta['HPXNSIDE'] = sp.meta['HPXNSIDE']
                     else:
                         import desimodel.footprint
                         meta['HPXNSIDE'] = 64
