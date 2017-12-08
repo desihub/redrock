@@ -4,7 +4,6 @@ import os, sys
 
 import time
 import numpy as np
-import scipy.constants
 
 from . import zscan as rrzscan
 from . import fitz
@@ -158,7 +157,6 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
             tzfit.sort('chi2')
             tzfit['targetid'] = target.id
             tzfit['znum'] = np.arange(len(tzfit))
-            tzfit['deltachi2'] = np.ediff1d(tzfit['chi2'], to_end=0.0)
             tzfit['zwarn'][ (tzfit['npixels']<10*tzfit['ncoeff']) ] |= ZW.LITTLE_COVERAGE
 
             #- Trim down cases of multiple subtypes for a single type (e.g. STARs)
@@ -173,16 +171,9 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
                 tzfit.sort('chi2')
 
             #- set flag ZW.SMALL_DELTA_CHI2
-            for i in range(len(tzfit)):
-                if (tzfit['deltachi2'][i]<9.):
-                    if (i==len(tzfit)-1):
-                        tzfit['zwarn'][i] |= ZW.SMALL_DELTA_CHI2
-                    else:
-                        dv = fitz.get_dv(z=tzfit['z'][i+1], zref=tzfit['z'][i])
-                        if np.absolute(dv)>=constants.max_velo_diff:
-                            tzfit['zwarn'][i] |= ZW.SMALL_DELTA_CHI2
-                        #- else do something in the future on subtype
-                        # for exemple if i==QSO and i+1==GALAXY
+            tzfit['deltachi2'] = np.ediff1d(tzfit['chi2'], to_end=0.0)
+            dv = np.absolute(sp.append( fitz.get_dv(z=tzfit['z'][1:], zref=tzfit['z'][:-1]),[constants.max_velo_diff]))
+            tzfit['deltachi2'][ (tzfit['deltachi2']<9.) & (dv>=constants.max_velo_diff) ] |= ZW.SMALL_DELTA_CHI2
 
             zfit.append(tzfit)
 
