@@ -40,8 +40,6 @@ def write_zbest(outfile, zbest):
 def read_spectra(spectrafiles, targetids=None, spectrum_class=SimpleSpectrum):
     '''
     Read targets from a list of spectra files.
-   
-
 
     Args:
         spectrafiles : list of input spectra files, or string glob to match
@@ -84,7 +82,7 @@ def read_spectra(spectrafiles, targetids=None, spectrum_class=SimpleSpectrum):
     for targetid in targetids:
         spectra = list()
         for sp in input_spectra:
-            ii = (sp.fibermap['TARGETID'] == targetid)
+            ii = np.where(sp.fibermap['TARGETID'] == targetid)[0]
             if np.count_nonzero(ii) == 0:
                 continue
             if 'BRICKNAME' in sp.fibermap.dtype.names:
@@ -98,6 +96,7 @@ def read_spectra(spectrafiles, targetids=None, spectrum_class=SimpleSpectrum):
                 Rdata = sp.resolution_data[x][ii]
 
                 for i in range(flux.shape[0]):
+                    ifiber = ii[i]      #- index into sp.fibermap
                     if np.all(flux[i] == 0):
                         # print('WARNING: Skipping spectrum {} of target {} on brick {} with flux=0'.format(i, targetid, brick.brickname))
                         continue
@@ -109,117 +108,37 @@ def read_spectra(spectrafiles, targetids=None, spectrum_class=SimpleSpectrum):
                     R = Resolution(Rdata[i])
 
                     meta = dict()
-                    meta['NIGHT'] = sp.meta['NIGHT']
-                    meta['EXPID'] = sp.meta['EXPID']
-                    if 'HPXPIXEL' in sp.meta:
-                        meta['HPXPIXEL'] = sp.meta['HPXPIXEL']
-                        meta['HPXNSIDE'] = sp.meta['HPXNSIDE']
+                    meta['NIGHT'] = sp.fibermap['NIGHT'][ifiber]
+                    meta['EXPID'] = sp.fibermap['EXPID'][ifiber]
+                    if 'TILEID' in sp.fibermap.dtype.names:
+                        meta['TILEID'] = sp.fibermap['TILEID'][ifiber]
+                    else:
+                        meta['TILEID'] = -1
+
+                    if 'HPXPIXEL' in sp.fibermap.dtype.names:
+                        meta['HPXPIXEL'] = sp.fibermap['HPXPIXEL'][ifiber]
+                        meta['HPXNSIDE'] = sp.fibermap['HPXNSIDE'][ifiber]
                     else:
                         import desimodel.footprint
                         meta['HPXNSIDE'] = 64
-                        ra = sp.fibermap['RA_TARGET'][ii[i]]
-                        dec = sp.fibermap['DEC_TARGET'][ii[i]]
+                        ra = sp.fibermap['RA_TARGET'][ifiber]
+                        dec = sp.fibermap['DEC_TARGET'][ifiber]
                         meta['HPXPIXEL'] = desimodel.footprint.radec2pix(64, ra, dec)
 
-                    spectra.append(spectrum_class(wave, flux[i], ivar[i], R))
+                    spectra.append(spectrum_class(wave, flux[i], ivar[i], R, meta=meta))
 
         bricknames.append(brickname)
         #- end of for targetid in targetids loop
 
         if len(spectra) > 0:
-            targets.append(Target(targetid, spectra))
-        else:
-            print('ERROR: Target {} on {} has no good spectra'.format(targetid, os.path.basename(brickfiles[0])))
-
-    #- Create a metadata table in case we might want to add other columns
-    #- in the future
-    assert len(bricknames) == len(targets)
-    dtype = [('BRICKNAME', 'S8'),]
-    meta = np.zeros(len(bricknames), dtype=dtype)
-    meta['BRICKNAME'] = bricknames
-
-    return targets, meta
-
-
-def read_bricks(brickfiles, trueflux=False, targetids=None, spectrum_class=SimpleSpectrum):
-    '''
-    Read targets from a list of brickfiles
-
-    Args:
-        brickfiles : list of input brick files, or string glob to match
-    
-    Options:
-        targetids : list of target ids. If set, only those target spectra will be read.
-        spectrum_class :  The spectrum_class argument is needed to use the same read_spectra
-        routine for the two parallelism approaches for redrock. The multiprocessing version
-        uses a shared memory at the spectrum class initialization, see
-        the redrock.dataobj.MultiprocessingSharedSpectrum class, whereas the MPI version
-        implements the shared memory after all spectra have been read by the root process,
-        and so the MPI version used another more simple spectrum class (see redrock.dataobj.SimpleSpectrum).
-    
-    Returns list of Target objects
-
-    Note: these don't actually have to be bricks anymore; they are read via
-        desispec.io.read_frame()
-    '''
-    if isinstance(brickfiles, basestring):
-        import glob
-        brickfiles = glob.glob(brickfiles)
-
-    assert len(brickfiles) > 0
-
-    bricks = list()
-    brick_targetids = set()
-
-    #- Ignore warnings about zdc2 bricks lacking bricknames in header
-    for infile in brickfiles:
-        b = desispec.io.read_frame(infile)
-        bricks.append(b)
-        brick_targetids.update(b.fibermap['TARGETID'])
-
-    if targetids is None:
-        targetids = brick_targetids
-
-    targets = list()
-    bricknames = list()
-    for targetid in targetids:
-        spectra = list()
-        for brick in bricks:
-            wave = brick.wave
-            ii = (brick.fibermap['TARGETID'] == targetid)
-            if np.count_nonzero(ii) == 0:
-                continue
-
-            if 'BRICKNAME' in brick.fibermap.dtype.names:
-                brickname = brick.fibermap['BRICKNAME'][ii][0]
+            numexp = len(set([sp.meta['EXPID'] for sp in spectra]))
+            if spectra[0].meta['TILEID'] >= 0:
+                numtile = len(set([sp.meta['TILEID'] for sp in spectra]))
             else:
-                brickname = 'unknown'
-            flux = brick.flux[ii]
-            ivar = brick.ivar[ii] * (brick.mask[ii]==0)
-            Rdata = brick.resolution_data[ii]
+                numtile = -1
 
-            #- work around desispec.io.Brick returning 32-bit non-native endian
-            # flux = flux.astype(float)
-            # ivar = ivar.astype(float)
-            # Rdata = Rdata.astype(float)
-
-            for i in range(flux.shape[0]):
-                if np.all(flux[i] == 0):
-                    # print('WARNING: Skipping spectrum {} of target {} on brick {} with flux=0'.format(i, targetid, brick.brickname))
-                    continue
-
-                if np.all(ivar[i] == 0):
-                    # print('WARNING: Skipping spectrum {} of target {} on brick {} with ivar=0'.format(i, targetid, brick.brickname))
-                    continue
-
-                R = Resolution(Rdata[i])
-                spectra.append(spectrum_class(wave, flux[i], ivar[i], R))
-
-        #- end of for targetid in targetids loop
-
-        if len(spectra) > 0:
-            bricknames.append(brickname)
-            targets.append(Target(targetid, spectra))
+            meta = dict(NUMEXP=numexp, NUMTILE=numtile)
+            targets.append(Target(targetid, spectra, meta=meta))
         else:
             print('ERROR: Target {} on {} has no good spectra'.format(targetid, os.path.basename(brickfiles[0])))
 
@@ -250,7 +169,7 @@ def rrdesi(options=None, comm=None):
 
     start_time = time.time()
     pid = os.getpid()
-    
+
     parser = optparse.OptionParser(usage = "%prog [options] spectra1 spectra2...")
     parser.add_option("-t", "--templates", type="string",  help="template file or directory")
     parser.add_option("-o", "--output", type="string",  help="output file")
@@ -286,10 +205,8 @@ def rrdesi(options=None, comm=None):
         spectrum_class = SimpleSpectrum
         if opts.ncpu is None or opts.ncpu > 1:
             spectrum_class = MultiprocessingSharedSpectrum
-        try:
-            targets, meta = read_spectra(infiles,spectrum_class=spectrum_class)
-        except RuntimeError:
-            targets, meta = read_bricks(infiles,spectrum_class=spectrum_class)
+
+        targets, meta = read_spectra(infiles,spectrum_class=spectrum_class)
             
         if not opts.allspec:
             for t in targets:
@@ -346,13 +263,16 @@ def rrdesi(options=None, comm=None):
             #- Add brickname column
             zbest['BRICKNAME'] = meta['BRICKNAME']
 
-            #- Move TARGETID to be first column as primary key
+            #- Cosmetic: move TARGETID to be first column as primary key
             zbest.columns.move_to_end('TARGETID', last=False)
 
-            #--- DEBUG ---
-            import IPython
-            IPython.embed()
-            #--- DEBUG ---
+            ntargets = len(targets)
+            zbest['NUMEXP'] = np.zeros(ntargets, dtype=np.int16)
+            zbest['NUMTILE'] = np.zeros(ntargets, dtype=np.int16)
+            for i in range(ntargets):
+                assert targets[i].id == zbest['TARGETID'][i]
+                zbest['NUMEXP'][i] = targets[i].meta['NUMEXP']
+                zbest['NUMTILE'][i] = targets[i].meta['NUMTILE']
 
             print('INFO: writing {}'.format(opts.zbest))
             write_zbest(opts.zbest, zbest)
