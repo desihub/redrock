@@ -230,7 +230,7 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3):
         #- Skip this minimum if it is within constants.max_velo_diff km/s of a previous one
         #- dv is in km/s
         zprev = np.array([tmp['z'] for tmp in results])
-        dv = get_dv(z=zprev,zref=redshifts[imin])
+        dv = get_dv(z=redshifts[imin],zref=zprev)
         if np.any(np.abs(dv) < constants.max_velo_diff):
             continue
 
@@ -270,6 +270,13 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3):
             imin = np.where(zbest == np.min(zbest))[0][0]
             zbest = zz[imin]
             chi2min = zzchi2[imin]
+
+        #- Skip this better defined minimum if it is within
+        #- constants.max_velo_diff km/s of a previous one
+        zprev = np.array([tmp['z'] for tmp in results])
+        dv = get_dv(z=zbest,zref=zprev)
+        if np.any(np.abs(dv) < constants.max_velo_diff):
+            continue
 
         results.append(dict(z=zbest, zerr=zerr, zwarn=zwarn,
             chi2=chi2min, zz=zz, zzchi2=zzchi2,
