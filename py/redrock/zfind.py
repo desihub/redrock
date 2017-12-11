@@ -161,13 +161,12 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
             tzfit['zwarn'][ (tzfit['npixels']<10*tzfit['ncoeff']) ] |= ZW.LITTLE_COVERAGE
 
             #- set ZW.SMALL_DELTA_CHI2 flag
-            for i in range(len(tzfit)):
-                if i<len(tzfit)-1:
-                    noti         = (np.arange(len(tzfit))!=i)
-                    alldeltachi2 = np.absolute(tzfit['chi2'][noti]-tzfit['chi2'][i])
-                    alldv        = np.absolute(fitz.get_dv(z=tzfit['z'][noti], zref=tzfit['z'][i]))
-                    zwarn        = np.any( (alldeltachi2<9.) & (alldv>=constants.max_velo_diff) )
-                    if zwarn: tzfit['zwarn'][i] |= ZW.SMALL_DELTA_CHI2
+            for i in range(len(tzfit)-1):
+                noti         = (np.arange(len(tzfit))!=i)
+                alldeltachi2 = np.absolute(tzfit['chi2'][noti]-tzfit['chi2'][i])
+                alldv        = np.absolute(fitz.get_dv(z=tzfit['z'][noti], zref=tzfit['z'][i]))
+                zwarn        = np.any( (alldeltachi2<9.) & (alldv>=constants.max_velo_diff) )
+                if zwarn: tzfit['zwarn'][i] |= ZW.SMALL_DELTA_CHI2
 
             #- Trim down cases of multiple subtypes for a single type (e.g. STARs)
             #- tzfit is already sorted by chi2, so keep first nminima of each type
