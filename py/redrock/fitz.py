@@ -2,11 +2,23 @@ from __future__ import absolute_import, division, print_function
 
 import sys
 import numpy as np
+import scipy.constants
 
 from . import sharedmem
 from . import zscan
+from . import constants
 from .zwarning import ZWarningMask as ZW
 
+
+def get_dv(z, zref):
+    '''
+    returns velocity difference in km/s for two redshifts
+    '''
+
+    c = (scipy.constants.speed_of_light/1000.) #- km/s
+    dv = c * (z - zref) / (1.0 + zref)
+
+    return dv
 
 def find_minima(x):
     '''
@@ -215,10 +227,11 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3):
         if len(results) == nminima:
             break
 
-        #- Skip this minimum if it is within 1000 km/s of a previous one
+        #- Skip this minimum if it is within constants.max_velo_diff km/s of a previous one
+        #- dv is in km/s
         zprev = np.array([tmp['z'] for tmp in results])
-        dv = 3e5 * (redshifts[imin] - zprev) / (1+redshifts[imin])
-        if np.any(np.abs(dv) < 1000):
+        dv = get_dv(z=redshifts[imin],zref=zprev)
+        if np.any(np.abs(dv) < constants.max_velo_diff):
             continue
 
         #- Sample more finely around the minimum
@@ -257,6 +270,13 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3):
             imin = np.where(zbest == np.min(zbest))[0][0]
             zbest = zz[imin]
             chi2min = zzchi2[imin]
+
+        #- Skip this better defined minimum if it is within
+        #- constants.max_velo_diff km/s of a previous one
+        zprev = np.array([tmp['z'] for tmp in results])
+        dv = get_dv(z=zbest,zref=zprev)
+        if np.any(np.abs(dv) < constants.max_velo_diff):
+            continue
 
         results.append(dict(z=zbest, zerr=zerr, zwarn=zwarn,
             chi2=chi2min, zz=zz, zzchi2=zzchi2,

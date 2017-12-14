@@ -7,6 +7,7 @@ import numpy as np
 
 from . import zscan as rrzscan
 from . import fitz
+from . import constants
 from .zwarning import ZWarningMask as ZW
 
 import multiprocessing as mp
@@ -157,9 +158,15 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
             tzfit['targetid'] = target.id
             tzfit['znum'] = np.arange(len(tzfit))
             tzfit['deltachi2'] = np.ediff1d(tzfit['chi2'], to_end=0.0)
-            ii = np.where(tzfit['deltachi2'] < 9)[0]
-            tzfit['zwarn'][ii] |= ZW.SMALL_DELTA_CHI2
             tzfit['zwarn'][ (tzfit['npixels']<10*tzfit['ncoeff']) ] |= ZW.LITTLE_COVERAGE
+
+            #- set ZW.SMALL_DELTA_CHI2 flag
+            for i in range(len(tzfit)-1):
+                noti         = (np.arange(len(tzfit))!=i)
+                alldeltachi2 = np.absolute(tzfit['chi2'][noti]-tzfit['chi2'][i])
+                alldv        = np.absolute(fitz.get_dv(z=tzfit['z'][noti], zref=tzfit['z'][i]))
+                zwarn        = np.any( (alldeltachi2<9.) & (alldv>=constants.max_velo_diff) )
+                if zwarn: tzfit['zwarn'][i] |= ZW.SMALL_DELTA_CHI2
 
             #- Trim down cases of multiple subtypes for a single type (e.g. STARs)
             #- tzfit is already sorted by chi2, so keep first nminima of each type
