@@ -295,6 +295,17 @@ def rrdesi(options=None, comm=None):
                 zbest['NUMEXP'][i] = targets[i].meta['NUMEXP']
                 zbest['NUMTILE'][i] = targets[i].meta['NUMTILE']
 
+            #- Cosmetic: move TARGETID to be first column as primary key
+            zbest.columns.move_to_end('TARGETID', last=False)
+
+            ntargets = len(targets)
+            zbest['NUMEXP'] = np.zeros(ntargets, dtype=np.int16)
+            zbest['NUMTILE'] = np.zeros(ntargets, dtype=np.int16)
+            for i in range(ntargets):
+                assert targets[i].id == zbest['TARGETID'][i]
+                zbest['NUMEXP'][i] = targets[i].meta['NUMEXP']
+                zbest['NUMTILE'][i] = targets[i].meta['NUMTILE']
+
             print('INFO: writing {}'.format(opts.zbest))
             write_zbest(opts.zbest, zbest, fibermap)
 
