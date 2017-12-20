@@ -147,7 +147,7 @@ def read_spectra(spectrafiles, targetids=None, spectrum_class=SimpleSpectrum):
             meta = dict(NUMEXP=numexp, NUMTILE=numtile)
             targets.append(Target(targetid, spectra, meta=meta))
         else:
-            print('ERROR: Target {} on {} has no good spectra'.format(targetid, os.path.basename(brickfiles[0])))
+            print('ERROR: Target {} on {} has no good spectra'.format(targetid, os.path.basename(spectrafiles[0])))
 
     fibermap = vstack(input_fibermaps)
 
@@ -193,7 +193,7 @@ def rrdesi(options=None, comm=None):
         sys.exit(1)
 
     if len(infiles) == 0:
-        print('ERROR: must provide input spectra/brick files')
+        print('ERROR: must provide input spectra files')
         sys.exit(1)
 
     templates = None
