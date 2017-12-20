@@ -20,6 +20,13 @@ setup_keywords['url'] = 'https://github.com/desihub/redrock'
 #
 # END OF SETTINGS THAT NEED TO BE CHANGED.
 #
+# Use desiutil if available to enable "python setup.py version"
+try:
+    from desiutil.setup import DesiVersion
+    setup_keywords['cmdclass'] = {'version': DesiVersion}
+except ImportError:
+    pass
+
 #
 # Import this module to get __doc__ and __version__.
 #

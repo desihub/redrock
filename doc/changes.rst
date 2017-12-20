@@ -2,15 +2,24 @@
 Redrock change log
 ==================
 
-0.7.0 (unreleased)
+0.7.1 (unreleased)
 ------------------
 
+* No changes yet.
+
+0.7.0 (2017-12-20)
+------------------
+
+* no ZWARN SMALL_DELTA_CHI2 between same spectype (PR `#47`_)
+* rrdesi --templates can now be folder not just file (PR `#44`_)
 * Allow templates to optionally include redshift range (PR `#41`_)
 * API CHANGE: redrock.io.read_templates() returns dict not list (PR `#41`_)
 * set ivar = 0 where mask != 0 (PR `#42`_)
 * Add NUMEXP and NUMTILE to zbest output (PR `#59`_)
 * Propagate input fibermap into output zbest (PR `#59`_)
 
+.. _`#47`: https://github.com/desihub/desispec/pull/47
+.. _`#44`: https://github.com/desihub/desispec/pull/44
 .. _`#41`: https://github.com/desihub/desispec/pull/41
 .. _`#42`: https://github.com/desihub/desispec/pull/42
 .. _`#59`: https://github.com/desihub/desispec/pull/59
