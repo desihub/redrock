@@ -8,11 +8,12 @@ Redrock change log
 * Allow templates to optionally include redshift range (PR `#41`_)
 * API CHANGE: redrock.io.read_templates() returns dict not list (PR `#41`_)
 * set ivar = 0 where mask != 0 (PR `#42`_)
-* Add NUMEXP and NUMTILE to zbest output
-* Propagate input fibermap into output zbest
+* Add NUMEXP and NUMTILE to zbest output (PR `#59`_)
+* Propagate input fibermap into output zbest (PR `#59`_)
 
 .. _`#41`: https://github.com/desihub/desispec/pull/41
 .. _`#42`: https://github.com/desihub/desispec/pull/42
+.. _`#59`: https://github.com/desihub/desispec/pull/59
 
 0.6.0 (2017-11-10)
 ------------------
