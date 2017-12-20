@@ -65,7 +65,7 @@ class Template(object):
 
 class MultiprocessingSharedSpectrum(object):
 
-    def __init__(self, wave, flux, ivar, R):
+    def __init__(self, wave, flux, ivar, R, meta=dict()):
         """
         create a Spectrum object
         
@@ -86,6 +86,7 @@ class MultiprocessingSharedSpectrum(object):
         self._shmem['ivar'] = sharedmem.fromarray(ivar)
         self._shmem['R.data'] = sharedmem.fromarray(R.data)
         self._shmem['R.offsets'] = R.offsets
+        self.meta = meta
 
         self._shmem['R.shape'] = R.shape
         
@@ -127,7 +128,7 @@ class MultiprocessingSharedSpectrum(object):
 
 class SimpleSpectrum(object):
 
-    def __init__(self, wave, flux, ivar, R):
+    def __init__(self, wave, flux, ivar, R, meta=dict()):
         self.nwave=wave.size
         self.wave=wave
         self.flux=flux
@@ -135,6 +136,7 @@ class SimpleSpectrum(object):
         self.R=R
         self.Rcsr = self.R.tocsr()
         self.wavehash = hash((len(wave), wave[0], wave[1], wave[-2], wave[-1]))
+        self.meta = meta
 
 
 class MPISharedTargets(object):
@@ -313,7 +315,7 @@ class MPISharedTargets(object):
 
 
 class Target(object):
-    def __init__(self, targetid, spectra, coadd=None,do_coadd = True):
+    def __init__(self, targetid, spectra, coadd=None, do_coadd=True, meta=dict()):
         """
         Create a Target object
 
@@ -326,9 +328,12 @@ class Target(object):
                     It is needed to create a new Target object from a shared memory buffer, because 
                     the Target object that was stored in the buffer had its coadd precomputed, 
                     and we don't want to reallocate memory or compute the coadds twice.
+            do_coadd: perform the coadd
+            meta: optional metadata dictionary to associate with this target
         """
         self.id = targetid
         self.spectra = spectra
+        self.meta = meta
 
         if not do_coadd:
             return

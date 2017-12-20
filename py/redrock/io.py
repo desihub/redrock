@@ -60,7 +60,7 @@ def read_template(filename):
         redshifts = native_endian(fx['REDSHIFTS'].data)
         old_style_templates = False
     except:
-        print("INFO: Can't find redshift range info in template file {}, using default values".format(filename))
+        print("DEBUG: Can't find redshift range info in template file {}, using default values".format(filename))
 
     fx.close()
 
