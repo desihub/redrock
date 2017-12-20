@@ -91,17 +91,12 @@ def read_spectra(spectrafiles, targetids=None, spectrum_class=SimpleSpectrum):
         targetids = input_targetids
 
     targets = list()
-    bricknames = list()
     for targetid in targetids:
         spectra = list()
         for sp in input_spectra:
             ii = np.where(sp.fibermap['TARGETID'] == targetid)[0]
             if np.count_nonzero(ii) == 0:
                 continue
-            if 'BRICKNAME' in sp.fibermap.dtype.names:
-                brickname = sp.fibermap['BRICKNAME'][ii][0]
-            else:
-                brickname = 'unknown'
             for x in sp.bands:          #- typically 'b', 'r', 'z'
                 wave = sp.wave[x]                
                 flux = sp.flux[x][ii]
@@ -111,11 +106,9 @@ def read_spectra(spectrafiles, targetids=None, spectrum_class=SimpleSpectrum):
                 for i in range(flux.shape[0]):
                     ifiber = ii[i]      #- index into sp.fibermap
                     if np.all(flux[i] == 0):
-                        # print('WARNING: Skipping spectrum {} of target {} on brick {} with flux=0'.format(i, targetid, brick.brickname))
                         continue
 
                     if np.all(ivar[i] == 0):
-                        # print('WARNING: Skipping spectrum {} of target {} on brick {} with ivar=0'.format(i, targetid, brick.brickname))
                         continue
 
                     R = Resolution(Rdata[i])
@@ -142,7 +135,6 @@ def read_spectra(spectrafiles, targetids=None, spectrum_class=SimpleSpectrum):
 
                     spectra.append(spectrum_class(wave, flux[i], ivar[i], R, meta=meta))
 
-        bricknames.append(brickname)
         #- end of for targetid in targetids loop
 
         if len(spectra) > 0:
@@ -156,13 +148,6 @@ def read_spectra(spectrafiles, targetids=None, spectrum_class=SimpleSpectrum):
             targets.append(Target(targetid, spectra, meta=meta))
         else:
             print('ERROR: Target {} on {} has no good spectra'.format(targetid, os.path.basename(brickfiles[0])))
-
-    #- Create a metadata table in case we might want to add other columns
-    #- in the future
-    assert len(bricknames) == len(targets)
-    dtype = [('BRICKNAME', 'S8'),]
-    meta = np.zeros(len(bricknames), dtype=dtype)
-    meta['BRICKNAME'] = bricknames
 
     fibermap = vstack(input_fibermaps)
 
