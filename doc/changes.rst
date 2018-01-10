@@ -1,11 +1,13 @@
 ==================
-Redrock change log
+redrock Change Log
 ==================
 
 0.7.1 (unreleased)
 ------------------
 
-* No changes yet.
+* Fully support desiInstall and DESI infrastructure generally (PR `#65`_).
+
+.. _`#65`: https://github.com/desihub/redrock/pull/65
 
 0.7.0 (2017-12-20)
 ------------------

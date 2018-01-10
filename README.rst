@@ -6,6 +6,14 @@ redrock
     :target: https://travis-ci.org/desihub/redrock
     :alt: Travis Build Status
 
+.. image:: https://coveralls.io/repos/github/desihub/redrock/badge.svg?branch=master
+    :target: https://coveralls.io/github/desihub/redrock?branch=master
+    :alt: Test Coverage Status
+
+.. image:: https://readthedocs.org/projects/redrock/badge/?version=latest
+    :target: http://redrock.readthedocs.org/en/latest/
+    :alt: Documentation Status
+
 Introduction
 ------------
 

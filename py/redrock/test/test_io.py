@@ -79,5 +79,10 @@ class TestIO(unittest.TestCase):
                     d2 = zscan2[targetid][spectype][key]
                     self.assertTrue(np.all(d1==d2), 'data mismatch {}/{}/{}'.format(targetid, spectype, key))
 
-if __name__ == '__main__':
-    unittest.main()
+
+def test_suite():
+    """Allows testing of only this module with the command::
+
+        python setup.py test -m <modulename>
+    """
+    return unittest.defaultTestLoader.loadTestsFromName(__name__)
