@@ -1,64 +1,45 @@
 #!/usr/bin/env python
-# License information goes here
+# Licensed under a 3-clause BSD style license - see LICENSE.rst
+from __future__ import absolute_import, division, print_function
 #
-# Imports
+# Standard imports
 #
 import glob
 import os
 import sys
+#
+# setuptools' sdist command ignores MANIFEST.in
+#
+from distutils.command.sdist import sdist as DistutilsSdist
 from setuptools import setup, find_packages
+#
+# DESI support code.
+#
+from desiutil.setup import DesiTest, DesiVersion, get_version
+#
+# Begin setup
+#
 setup_keywords = dict()
 #
 # THESE SETTINGS NEED TO BE CHANGED FOR EVERY PRODUCT.
 #
 setup_keywords['name'] = 'redrock'
 setup_keywords['description'] = 'Redrock redshift fitter'
-setup_keywords['author'] = 'Stephen Bailey'
-setup_keywords['author_email'] = 'StephenBailey@lbl.gov'
+setup_keywords['author'] = 'DESI Collaboration'
+setup_keywords['author_email'] = 'desi-data@desi.lbl.gov'
 setup_keywords['license'] = 'BSD'
 setup_keywords['url'] = 'https://github.com/desihub/redrock'
 #
 # END OF SETTINGS THAT NEED TO BE CHANGED.
 #
-# Use desiutil if available to enable "python setup.py version"
-try:
-    from desiutil.setup import DesiVersion
-    setup_keywords['cmdclass'] = {'version': DesiVersion}
-except ImportError:
-    pass
-
+setup_keywords['version'] = get_version(setup_keywords['name'])
 #
-# Import this module to get __doc__ and __version__.
+# Use README.rst as long_description.
 #
-sys.path.insert(int(sys.path[0] == ''),'./py')
-try:
-    from importlib import import_module
-    product = import_module(setup_keywords['name'])
-    setup_keywords['long_description'] = product.__doc__
-    setup_keywords['version'] = product.__version__
-except ImportError:
-    #
-    # Try to get the long description from the README.rst file.
-    #
-    if os.path.exists('README.rst'):
-        with open('README.rst') as readme:
-            setup_keywords['long_description'] = readme.read()
-    else:
-        setup_keywords['long_description'] = ''
-    setup_keywords['version'] = 'unknown'
-#
-# Indicates if this version is a release version.
-#
-if setup_keywords['version'].endswith('dev'):
-    #
-    # Try to obtain svn information.
-    #
-    if 'github' not in setup_keywords['url'].lower():
-        try:
-            from desiUtil.install import get_svn_devstr
-            setup_keywords['version'] += get_svn_devstr(setup_keywords['name'])
-        except ImportError:
-            pass
+setup_keywords['long_description'] = ''
+if os.path.exists('README.rst'):
+    with open('README.rst') as readme:
+        setup_keywords['long_description'] = readme.read()
 #
 # Set other keywords for the setup function.  These are automated, & should
 # be left alone unless you are an expert.
@@ -70,25 +51,22 @@ if os.path.isdir('bin'):
         if not os.path.basename(fname).endswith('.rst')]
 setup_keywords['provides'] = [setup_keywords['name']]
 setup_keywords['requires'] = ['Python (>2.7.0)']
+# setup_keywords['install_requires'] = ['Python (>2.7.0)']
 setup_keywords['zip_safe'] = False
 setup_keywords['use_2to3'] = False
 setup_keywords['packages'] = find_packages('py')
 setup_keywords['package_dir'] = {'':'py'}
-setup_keywords['test_suite'] = 'redrock.test.test_suite'
-
-#- Load requirements.txt
-# with open('requirements.txt') as fx:
-#     required = list()
-#     for line in fx:
-#         line = line.strip()
-#         if not line.startswith('#') and len(line) > 1:
-#             required.append(line)
-#             
-# setup_keywords['install_requires'] = required
-
-if not 'RR_TEMPLATE_DIR' in os.environ:
+setup_keywords['cmdclass'] = {'version': DesiVersion, 'test': DesiTest, 'sdist': DistutilsSdist}
+setup_keywords['test_suite']='{name}.test.test_suite'.format(**setup_keywords)
+#
+# Autogenerate command-line scripts.
+#
+# setup_keywords['entry_points'] = {'console_scripts':['desiInstall = desiutil.install.main:main']}
+#
+# Add internal data directories.
+#
+if 'RR_TEMPLATE_DIR' not in os.environ:
     setup_keywords['package_data'] = {'redrock': ['templates/*.fits']}
-
 #
 # Run setup command.
 #
