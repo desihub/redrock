@@ -1,4 +1,9 @@
+"""
+redrock.plotspec
+================
 
+Plotting tools.
+"""
 import time
 import numpy as np
 
@@ -70,7 +75,7 @@ class PlotSpec(object):
                 self.itarget -= 1
                 self.plot()
         elif event.key == 'd':
-            target = self.targets[self.itarget]    
+            target = self.targets[self.itarget]
             zfit = self.zfit[self.zfit['targetid'] == target.id]
             print('target {}'.format(target.id))
             print(zfit['znum', 'spectype', 'z', 'zerr', 'zwarn', 'chi2'])
@@ -80,8 +85,8 @@ class PlotSpec(object):
         #- Isolate imports of optional dependencies
         from scipy.signal import medfilt
         import matplotlib.pyplot as plt
-        
-        target = self.targets[self.itarget]    
+
+        target = self.targets[self.itarget]
         zfit = self.zfit[self.zfit['targetid'] == target.id]
         self.nznum = len(zfit)
         zz = zfit[zfit['znum'] == self.znum][0]
@@ -107,7 +112,7 @@ class PlotSpec(object):
                 self._ax1.plot(zx['redshifts'], zx['zchi2'], fmt, alpha=0.2, label='_none_')
                 self._ax1.plot(zx['redshifts'], zx['zchi2']+zx['penalty'], fmt, label=spectype)
 
-    
+
         self._ax1.plot(zfit['z'], zfit['chi2'], 'r.', label='_none_')
         for row in zfit:
             self._ax1.text(row['z'], row['chi2'], str(row['znum']), verticalalignment='top')
@@ -129,12 +134,12 @@ class PlotSpec(object):
         if keepzoom:
             self._ax1.set_xlim(*force_xlim)
             self._ax1.set_ylim(*force_ylim)
-    
+
         #----- spectrum plot
         if keepzoom:
             force_xlim = self._ax2.get_xlim()
             force_ylim = self._ax2.get_ylim()
-            
+
         self._ax2.clear()
         ymin = ymax = 0.0
         if hasattr(target,"coadd") and not target.coadd is None:

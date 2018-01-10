@@ -1,3 +1,9 @@
+"""
+redrock.fitz
+============
+
+Fitting tools.
+"""
 from __future__ import absolute_import, division, print_function
 
 import sys
@@ -120,7 +126,7 @@ def parallel_fitz_targets(zchi2, redshifts, targets, template, nminima=3, ncpu=N
     target_indices = np.array_split(range(len(targets)), ncpu)
     for i in range(ncpu):
         ### print('fitz process {}/{} doing {} targets'.format(i+1, ncpu, len(target_indices[i])))
-        p = mp.Process(target=_wrap_fitz, args=(target_indices[i], qout, 
+        p = mp.Process(target=_wrap_fitz, args=(target_indices[i], qout,
                 zchi2, redshifts, targets, template, nminima))
         p.start()
 
@@ -155,7 +161,7 @@ def parallel_fitz_targets(zchi2, redshifts, targets, template, nminima=3, ncpu=N
     return results
 
 
-def mpi_fitz_targets(zchi2, redshifts, targets, template, nminima=3, 
+def mpi_fitz_targets(zchi2, redshifts, targets, template, nminima=3,
     comm=None):
 
     rank = 0
@@ -165,7 +171,7 @@ def mpi_fitz_targets(zchi2, redshifts, targets, template, nminima=3,
         nproc = comm.size
 
     assert zchi2.shape == (len(targets), len(redshifts))
-    
+
     target_indices = np.array_split(range(len(targets)), nproc)
 
     # print("rank {} : redrock.fitz for {} targets {}:{}".format(rank,
@@ -180,20 +186,20 @@ def mpi_fitz_targets(zchi2, redshifts, targets, template, nminima=3,
     except Exception as err:
         import traceback, sys
         message = "error for a target between {} and {} : {}".format(
-            target_indices[rank][0], target_indices[rank][1], 
+            target_indices[rank][0], target_indices[rank][1],
             traceback.format_exception(*sys.exc_info()))
         result.append( (err, message) )
-    
+
     #- all the results gather to rank #0
     if comm is not None:
         results = comm.gather(result, root=0)
     else:
         results = [ result ]
-    
+
     if rank == 0:
         # rearrange results ( list of lists -> list )
         results = [item for sublist in results for item in sublist]
-        
+
         #- Check for any errors
         mpifail = False
         message = 'ok'
@@ -205,18 +211,18 @@ def mpi_fitz_targets(zchi2, redshifts, targets, template, nminima=3,
         if mpifail:
             print("ERROR: Raising the last of the exceptions")
             raise RuntimeError(message)
-        
+
     else: # not rank 0
         results = None
-    
-    # do not need to bcast results      
+
+    # do not need to bcast results
     return results
 
 
 def fitz(zchi2, redshifts, spectra, template, nminima=3):
     '''Refines redshift measurement around up to nminima minima
 
-    TODO: document return values    
+    TODO: document return values
     TODO: if there are fewer than nminima minima, consider padding
     '''
     assert len(zchi2) == len(redshifts)

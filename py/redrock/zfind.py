@@ -1,3 +1,9 @@
+"""
+redrock.zfind
+=============
+
+Redshift finding algorithms.
+"""
 from __future__ import division, print_function
 import time
 import os, sys
@@ -29,7 +35,7 @@ def _wrap_calc_zchi2(args):
 def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
     '''
     Given a list of targets and a list of templates, find redshifts
-    
+
     Args:
         targets : list of Target objects
         templates: dictionary of Template objects (template_name: template)
@@ -44,7 +50,7 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
         - zbest: best fit redshift (finer resolution fit around zchi2 minimum)
         - minchi2: chi2 at zbest
         - zerr: uncertainty on zbest
-        - zwarn: 0=good, non-0 is a warning flag    
+        - zwarn: 0=good, non-0 is a warning flag
     '''
     # redshifts = dict(
     #     GALAXY  = 10**np.arange(np.log10(0.1), np.log10(2.0), 4e-4),
@@ -58,7 +64,7 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
         zscan[target.id] = dict()
         for t in templates.values():
             zscan[target.id][t.fulltype] = dict()
-            
+
     if ncpu is None :
         if comm is None :
             # use multiprocessing by default
@@ -74,14 +80,14 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
         print("INFO: using multiprocessing with {} cores".format(ncpu))
     else:
         print("INFO: not using multiprocessing")
-        
+
     for t in templates.values():
 
         if comm is not None and (comm.rank == 0) :
             print('INFO: starting zchi2 scan for {}'.format(comm.rank,
                 t.fulltype))
             sys.stdout.flush() #  this helps seeing something
-        
+
         t0 = time.time()
         if ncpu > 1:
             zchi2, zcoeff, penalty = rrzscan.parallel_calc_zchi2_targets(t.redshifts, targets, t, ncpu=ncpu)
@@ -107,12 +113,12 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
 
         if comm is None or comm.rank==0 :
             print('DEBUG: PID {} {} fitz in {:.1f} seconds'.format(pid, t.fulltype, dt))
-  
+
         if comm is None or comm.rank == 0 :
-            
+
             for i,zfit in enumerate(zfits) :
                 zscan[targets[i].id][t.fulltype]['zfit'] = zfit
-        
+
             for i in range(len(targets)):
                 zscan[targets[i].id][t.fulltype]['redshifts'] = t.redshifts
                 zscan[targets[i].id][t.fulltype]['zchi2'] = zchi2[i]
@@ -120,14 +126,14 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
                 zscan[targets[i].id][t.fulltype]['zcoeff'] = zcoeff[i]
 
     sys.stdout.flush()
-    
+
     if comm is None or comm.rank == 0 :
         #- Convert individual zfit results into a zall array
         t0 = time.time()
         ### print('DEBUG: PID {} Making zall'.format(pid))
         sys.stdout.flush()
         import astropy.table
-        zfit = list() 
+        zfit = list()
         for target in targets:
             tzfit = list()
             for fulltype in zscan[target.id]:
@@ -187,9 +193,8 @@ def zfind(targets, templates, ncpu=None, comm=None, nminima=3):
     else :
        zscan = None
        zfit = None
-    
+
     # no need to broadcast at the end of this routine
     # because only rank 0 will write the results
-    
+
     return zscan, zfit
-    

@@ -1,7 +1,8 @@
 """
 redrock.zwarning
+================
 
-Mask bit definitions for zwarning
+Mask bit definitions for zwarning.
 
 WARNING on the warnings: not all of these are implemented yet.
 """

@@ -1,3 +1,9 @@
+"""
+redrock.dataobj
+===============
+
+Objects for storing and manipulating data.
+"""
 from __future__ import absolute_import, division, print_function
 
 import numpy as np
@@ -14,7 +20,7 @@ class Template(object):
     def __init__(self, template_type, redshifts, wave, flux, subtype=''):
         '''
         Create a spectral Template PCA object
-        
+
         Args:
             template_type : str, type of template, e.g. 'galaxy' or 'qso'
             redshifts : array of redshifts to consider for this template
@@ -23,9 +29,9 @@ class Template(object):
         '''
         wave = np.asarray(wave)
         flux = np.asarray(flux)
-        
+
         assert flux.shape[1] == len(wave)
-        
+
         self.type = template_type
         self.subtype = subtype
         self.redshifts = np.asarray(redshifts)
@@ -45,15 +51,15 @@ class Template(object):
     def eval(self, coeff, wave, z):
         '''
         Return template for given coefficients, wavelengths, and redshift
-        
+
         Args:
             coeff : array of coefficients length self.nbasis
             wave : wavelengths at which to evaluate template flux
             z : redshift at which to evaluate template flux
-        
+
         Returns:
             template flux array
-        
+
         Notes:
             A single factor of (1+z)^-1 is applied to the resampled flux
             to conserve integrated flux after redshifting.
@@ -68,7 +74,7 @@ class MultiprocessingSharedSpectrum(object):
     def __init__(self, wave, flux, ivar, R, meta=dict()):
         """
         create a Spectrum object
-        
+
         Args:
             wave : wavelength array
             flux : flux array
@@ -79,7 +85,7 @@ class MultiprocessingSharedSpectrum(object):
         assert(len(flux) == self.nwave)
         assert(len(ivar) == self.nwave)
         assert(R.shape == (self.nwave, self.nwave))
-        
+
         self._shmem = dict()
         self._shmem['wave'] = sharedmem.fromarray(wave)
         self._shmem['flux'] = sharedmem.fromarray(flux)
@@ -89,7 +95,7 @@ class MultiprocessingSharedSpectrum(object):
         self.meta = meta
 
         self._shmem['R.shape'] = R.shape
-        
+
         self.sharedmem_unpack()
 
         #- NOT EXACT: hash of wavelengths
@@ -152,9 +158,9 @@ class MPISharedTargets(object):
         on the format of this dictionary ).
         2) The dictionary is broadcasted to all processes.
         3) The root process allocates and fill the memory buffer with data.
-        4) All processes recreate the target list, using references to portions of 
+        4) All processes recreate the target list, using references to portions of
            the memory buffer for all wave, flux, ivar, rdata arrays.
-        
+
         Args:
             targets (list): the list of targets.  This is ONLY meaningful
                 on the rank zero process.  Data on other processes is
@@ -180,7 +186,7 @@ class MPISharedTargets(object):
         if root:
             self._target_dictionary, self._bufsize = \
                 self._fill_target_dictionary(targets)
-        
+
         if self._comm is not None:
             self._target_dictionary = self._comm.bcast(self._target_dictionary,
                 root=0)
@@ -208,15 +214,15 @@ class MPISharedTargets(object):
                             spectrum = targets[targetnum].spectra[specnum]
                         elif spectra_label == "coadd":
                             spectrum = targets[targetnum].coadd[specnum]
-                        for label, an_array in zip(["wave", "flux", "ivar", 
+                        for label, an_array in zip(["wave", "flux", "ivar",
                             "rdata", "roffsets", "rshape"], [spectrum.wave,
-                            spectrum.flux, spectrum.ivar, spectrum.R.data, 
+                            spectrum.flux, spectrum.ivar, spectrum.R.data,
                             spectrum.R.offsets.astype(self._dtype),
                             np.array(spectrum.R.shape).astype(self._dtype)]):
                             begin = spectra_dict[label][0] - target_begin
                             end = spectra_dict[label][1] - target_begin
                             target_buffer[begin:end] = an_array.ravel()
-                    self._shared.set(target_buffer, (target_begin,), 
+                    self._shared.set(target_buffer, (target_begin,),
                         fromrank=0)
                     specnum += 1
             targetnum += 1
@@ -229,10 +235,10 @@ class MPISharedTargets(object):
 
     def __del__(self):
         self.close()
-    
+
     def __enter__(self):
         return self
-    
+
     def __exit__(self, type, value, tb):
         self.close()
         return False
@@ -251,29 +257,29 @@ class MPISharedTargets(object):
         i.e. a dictionary of targets identified by their id
              - each target has two list of spectra labeled "spectra" and "coadd"
              - each spectrum in the two lists of spectra is a dictionary containing, for the keys
-                "wave", "flux", "ivar", "rdata", "roffsets" and "rshape" , the begin and end index of the array in the shared 
+                "wave", "flux", "ivar", "rdata", "roffsets" and "rshape" , the begin and end index of the array in the shared
                memory buffer.
-        
+
         Args:
             targets (list): the list of targets.
 
         Returns:
             - dictionnary
             - size of the memory array
-        
+
         """
         n = 0
         dictionary = OrderedDict() # keep targets as ordered in list
         for target in targets :
             dictionary[target.id] = {}
-            for spectra_label, spectra in zip(["spectra", "coadd"], 
+            for spectra_label, spectra in zip(["spectra", "coadd"],
                 [target.spectra, target.coadd]):
                 spectra_list = list()
                 for spectrum in spectra :
                     spectrum_dict = {}
                     for label, asize in zip(["wave","flux","ivar","rdata",
-                        "roffsets","rshape"], [spectrum.wave.size, 
-                        spectrum.flux.size, spectrum.ivar.size, 
+                        "roffsets","rshape"], [spectrum.wave.size,
+                        spectrum.flux.size, spectrum.ivar.size,
                         spectrum.R.data.size, spectrum.R.offsets.size,
                         len(spectrum.R.shape)]):
                         spectrum_dict[label] = [n, n + asize]
@@ -289,7 +295,7 @@ class MPISharedTargets(object):
         to get the list of target ids, the number spectra, and the addresses in the memory
         of each array that defines a spectrum (wave, flux, ivar, rdata).
         """
-        
+
         targets = list()
         for id, tdict in self._target_dictionary.items():
             spectra = list()
@@ -306,9 +312,9 @@ class MPISharedTargets(object):
                     roffsets = self._shared[spectrum_dict["roffsets"][0]:spectrum_dict["roffsets"][1]]
                     rshape = tuple(self._shared[spectrum_dict["rshape"][0]:spectrum_dict["rshape"][1]].astype(int))
                     rdata = rdata.reshape((roffsets.size,rdata.shape[0]//roffsets.size))
-                    spectra_ref.append( SimpleSpectrum(wave, flux, ivar, 
-                        scipy.sparse.dia_matrix((rdata, roffsets), 
-                        shape=rshape)) )            
+                    spectra_ref.append( SimpleSpectrum(wave, flux, ivar,
+                        scipy.sparse.dia_matrix((rdata, roffsets),
+                        shape=rshape)) )
             targets.append(Target(id, spectra, coadd=coadd))
 
         return targets
@@ -324,9 +330,9 @@ class Target(object):
             spectra : list of Spectra objects
 
         Option:
-            coadd : list of Spectra objects. This option is used in MPISharedTargets._get_targets(). 
-                    It is needed to create a new Target object from a shared memory buffer, because 
-                    the Target object that was stored in the buffer had its coadd precomputed, 
+            coadd : list of Spectra objects. This option is used in MPISharedTargets._get_targets().
+                    It is needed to create a new Target object from a shared memory buffer, because
+                    the Target object that was stored in the buffer had its coadd precomputed,
                     and we don't want to reallocate memory or compute the coadds twice.
             do_coadd: perform the coadd
             meta: optional metadata dictionary to associate with this target
@@ -376,7 +382,7 @@ class Target(object):
                 self.coadd.append(MultiprocessingSharedSpectrum(wave, flux, weights, R))
         else :
             self.coadd=coadd
-    
+
     def sharedmem_pack(self):
         '''Prepare underlying numpy arrays for sending to a new process;
         call self.sharedmem_unpack() to restore to original state.'''
