@@ -2,8 +2,9 @@ import unittest
 import numpy as np
 import scipy.sparse
 
-from .. import zfind as rrzfind
-from .. import zscan as rrzscan
+from ..zfind import zfind as rrzfind
+from ..zscan import (calc_zchi2_targets, parallel_calc_zchi2_targets,
+                     template_fit)
 from . import util
 
 #- Return a normalized sampled Gaussian (no integration, just sampling)
@@ -23,10 +24,10 @@ def getR(n, sigma):
 
 
 class TestZScan(unittest.TestCase):
-    
+
     def setUp(self):
         pass
-            
+
     def test_zscan(self):
         z1 = 0.2
         z2 = 0.25
@@ -45,16 +46,16 @@ class TestZScan(unittest.TestCase):
         self.assertLess(np.abs(zx2['z'] - z2)/zx2['zerr'], 5)
         self.assertLess(zx1['zerr'], 0.002)
         self.assertLess(zx2['zerr'], 0.002)
-        
+
         #- Test dimensions of template_fit return
         zmin = zx1['z']
-        fitflux, fitcoeff = rrzscan.template_fit(t1.spectra, zmin, template)
+        fitflux, fitcoeff = template_fit(t1.spectra, zmin, template)
 
         self.assertEqual(len(fitcoeff), template.nbasis)
         self.assertEqual(len(fitflux), len(t1.spectra))
         for i in range(len(fitflux)):
             self.assertEqual(len(fitflux[i]), len(t1.spectra[i].flux))
-    
+
     def test_parallel_zscan(self):
         z1 = 0.2
         z2 = 0.25
@@ -65,9 +66,9 @@ class TestZScan(unittest.TestCase):
         t2 = util.get_target(z2); t2.id = 222
         template = util.get_template()
         redshifts = np.linspace(0.15, 0.3, 25)
-        zchi2a, zcoeffa, penaltya = rrzscan.calc_zchi2_targets(redshifts, [t1,t2], template)
-        zchi2b, zcoeffb, penaltyb = rrzscan.parallel_calc_zchi2_targets(redshifts, [t1,t2], template, ncpu=2)
-        
+        zchi2a, zcoeffa, penaltya = calc_zchi2_targets(redshifts, [t1,t2], template)
+        zchi2b, zcoeffb, penaltyb = parallel_calc_zchi2_targets(redshifts, [t1,t2], template, ncpu=2)
+
         self.assertEqual(zchi2a.shape, zchi2b.shape)
         self.assertEqual(zcoeffa.shape, zcoeffb.shape)
         self.assertTrue(np.all(zchi2a == zchi2b))
@@ -86,7 +87,7 @@ class TestZScan(unittest.TestCase):
         Fstar.redshifts = np.linspace(-1e-3, 1e-3, 25)
         Fstar.redshifts = np.linspace(-1e-3, 1e-3, 25)
         nminima = 3
-        zscan, zfit = rrzfind([t1,t2], {Fstar.fulltype:Fstar, Mstar.fulltype:Mstar}, ncpu=1, 
+        zscan, zfit = rrzfind([t1,t2], {Fstar.fulltype:Fstar, Mstar.fulltype:Mstar}, ncpu=1,
             nminima=nminima)
         self.assertEqual(len(zfit), 2*nminima)
         self.assertTrue(np.all(zfit['spectype'] == 'STAR'))
