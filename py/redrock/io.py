@@ -8,7 +8,7 @@ import numpy as np
 from astropy.io import fits
 from astropy.table import Table
 
-from . import Template
+from .dataobj import Template
 
 #- for python 3 compatibility
 if sys.version_info.major > 2:
@@ -35,7 +35,7 @@ def native_endian(data):
 def read_template(filename):
     '''
     Read template from filename
-    
+
     Returns a Template object
     '''
     if os.path.exists(filename):
@@ -86,13 +86,13 @@ def read_template(filename):
 
 
 def find_templates(template_dir=None):
-    '''
-    Return list of redrock-*.fits template files
-    
+    '''Return list of redrock-\*.fits template files
+
     Search directories in this order, returning results from first one found:
-        * template_dir
-        * $RR_TEMPLATE_DIR
-        * {redrock_code}/templates/
+
+    * `template_dir`
+    * :envvar:`RR_TEMPLATE_DIR`
+    * ``{redrock_code}/templates/``
     '''
     if template_dir is None:
         if 'RR_TEMPLATE_DIR' in os.environ:
@@ -102,7 +102,7 @@ def find_templates(template_dir=None):
             tempdir = os.path.join(os.path.abspath(thisdir), 'templates')
             if os.path.exists(tempdir):
                 template_dir = tempdir
-        
+
     if template_dir is None:
         raise IOError("ERROR: can't find template_dir, $RR_TEMPLATE_DIR, or {rrcode}/templates/")
 
@@ -112,7 +112,7 @@ def find_templates(template_dir=None):
 def read_templates(template_list=None, template_dir=None):
     '''
     Return a list of templates from the files in template_list
-    
+
     If template_list is None, use list from find_templates(template_dir)
     If template_list is a filename, return 1-element list with that template
     '''
@@ -127,29 +127,29 @@ def read_templates(template_list=None, template_dir=None):
         for tfile in template_list:
             t = read_template(tfile)
             templates[t.fulltype] = t
-    
+
     if len(templates) == 0:
         raise IOError('No templates found')
-    
+
     return templates
 
 
 def write_zscan(filename, zscan, zfit, clobber=False):
     '''
     Writes redrock.zfind results to filename
-    
+
     The nested dictionary structure of results is mapped into a nested
     group structure of the HDF5 file:
 
     TODO: document structure
-    
+
     /targetids[nt]
     /zscan/{spectype}/redshifts[nz]
     /zscan/{spectype}/zchi2[nt, nz]
     /zscan/{spectype}/penalty[nt, nz]
     /zscan/{spectype}/zcoeff[nt, nz, nc] or zcoeff[nt, nc, nz] ?
     /zfit/{targetid}/zfit table...
-    
+
     if clobber=True, replace pre-existing file
     '''
     import h5py
@@ -164,7 +164,7 @@ def write_zscan(filename, zscan, zfit, clobber=False):
 
     zbest = zfit[zfit['znum'] == 0]
     zbest.remove_column('znum')
-        
+
     zbest.write(filename, path='zbest', format='hdf5')
 
     targetids = np.asarray(zbest['targetid'])
@@ -198,24 +198,26 @@ def write_zscan(filename, zscan, zfit, clobber=False):
 def read_zscan(filename):
     '''Return redrock.zfind results stored in hdf5 file as written
     by write_zscan
-    
-    returns (zbest, results) tuple:
-        zbest is a Table with keys TARGETID, Z, ZERR, ZWARN
-        results is a nested dictionary results[targetid][templatetype] with keys
-            - z: array of redshifts scanned
-            - zchi2: array of chi2 fit at each z
-            - penalty: array of chi2 penalties for unphysical fits at each z
-            - zbest: best fit redshift (finer resolution fit around zchi2 min)
-            - minchi2: chi2 at zbest
-            - zerr: uncertainty on zbest
-            - zwarn: 0=good, non-0 is a warning flag    
+
+    Returns:
+        A (zbest, results) tuple: zbest is a Table with keys
+        TARGETID, Z, ZERR, ZWARN. results is a nested dictionary
+        results[targetid][templatetype] with keys:
+
+        - z: array of redshifts scanned
+        - zchi2: array of chi2 fit at each z
+        - penalty: array of chi2 penalties for unphysical fits at each z
+        - zbest: best fit redshift (finer resolution fit around zchi2 min)
+        - minchi2: chi2 at zbest
+        - zerr: uncertainty on zbest
+        - zwarn: 0=good, non-0 is a warning flag
     '''
     import h5py
     # zbest = Table.read(filename, format='hdf5', path='zbest')
     with h5py.File(filename, mode='r') as fx:
         targetids = fx['targetids'].value
         spectypes = list(fx['zscan'].keys())
-    
+
         zscan = dict()
         for targetid in targetids:
             zscan[targetid] = dict()
@@ -239,7 +241,7 @@ def read_zscan(filename):
                 thiszfit.replace_column('spectype', _encode_column(thiszfit['spectype']))
                 thiszfit.replace_column('subtype', _encode_column(thiszfit['subtype']))
                 zscan[targetid][spectype]['zfit'] = thiszfit
-    
+
         zfit = [fx['zfit/{}/zfit'.format(tid)].value for tid in targetids]
         zfit = Table(np.hstack(zfit))
         zfit.replace_column('spectype', _encode_column(zfit['spectype']))
@@ -265,6 +267,3 @@ def getch():
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
     return ch
-
-            
-    
