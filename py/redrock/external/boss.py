@@ -1,4 +1,7 @@
 '''
+redrock.external.boss
+=====================
+
 redrock wrapper tools for BOSS
 '''
 
@@ -15,10 +18,9 @@ import desispec.resolution
 from desispec.resolution import Resolution
 import os.path
 
-from .. import Target
 from .. import io
 from .. import zfind
-from ..dataobj import (Target, MultiprocessingSharedSpectrum, 
+from ..dataobj import (Target, MultiprocessingSharedSpectrum,
     SimpleSpectrum, MPISharedTargets)
 
 def platemjdfiber2targetid(plate, mjd, fiber):
@@ -83,7 +85,7 @@ def read_spectra(spplate_name, targetids=None,spectrum_class=SimpleSpectrum,use_
                     expid = '0'+expid
                 exp = path+"/spCFrame-"+spplate[0].read_header()["EXPID"+expid][:11]+".fits"
                 infiles.append(exp)
-    
+
     spplate.close()
     bricknames=[]
     dic_spectra = {}
@@ -114,7 +116,7 @@ def read_spectra(spplate_name, targetids=None,spectrum_class=SimpleSpectrum,use_
             coeff1 = h[0].read_header()["COEFF1"]
             la = 10**(coeff0 + coeff1*np.arange(fl.shape[1]))
             la = np.broadcast_to(la,fl.shape)
-        
+
         imin = abs(la-lmin).min(axis=0).argmin()
         imax = abs(la-lmax).min(axis=0).argmin()
 

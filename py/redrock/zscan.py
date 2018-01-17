@@ -1,3 +1,9 @@
+"""
+redrock.zscan
+=============
+
+Algorithms for scanning redshifts.
+"""
 from __future__ import division, print_function
 import time
 
@@ -7,7 +13,7 @@ import scipy.sparse
 
 from . import rebin
 
-from .dataobj import (MultiprocessingSharedSpectrum, 
+from .dataobj import (MultiprocessingSharedSpectrum,
     SimpleSpectrum, MPISharedTargets, Target)
 
 
@@ -115,14 +121,14 @@ def mpi_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
     if comm is not None:
         rank = comm.rank
         nproc = comm.size
-                
+
     zsplit = np.array_split(redshifts, nproc)
 
     # print("rank {} : zscan.calc_zchi2_targets for {} redshifts "
     #     "{}:{}".format(rank, template.fulltype, zsplit[rank][0],
     #     zsplit[rank][-1]))
     # sys.stdout.flush() #  this helps seeing something
-    
+
     zchi2, zcoeff, zchi2penalty = calc_zchi2_targets(zsplit[rank], targets, template)
 
     if comm is not None:
@@ -132,7 +138,7 @@ def mpi_calc_zchi2_targets(redshifts, targets, template, verbose=False, \
         zchi2        = np.hstack(zchi2)
         zcoeff       = np.hstack(zcoeff)
         zchi2penalty = np.hstack(zchi2penalty)
-    
+
     return zchi2, zcoeff, zchi2penalty
 
 

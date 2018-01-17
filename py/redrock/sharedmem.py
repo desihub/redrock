@@ -1,4 +1,7 @@
 '''
+redrock.sharedmem
+=================
+
 Utilities for working with multiprocessing shared memory arrays
 
 Copy a numpy array into a shared memory tuple::

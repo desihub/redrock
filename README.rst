@@ -2,25 +2,48 @@
 redrock
 =======
 
-.. image:: https://travis-ci.org/sbailey/redrock.svg?branch=master
-    :target: https://travis-ci.org/sbailey/redrock
+.. image:: https://travis-ci.org/desihub/redrock.svg?branch=master
+    :target: https://travis-ci.org/desihub/redrock
+    :alt: Travis Build Status
+
+.. image:: https://coveralls.io/repos/github/desihub/redrock/badge.svg?branch=master
+    :target: https://coveralls.io/github/desihub/redrock?branch=master
+    :alt: Test Coverage Status
+
+.. image:: https://readthedocs.org/projects/redrock/badge/?version=latest
+    :target: http://redrock.readthedocs.org/en/latest/
+    :alt: Documentation Status
+
+Introduction
+------------
 
 Redshift fitting for spectroperfectionism.
 
-To install:
-```
-git clone https://github.com/sbailey/redrock
-cd redrock
-git clone https://github.com/sbailey/redrock-templates py/redrock/templates
-python setup.py install
-```
-That will install the templates with the code.  Alternatively, the templates
-can be put elsewhere and set `$RR_TEMPLATE_DIR` to that location.
+Installation
+------------
 
-To run on desi bricks files:
-```
-rrdesi --zbest zbest.fits --output rrdetails.h5 brick*.fits
-```
+To install::
+
+    git clone https://github.com/desihub/redrock
+    cd redrock
+    git clone https://github.com/desihub/redrock-templates py/redrock/templates
+    python setup.py install
+
+That will install the templates with the code.  Alternatively, the templates
+can be put elsewhere and set ``$RR_TEMPLATE_DIR`` to that location.
+
+Running
+-------
+
+To run on desi bricks files::
+
+    rrdesi --zbest zbest.fits --output rrdetails.h5 brick*.fits
+
+License
+-------
+
+redrock is free software licensed under a 3-clause BSD-style license. For details see
+the ``LICENSE.rst`` file.
 
 | Stephen Bailey & David Schlegel
 | Lawrence Berkeley National Lab

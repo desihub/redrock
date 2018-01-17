@@ -1,3 +1,9 @@
+"""
+redrock.rebin
+=============
+
+Tools for binning data.
+"""
 from __future__ import division, print_function
 
 import numpy as np
@@ -5,10 +11,10 @@ import numba
 
 def centers2edges(centers):
     '''convert bin centers to bin edges, guessing at what you probably meant
-    
+
     Args:
         centers : array of bin centers
-    
+
     Returns:
         edges : array of bin edges, lenth = len(centers) + 1
     '''
@@ -28,7 +34,7 @@ def trapz_rebin(x, y, xnew=None, edges=None):
     if edges is None:
         edges = centers2edges(xnew)
     else:
-        edges = np.asarray(edges)    
+        edges = np.asarray(edges)
 
     if edges[0] < x[0] or x[-1] < edges[-1]:
         raise ValueError('edges must be within input x range')
@@ -39,14 +45,14 @@ def trapz_rebin(x, y, xnew=None, edges=None):
 @numba.jit
 def _trapz_rebin(x, y, edges):
     '''Rebin y(x) flux density using trapezoidal integration between bin edges
-    
+
     Args:
         x, y : arrays of input y vs. x samples
         edges : array of new bin edges
-                
+
     Returns:
         array of integrated results with len(results) = len(edges)-1
-        
+
     Notes:
         y is interpreted as a density, as is the output, e.g.
 
@@ -54,7 +60,7 @@ def _trapz_rebin(x, y, edges):
         >>> y = np.ones(10)
         >>> trapz_rebin(x, y, edges=[0,2,4,6,8])  #- density still 1, not 2
         array([ 1.,  1.,  1.,  1.])
-                
+
     Raises:
         ValueError if edges are outside the range of x
         ValueError if len(x) != len(y)
@@ -64,7 +70,7 @@ def _trapz_rebin(x, y, edges):
     results = np.zeros(nbin)
     i = 0  #- index counter for output
     j = 0  #- index counter for inputs
-    
+
     #- Find edge and include first trapezoid
     # print('---')
     # print(x)
@@ -89,7 +95,7 @@ def _trapz_rebin(x, y, edges):
                 area = 0.5 * (y[j] + y[j-1]) * (x[j] - x[j-1])
                 # print('interior', i, j, area)
                 results[i] += area
-            
+
             #- Next sample will be outside this bin; handle upper edge
             yedge = y[j] + (edges[i+1]-x[j]) * (y[j+1]-y[j]) / (x[j+1]-x[j])
             area = 0.5 * (yedge + y[j]) * (edges[i+1] - x[j])
@@ -107,5 +113,3 @@ def _trapz_rebin(x, y, edges):
         i += 1
 
     return results / (edges[1:] - edges[0:-1])
-    
-

@@ -1,4 +1,7 @@
 '''
+redrock.external.desi
+=====================
+
 redrock wrapper tools for DESI
 '''
 from __future__ import absolute_import, division, print_function
@@ -14,7 +17,7 @@ from astropy.table import Table, vstack
 import desispec.io
 from desispec.resolution import Resolution
 
-from ..dataobj import (Target, MultiprocessingSharedSpectrum, 
+from ..dataobj import (Target, MultiprocessingSharedSpectrum,
     SimpleSpectrum, MPISharedTargets)
 
 from .. import io
@@ -60,7 +63,7 @@ def read_spectra(spectrafiles, targetids=None, spectrum_class=SimpleSpectrum):
         the redrock.dataobj.MultiprocessingSharedSpectrum class, whereas the MPI version
         implements the shared memory after all spectra have been read by the root process,
         and so the MPI version used another more simple spectrum class (see redrock.dataobj.SimpleSpectrum).
-    
+
     Returns tuple of (targets, fibermap) where
         targets is a list of Target objects and
         fibermap is the Table from the input spectra files
@@ -98,7 +101,7 @@ def read_spectra(spectrafiles, targetids=None, spectrum_class=SimpleSpectrum):
             if np.count_nonzero(ii) == 0:
                 continue
             for x in sp.bands:          #- typically 'b', 'r', 'z'
-                wave = sp.wave[x]                
+                wave = sp.wave[x]
                 flux = sp.flux[x][ii]
                 ivar = sp.ivar[x][ii]*(sp.mask[x][ii]==0)
                 Rdata = sp.resolution_data[x][ii]
@@ -203,13 +206,13 @@ def rrdesi(options=None, comm=None):
         t0 = time.time()
         print('INFO: reading targets')
         sys.stdout.flush()
-        
+
         spectrum_class = SimpleSpectrum
         if opts.ncpu is None or opts.ncpu > 1:
             spectrum_class = MultiprocessingSharedSpectrum
 
         targets, fibermap = read_spectra(infiles,spectrum_class=spectrum_class)
-            
+
         if not opts.allspec:
             for t in targets:
                 t._all_spectra = t.spectra
@@ -220,10 +223,10 @@ def rrdesi(options=None, comm=None):
             targetids = [t.id for t in targets]
             ii = np.in1d(fibermap['TARGETID'], targetids)
             fibermap = fibermap[ii]
-        
+
         print('INFO: reading templates')
         sys.stdout.flush()
-        
+
         if not opts.templates is None and os.path.isdir(opts.templates):
             templates = io.read_templates(template_list=None, template_dir=opts.templates)
         else:
@@ -232,7 +235,7 @@ def rrdesi(options=None, comm=None):
         dt = time.time() - t0
         # print('DEBUG: PID {} read targets and templates in {:.1f} seconds'.format(pid,dt))
         sys.stdout.flush()
-        
+
     # all processes get a copy of the templates from rank 0
     if comm is not None:
         templates = comm.bcast(templates, root=0)
@@ -242,12 +245,12 @@ def rrdesi(options=None, comm=None):
     if comm is not None:
         # Use MPI
         with MPISharedTargets(targets, comm) as shared_targets:
-            zscan, zfit = zfind(shared_targets.targets, templates, 
+            zscan, zfit = zfind(shared_targets.targets, templates,
                 ncpu=None, comm=comm)
     else:
         # Use pure multiprocessing
         zscan, zfit = zfind(targets, templates, ncpu=opts.ncpu)
-    
+
     if rank == 0:
         if opts.output:
             print('INFO: writing {}'.format(opts.output))
@@ -295,10 +298,10 @@ def rrdesi(options=None, comm=None):
             write_zbest(opts.zbest, zbest, fibermap)
 
     run_time = time.time() - start_time
-    
+
     if comm is None or comm.rank == 0:
         print('INFO: finished {} in {:.1f} seconds'.format(os.path.basename(infiles[0]), run_time))
-    
+
     if opts.debug:
         if comm is not None:
             print('INFO: ignoring ipython debugging when using MPI')
@@ -307,6 +310,3 @@ def rrdesi(options=None, comm=None):
             IPython.embed()
 
     return
-
-
-
