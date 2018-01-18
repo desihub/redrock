@@ -283,13 +283,12 @@ class DistTargetsCopy(DistTargets):
 
     Args:
         targets (list): list of Target objects on one process.
-        meta (Table): the metadata table.
         comm (mpi4py.MPI.Comm): (optional) the MPI communicator.
         root (int): the process which has the input targets locally.
 
     """
 
-    def __init__(self, targets, meta=None, comm=None, root=0):
+    def __init__(self, targets, comm=None, root=0):
 
         comm_size = 1
         comm_rank = 0
@@ -326,8 +325,7 @@ class DistTargetsCopy(DistTargets):
                     tbuf[recv.id] = recv
             self._my_data = [ tbuf[x] for x in self._my_targets ]
 
-        super(DistTargetsCopy, self).__init__(self._alltargetids, meta,
-            comm=comm)
+        super(DistTargetsCopy, self).__init__(self._alltargetids, comm=comm)
 
 
     def _local_target_ids(self):

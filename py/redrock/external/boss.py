@@ -368,7 +368,7 @@ def rrboss(options=None, comm=None):
 
         start = elapsed(None, "", comm=comm)
 
-        dtargets = DistTargetsCopy(targets, meta=meta, comm=comm, root=0)
+        dtargets = DistTargetsCopy(targets, comm=comm, root=0)
 
         # Get the dictionary of wavelength grids
         dwave = dtargets.wavegrids()
