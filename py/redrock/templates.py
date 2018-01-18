@@ -154,12 +154,12 @@ class Template(object):
 
 
 def find_templates(template_dir=None):
-    """Return list of redrock-*.fits template files
+    """Return list of redrock-\*.fits template files
 
     Search directories in this order, returning results from first one found:
         - template_dir
         - $RR_TEMPLATE_DIR
-        - {redrock_code}/templates/
+        - <redrock_code>/templates/
 
     Args:
         template_dir (str): optional directory containing the templates.
