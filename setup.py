@@ -13,13 +13,40 @@ import sys
 from distutils.command.sdist import sdist as DistutilsSdist
 from setuptools import setup, find_packages
 #
-# DESI support code.
-#
-from desiutil.setup import DesiTest, DesiVersion, get_version
-#
 # Begin setup
 #
 setup_keywords = dict()
+#
+# Optionally support DESI support code.
+#
+setup_keywords['cmdclass'] = {'sdist': DistutilsSdist}
+try:
+    from desiutil.setup import DesiTest, DesiVersion, get_version
+    setup_keywords['cmdclass']['version'] = DesiVersion
+    setup_keywords['cmdclass']['test'] = DesiTest
+except ImportError:
+    def get_version(productname):
+        """Get the value of ``__version__`` without having to import the module.
+        Parameters
+        ----------
+        productname : :class:`str`
+            The name of the package.
+        Returns
+        -------
+        :class:`str`
+            The value of ``__version__``.
+        """
+        import re
+        version_file = os.path.join(os.path.abspath('.'), 'py',
+                                    productname, '_version.py')
+        if not os.path.isfile(version_file):
+            return '0.1.0'
+        with open(version_file, "r") as f:
+            for line in f.readlines():
+                mo = re.match("__version__ = '(.*)'", line)
+                if mo:
+                    ver = mo.group(1)
+        return ver
 #
 # THESE SETTINGS NEED TO BE CHANGED FOR EVERY PRODUCT.
 #
@@ -56,7 +83,7 @@ setup_keywords['zip_safe'] = False
 setup_keywords['use_2to3'] = False
 setup_keywords['packages'] = find_packages('py')
 setup_keywords['package_dir'] = {'':'py'}
-setup_keywords['cmdclass'] = {'version': DesiVersion, 'test': DesiTest, 'sdist': DistutilsSdist}
+# setup_keywords['cmdclass'] = {'version': DesiVersion, 'test': DesiTest, 'sdist': DistutilsSdist}
 setup_keywords['test_suite']='{name}.test.test_suite'.format(**setup_keywords)
 #
 # Autogenerate command-line scripts.
