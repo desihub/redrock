@@ -17,7 +17,34 @@ If you're loading a module here, and don't see some functions, try adding the
 .. automodule:: redrock.constants
     :members:
 
-.. automodule:: redrock.dataobj
+.. automodule:: redrock.utils
+    :members:
+
+.. automodule:: redrock.zwarning
+    :members:
+
+.. automodule:: redrock.rebin
+    :members:
+
+.. automodule:: redrock.results
+    :members:
+
+.. automodule:: redrock.targets
+    :members:
+
+.. automodule:: redrock.templates
+    :members:
+
+.. automodule:: redrock.fitz
+    :members:
+
+.. automodule:: redrock.plotspec
+    :members:
+
+.. automodule:: redrock.zfind
+    :members:
+
+.. automodule:: redrock.zscan
     :members:
 
 .. automodule:: redrock.external
@@ -27,31 +54,4 @@ If you're loading a module here, and don't see some functions, try adding the
     :members:
 
 .. automodule:: redrock.external.desi
-    :members:
-
-.. automodule:: redrock.fitz
-    :members:
-
-.. automodule:: redrock.io
-    :members:
-
-.. automodule:: redrock.plotspec
-    :members:
-
-.. automodule:: redrock.rebin
-    :members:
-
-.. automodule:: redrock.sharedmem_mpi
-    :members:
-
-.. automodule:: redrock.sharedmem
-    :members:
-
-.. automodule:: redrock.zfind
-    :members:
-
-.. automodule:: redrock.zscan
-    :members:
-
-.. automodule:: redrock.zwarning
     :members:

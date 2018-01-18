@@ -8,6 +8,7 @@ Redshift finding algorithms.
 from __future__ import division, print_function
 
 import os
+import re
 import sys
 import traceback
 
@@ -173,6 +174,11 @@ def zfind(targets, templates, mp_procs=1, nminima=3):
 
         stop = elapsed(start, "    Finished in", comm=t.comm)
 
+    # Add the target metadata to the results
+
+    for tg in targets.local():
+        results[tg.id]['meta'] = tg.meta
+
     # Gather our results to the root process and split off the zfit data.
     # Only process zero returns data- other ranks return None.
 
@@ -190,10 +196,15 @@ def zfind(targets, templates, mp_procs=1, nminima=3):
             allresults.update(p)
         del results
 
+        # for t in templates:
+        #     ft = t.template.full_type
+
         allzfit = list()
         for tid in targets.all_target_ids:
             tzfit = list()
             for fulltype in allresults[tid]:
+                if fulltype == 'meta':
+                    continue
                 tmp = allresults[tid][fulltype]['zfit']
                 #- TODO: reconsider fragile parsing of fulltype
                 if fulltype.count(':') > 0:
@@ -247,5 +258,50 @@ def zfind(targets, templates, mp_procs=1, nminima=3):
             allzfit.append(tzfit)
 
         allzfit = astropy.table.vstack(allzfit)
+
+        # Cosmetic: move TARGETID to be first column as primary key
+        allzfit.columns.move_to_end('targetid', last=False)
+
+        # Now we have the final table of best fit results.  We want to add any
+        # extra columns from the target metadata.  We assume that the meta keys
+        # for the first target are the same keys for all targets...
+
+        zfitids = list(allzfit['targetid'])
+        allmetakeys = list(sorted(allresults[zfitids[0]]['meta'].keys()))
+
+        # Parse any type information for the metadata.
+
+        typepat = re.compile(r'(.*)_datatype')
+        metakeys = list()
+        metatypes = dict()
+        for mk in allmetakeys:
+            mat = typepat.match(mk)
+            if mat is None:
+                # this is a real key
+                metakeys.append(mk)
+            else:
+                # get the data type
+                metatypes[mat.group(1)] = allresults[zfitids[0]]['meta'][mk]
+        for mk in metakeys:
+            if mk not in metatypes:
+                metatypes[mk] = None
+
+        # Append the columns
+
+        for mk in metakeys:
+            if metatypes[mk] is not None:
+                col = astropy.table.Column(np.array([ \
+                    allresults[x]['meta'][mk] for x in zfitids ],
+                    dtype=metatypes[mk]), name=mk)
+            else:
+                col = astropy.table.Column([ allresults[x]['meta'][mk] \
+                    for x in zfitids ], name=mk)
+            allzfit.add_column(col)
+
+        # Remove the meta data from the dictionary, so that it is not later
+        # interpreted as a template type.
+
+        for tid in targets.all_target_ids:
+            del allresults[tid]['meta']
 
     return allresults, allzfit

@@ -40,23 +40,12 @@ from ..zfind import zfind
 def write_zbest(outfile, zbest, fibermap):
     """Write zbest and fibermap Tables to outfile
 
-    Adds blank BRICKNAME and SUBTYPE columns if needed
-    Adds zbest.meta['EXTNAME'] = 'ZBEST'
-    Adds fibermap.meta['EXTNAME'] = 'FIBERMAP'
-
     Args:
         outfile (str): output path.
         zbest (Table): best fit table.
         fibermap (Table): the fibermap from the original inputs.
 
     """
-    ntargets = len(zbest)
-    if 'BRICKNAME' not in zbest.colnames:
-        zbest['BRICKNAME'] = np.zeros(ntargets, dtype='S8')
-
-    if 'SUBTYPE' not in zbest.colnames:
-        zbest['SUBTYPE'] = np.zeros(ntargets, dtype='S8')
-
     zbest.meta['EXTNAME'] = 'ZBEST'
     fibermap.meta['EXTNAME'] = 'FIBERMAP'
 
@@ -153,16 +142,6 @@ class DistTargetsDESI(DistTargets):
                 keep_targetids = fmap["TARGETID"]
             self._alltargetids.update(keep_targetids)
 
-            # Handle special cases in the fibermap.  Basically we want to allow
-            # some missing columns for backwards compatibility and also
-            # add new columns that might be present in the future.
-
-            # FIXME: here is where we should extend the fibermap columns as
-            # needed to deal with BRICKNAME, TILEID, NIGHT, EXPID, HPXNSIDE,
-            # HPXPIXEL, etc.
-
-            self._fmaps[sfile] = fmap
-
             # This is the spectral row to target mapping using the original
             # global indices (before slicing).
 
@@ -179,13 +158,17 @@ class DistTargetsDESI(DistTargets):
             self._spec_sliced[sfile] = { x : y for y, x in \
                 enumerate(self._spec_keep[sfile]) }
 
+            # Slice the fibermap
+
+            self._fmaps[sfile] = fmap[self._spec_keep[sfile]]
+
             # For each target, store the sliced row index of all spectra,
             # so that we can do a fast lookup later.
 
             self._target_specs[sfile] = {}
             for id in keep_targetids:
-                self._target_specs[sfile][id] = [ self._spec_sliced[sfile][x] \
-                    for x, y in enumerate(fmap["TARGETID"]) if y == id ]
+                self._target_specs[sfile][id] = [ x for x, y in \
+                    enumerate(self._fmaps[sfile]["TARGETID"]) if y == id ]
 
             # We need some more metadata information for each file-
             # specifically, the bands that are used and their wavelength grids.
@@ -252,14 +235,33 @@ class DistTargetsDESI(DistTargets):
 
         for t in self._my_targets:
             speclist = list()
+            tileids = set()
+            exps = set()
+            bname = None
             for sfile in spectrafiles:
                 for b in self._bands[sfile]:
                     if t in self._target_specs[sfile]:
                         nspec = len(self._target_specs[sfile][t])
                         for s in range(nspec):
+                            sindx = self._target_specs[sfile][t][s]
+                            frow = self._fmaps[sfile][sindx]
+                            if bname is None:
+                                bname = frow["BRICKNAME"]
+                            exps.add(frow["EXPID"])
+                            if "TILEID" in frow.dtype.names:
+                                tileids.add(frow["TILEID"])
                             speclist.append(Spectrum(self._wave[sfile][b],
                                 None, None, None, None))
-            self._my_data.append(Target(t, speclist, coadd=False))
+            # Meta dictionary for this target.  Whatever keys we put in here
+            # will end up as columns in the final zbest output table.
+            tmeta = dict()
+            tmeta["NUMEXP"] = len(exps)
+            tmeta["NUMEXP_datatype"] = "i4"
+            tmeta["NUMTILE"] = len(tileids)
+            tmeta["NUMTILE_datatype"] = "i4"
+            tmeta["BRICKNAME"] = bname
+            tmeta["BRICKNAME_datatype"] = "S8"
+            self._my_data.append(Target(t, speclist, coadd=False, meta=tmeta))
 
         # Iterate over the data and broadcast.  Every process selects the rows
         # of each table that contain pieces of local target data and copies it
@@ -363,11 +365,10 @@ class DistTargetsDESI(DistTargets):
             for t in self._my_data:
                 t.compute_coadd()
 
-        metatable = Table(np.vstack([ self._fmaps[x] \
+        self.fibermap = Table(np.hstack([ self._fmaps[x] \
             for x in self._spectrafiles ]))
 
-        super(DistTargetsDESI, self).__init__(self._keep_targets, metatable,
-            comm=comm)
+        super(DistTargetsDESI, self).__init__(self._keep_targets, comm=comm)
 
 
     def _local_target_ids(self):
@@ -562,10 +563,7 @@ def rrdesi(options=None, comm=None):
                     if colname.islower():
                         zbest.rename_column(colname, colname.upper())
 
-                # Add brickname column
-                zbest['BRICKNAME'] = targets.meta['BRICKNAME']
-
-                write_zbest(args.zbest, zbest, targets.meta)
+                write_zbest(args.zbest, zbest, targets.fibermap)
 
             stop = elapsed(start, "Writing zbest data took", comm=comm)
 

@@ -51,17 +51,11 @@ def targetid2platemjdfiber(targetid):
 def write_zbest(outfile, zbest):
     """Write zbest Table to outfile
 
-    Adds blank BRICKNAME and SUBTYPE columns if needed
-    Adds zbest.meta['EXTNAME'] = 'ZBEST'
+    Args:
+        outfile (str): output file.
+        zbest (Table): the output best fit results.
 
     """
-    ntargets = len(zbest)
-    if 'BRICKNAME' not in zbest.colnames:
-        zbest['BRICKNAME'] = np.zeros(ntargets, dtype='S8')
-
-    if 'SUBTYPE' not in zbest.colnames:
-        zbest['SUBTYPE'] = np.zeros(ntargets, dtype='S8')
-
     zbest.meta['EXTNAME'] = 'ZBEST'
 
     hx = fits.HDUList()
@@ -198,8 +192,13 @@ def read_spectra(spplate_name, targetids=None, use_frames=False,
     targets = []
     for targetid in targetids:
         spectra = dic_spectra[targetid]
+        # Add the brickname to the meta dictionary.  The keys of this dictionary
+        # will end up as extra columns in the output ZBEST HDU.
+        tmeta = dict()
+        tmeta["BRICKNAME"] = bricknames[targetid]
+        tmeta["BRICKNAME_datatype"] = "S8"
         if len(spectra) > 0:
-            targets.append(Target(targetid, spectra, coadd=coadd))
+            targets.append(Target(targetid, spectra, coadd=coadd, meta=tmeta))
         else:
             print('ERROR: Target {} on {} has no good spectra'.format(targetid, os.path.basename(brickfiles[0])))
 
@@ -350,7 +349,11 @@ def rrboss(options=None, comm=None):
 
         start = elapsed(None, "", comm=comm)
 
-        # Read the spectra on the root process
+        # Read the spectra on the root process.  Currently the "meta" Table
+        # returned here is not propagated to the output zbest file.  However,
+        # that could be changed to work like the DESI write_zbest() function.
+        # Each target contains metadata which is propagated to the output zbest
+        # table though.
         targets, meta = read_spectra(args.spplate, targetids=targetids,
             use_frames=args.use_frames, coadd=(not args.allspec))
 
@@ -408,9 +411,6 @@ def rrboss(options=None, comm=None):
                 for colname in zbest.colnames:
                     if colname.islower():
                         zbest.rename_column(colname, colname.upper())
-
-                # Add brickname column
-                zbest['BRICKNAME'] = dtargets.meta['BRICKNAME']
 
                 write_zbest(args.zbest, zbest)
 

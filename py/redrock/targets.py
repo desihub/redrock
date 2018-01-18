@@ -96,11 +96,13 @@ class Target(object):
         coadd (bool): compute and store the coadd at construction time.
             The coadd can always be recomputed with the compute_coadd()
             method.
+        meta (dict): optional metadata dictionary for this Target.
 
     """
-    def __init__(self, targetid, spectra, coadd=False):
+    def __init__(self, targetid, spectra, coadd=False, meta=dict()):
         self.id = targetid
         self.spectra = spectra
+        self.meta = meta
         if coadd:
             self.compute_coadd()
 
@@ -179,23 +181,17 @@ class DistTargets(object):
 
     Args:
         targetids (list): the global set of target IDs.
-        meta (Table): the metadata table.
         comm (mpi4py.MPI.Comm): (optional) the MPI communicator.
 
     """
-    def __init__(self, targetids, meta, comm=None):
+    def __init__(self, targetids, comm=None):
         self._comm = comm
         self._targetids = targetids
         self._dwave = None
-        self._meta = meta
 
     @property
     def comm(self):
         return self._comm
-
-    @property
-    def meta(self):
-        return self._meta
 
     @property
     def all_target_ids(self):
