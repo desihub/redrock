@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Redrock for DESI - MPI entry point
+Redrock for BOSS - MPI entry point
 """
 import os
 import sys
@@ -19,11 +19,11 @@ else:
     except ImportError:
         have_mpi = False
 
-from redrock.external import desi
+from redrock.external import boss
 
 if have_mpi:
-    desi.rrdesi(comm=MPI.COMM_WORLD)
+    boss.rrboss(comm=MPI.COMM_WORLD)
 else:
     print("MPI not available, falling back to serial / multiprocessing case")
     sys.stdout.flush()
-    desi.rrdesi(comm=None)
+    boss.rrboss(comm=None)

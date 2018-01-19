@@ -1,44 +1,51 @@
-'''
+"""
 redrock.external.desi
 =====================
 
 redrock wrapper tools for DESI
-'''
+"""
 from __future__ import absolute_import, division, print_function
 
-import os, sys
+import os
+import sys
+import re
 import warnings
+import traceback
+
+import argparse
+
 if sys.version_info[0] > 2:
     basestring = str
 
 import numpy as np
+
 from astropy.io import fits
-from astropy.table import Table, vstack
-import desispec.io
+from astropy.table import Table
+
+from desiutil.io import encode_table
+
 from desispec.resolution import Resolution
 
-from ..dataobj import (Target, MultiprocessingSharedSpectrum,
-    SimpleSpectrum, MPISharedTargets)
+from ..utils import elapsed, get_mp, distribute_work
 
-from .. import io
-from .. import zfind
+from ..targets import (Spectrum, Target, DistTargets)
+
+from ..templates import load_dist_templates
+
+from ..results import write_zscan
+
+from ..zfind import zfind
 
 
 def write_zbest(outfile, zbest, fibermap):
-    '''
-    Write zbest and fibermap Tables to outfile
+    """Write zbest and fibermap Tables to outfile
 
-    Adds blank BRICKNAME and SUBTYPE columns if needed
-    Adds zbest.meta['EXTNAME'] = 'ZBEST'
-    Adds fibermap.meta['EXTNAME'] = 'FIBERMAP'
-    '''
-    ntargets = len(zbest)
-    if 'BRICKNAME' not in zbest.colnames:
-        zbest['BRICKNAME'] = np.zeros(ntargets, dtype='S8')
+    Args:
+        outfile (str): output path.
+        zbest (Table): best fit table.
+        fibermap (Table): the fibermap from the original inputs.
 
-    if 'SUBTYPE' not in zbest.colnames:
-        zbest['SUBTYPE'] = np.zeros(ntargets, dtype='S8')
-
+    """
     zbest.meta['EXTNAME'] = 'ZBEST'
     fibermap.meta['EXTNAME'] = 'FIBERMAP'
 
@@ -47,266 +54,532 @@ def write_zbest(outfile, zbest, fibermap):
     hx.append(fits.convenience.table_to_hdu(zbest))
     hx.append(fits.convenience.table_to_hdu(fibermap))
     hx.writeto(outfile, overwrite=True)
+    return
 
-def read_spectra(spectrafiles, targetids=None, spectrum_class=SimpleSpectrum):
-    '''
-    Read targets from a list of spectra files.
+
+class DistTargetsDESI(DistTargets):
+    """Distributed targets for DESI.
+
+    DESI spectral data is grouped by sky location, but is just a random
+    collection of spectra for all targets.  Reading this into memory with
+    spectra grouped by target ID involves not just loading the data, but
+    also sorting it by target.
+
+    We pass through the spectra files once to compute all the book-keeping
+    associated with regrouping the spectra by target.  Then we pass through
+    again and actually read and distribute the data.
 
     Args:
-        spectrafiles : list of input spectra files, or string glob to match
+        spectrafiles (str or list): a list of input files or pattern match
+            of files.
+        coadd (bool): if False, do not compute the coadds.
+        targetids (list): (optional) restrict the global set of target IDs
+            to this list.
+        first_target (int): (optional) integer offset of the first target to
+            consider.  Useful for debugging / testing.
+        n_target (int): (optional) number of targets to consider.  Useful for
+            debugging / testing.
+        comm (mpi4py.MPI.Comm): (optional) the MPI communicator.
+    """
 
-    Options:
-        targetids : list of target ids. If set, only those target spectra will be read.
-        spectrum_class :  The spectrum_class argument is needed to use the same read_spectra
-        routine for the two parallelism approaches for redrock. The multiprocessing version
-        uses a shared memory at the spectrum class initialization, see
-        the redrock.dataobj.MultiprocessingSharedSpectrum class, whereas the MPI version
-        implements the shared memory after all spectra have been read by the root process,
-        and so the MPI version used another more simple spectrum class (see redrock.dataobj.SimpleSpectrum).
+    def __init__(self, spectrafiles, coadd=True, targetids=None,
+        first_target=None, n_target=None, comm=None):
 
-    Returns tuple of (targets, fibermap) where
-        targets is a list of Target objects and
-        fibermap is the Table from the input spectra files
+        comm_size = 1
+        comm_rank = 0
+        if comm is not None:
+            comm_size = comm.size
+            comm_rank = comm.rank
 
-    Note that due to multiple exposures of the same targets,
-    len(targets) != len(fibermap)
-    '''
-    if isinstance(spectrafiles, basestring):
-        import glob
-        spectrafiles = glob.glob(spectrafiles)
+        # check the file list
+        if isinstance(spectrafiles, basestring):
+            import glob
+            spectrafiles = glob.glob(spectrafiles)
 
-    assert len(spectrafiles) > 0
+        assert len(spectrafiles) > 0
 
-    input_spectra = list()
-    input_targetids = set()
-    input_fibermaps = list()
+        self._spectrafiles = spectrafiles
 
-    #- Ignore warnings about zdc2 bricks lacking bricknames in header
-    for infile in spectrafiles:
-        sp = desispec.io.read_spectra(infile)
-        if hasattr(sp, 'fmap'):
-            sp.fibermap = sp.fmap   #- for future compatibility
-        input_spectra.append(sp)
-        input_targetids.update(sp.fibermap['TARGETID'])
-        input_fibermaps.append(sp.fibermap)
+        # This is the mapping between specs to targets for each file
 
-    if targetids is None:
-        targetids = input_targetids
+        self._spec_to_target = {}
+        self._target_specs = {}
+        self._spec_keep = {}
+        self._spec_sliced = {}
 
-    targets = list()
-    for targetid in targetids:
-        spectra = list()
-        for sp in input_spectra:
-            ii = np.where(sp.fibermap['TARGETID'] == targetid)[0]
-            if np.count_nonzero(ii) == 0:
+        # The bands for each file
+
+        self._bands = {}
+        self._wave = {}
+
+        # The full list of targets from all files
+
+        self._alltargetids = set()
+
+        # The fibermaps from all files
+
+        self._fmaps = {}
+
+        for sfile in spectrafiles:
+            hdus = None
+            nhdu = None
+            fmap = None
+            if comm_rank == 0:
+                hdus = fits.open(sfile, memmap=True)
+                nhdu = len(hdus)
+                fmap = encode_table(Table(hdus["FIBERMAP"].data,
+                    copy=True).as_array())
+
+            if comm is not None:
+                nhdu = comm.bcast(nhdu, root=0)
+                fmap = comm.bcast(fmap, root=0)
+
+            # Now every process has the fibermap and number of HDUs.  Build the
+            # mapping between spectral rows and target IDs.
+
+            keep_targetids = targetids
+            if targetids is None:
+                keep_targetids = fmap["TARGETID"]
+            self._alltargetids.update(keep_targetids)
+
+            # This is the spectral row to target mapping using the original
+            # global indices (before slicing).
+
+            self._spec_to_target[sfile] = [ x if y in keep_targetids else -1 \
+                for x, y in enumerate(fmap["TARGETID"]) ]
+
+            # The reduced set of spectral rows.
+
+            self._spec_keep[sfile] = [ x for x in self._spec_to_target[sfile] \
+                if x >= 0 ]
+
+            # The mapping between original spectral indices and the sliced ones
+
+            self._spec_sliced[sfile] = { x : y for y, x in \
+                enumerate(self._spec_keep[sfile]) }
+
+            # Slice the fibermap
+
+            self._fmaps[sfile] = fmap[self._spec_keep[sfile]]
+
+            # For each target, store the sliced row index of all spectra,
+            # so that we can do a fast lookup later.
+
+            self._target_specs[sfile] = {}
+            for id in keep_targetids:
+                self._target_specs[sfile][id] = [ x for x, y in \
+                    enumerate(self._fmaps[sfile]["TARGETID"]) if y == id ]
+
+            # We need some more metadata information for each file-
+            # specifically, the bands that are used and their wavelength grids.
+            # That information will allow us to pre-allocate our local target
+            # list and then fill that with one pass through all HDUs in the
+            # files.
+
+            self._bands[sfile] = []
+            self._wave[sfile] = dict()
+
+            if comm_rank == 0:
+                for h in range(nhdu):
+                    name = None
+                    if "EXTNAME" not in hdus[h].header:
+                        continue
+                    name = hdus[h].header["EXTNAME"]
+                    mat = re.match(r"(.*)_(.*)", name)
+                    if mat is None:
+                        continue
+                    band = mat.group(1).lower()
+                    if band not in self._bands[sfile]:
+                        self._bands[sfile].append(band)
+                    htype = mat.group(2)
+
+                    if htype == "WAVELENGTH":
+                        self._wave[sfile][band] = \
+                            hdus[h].data.astype(np.float64).copy()
+
+            if comm is not None:
+                self._bands[sfile] = comm.bcast(self._bands[sfile], root=0)
+                self._wave[sfile] = comm.bcast(self._wave[sfile], root=0)
+
+            if comm_rank == 0:
+                hdus.close()
+
+        self._keep_targets = list(sorted(self._alltargetids))
+
+        # Now we have the metadata for all targets in all files.  Distribute
+        # the targets among process weighted by the amount of work to do for
+        # each target.  This weight is either "1" if we are going to use coadds
+        # or the number of spectra if we are using all the data.
+
+        tweights = None
+        if not coadd:
+            tweights = dict()
+            for t in self._keep_targets:
+                tweights[t] = 0
+                for sfile in spectrafiles:
+                    if t in self._target_specs[sfile]:
+                        tweights[t] += len(self._target_specs[sfile][t])
+
+        self._proc_targets = distribute_work(comm_size,
+            self._keep_targets, weights=tweights)
+
+        self._my_targets = self._proc_targets[comm_rank]
+
+        # Reverse mapping- target ID to index in our list
+        self._my_target_indx = {y : x for x, y in enumerate(self._my_targets)}
+
+        # Now every process has its local target IDs assigned.  Pre-create our
+        # local target list with empty spectral data (except for wavelengths)
+
+        self._my_data = list()
+
+        for t in self._my_targets:
+            speclist = list()
+            tileids = set()
+            exps = set()
+            bname = None
+            for sfile in spectrafiles:
+                for b in self._bands[sfile]:
+                    if t in self._target_specs[sfile]:
+                        nspec = len(self._target_specs[sfile][t])
+                        for s in range(nspec):
+                            sindx = self._target_specs[sfile][t][s]
+                            frow = self._fmaps[sfile][sindx]
+                            if bname is None:
+                                bname = frow["BRICKNAME"]
+                            exps.add(frow["EXPID"])
+                            if "TILEID" in frow.dtype.names:
+                                tileids.add(frow["TILEID"])
+                            speclist.append(Spectrum(self._wave[sfile][b],
+                                None, None, None, None))
+            # Meta dictionary for this target.  Whatever keys we put in here
+            # will end up as columns in the final zbest output table.
+            tmeta = dict()
+            tmeta["NUMEXP"] = len(exps)
+            tmeta["NUMEXP_datatype"] = "i4"
+            tmeta["NUMTILE"] = len(tileids)
+            tmeta["NUMTILE_datatype"] = "i4"
+            tmeta["BRICKNAME"] = bname
+            tmeta["BRICKNAME_datatype"] = "S8"
+            self._my_data.append(Target(t, speclist, coadd=False, meta=tmeta))
+
+        # Iterate over the data and broadcast.  Every process selects the rows
+        # of each table that contain pieces of local target data and copies it
+        # into place.
+
+        # these are for tracking offsets within the spectra for each target.
+        tspec_flux = { x : 0 for x in self._my_targets }
+        tspec_ivar = tspec_flux.copy()
+        tspec_mask = tspec_flux.copy()
+        tspec_res = tspec_flux.copy()
+
+        for sfile in spectrafiles:
+            rows = self._spec_keep[sfile]
+            if len(rows) == 0:
                 continue
-            for x in sp.bands:          #- typically 'b', 'r', 'z'
-                wave = sp.wave[x]
-                flux = sp.flux[x][ii]
-                ivar = sp.ivar[x][ii]*(sp.mask[x][ii]==0)
-                Rdata = sp.resolution_data[x][ii]
 
-                for i in range(flux.shape[0]):
-                    ifiber = ii[i]      #- index into sp.fibermap
-                    if np.all(flux[i] == 0):
-                        continue
+            hdus = None
+            if comm_rank == 0:
+                hdus = fits.open(sfile, memmap=True)
 
-                    if np.all(ivar[i] == 0):
-                        continue
+            for b in self._bands[sfile]:
+                extname = "{}_{}".format(b.upper(), "FLUX")
+                hdata = None
+                if comm_rank == 0:
+                    hdata = hdus[extname].data[rows]
+                if comm is not None:
+                    hdata = comm.bcast(hdata, root=0)
 
-                    R = Resolution(Rdata[i])
+                toff = 0
+                for t in self._my_targets:
+                    if t in self._target_specs[sfile]:
+                        for trow in self._target_specs[sfile][t]:
+                            self._my_data[toff].spectra[tspec_flux[t]].flux = \
+                                hdata[trow].astype(np.float64).copy()
+                            tspec_flux[t] += 1
+                    toff += 1
 
-                    meta = dict()
-                    meta['NIGHT'] = sp.fibermap['NIGHT'][ifiber]
-                    meta['EXPID'] = sp.fibermap['EXPID'][ifiber]
+                extname = "{}_{}".format(b.upper(), "IVAR")
+                hdata = None
+                if comm_rank == 0:
+                    hdata = hdus[extname].data[rows]
 
-                    #- for backwards compatibility, allow missing TILEID
-                    if 'TILEID' in sp.fibermap.dtype.names:
-                        meta['TILEID'] = sp.fibermap['TILEID'][ifiber]
-                    else:
-                        meta['TILEID'] = -1
+                if comm is not None:
+                    hdata = comm.bcast(hdata, root=0)
 
-                    if 'HPXPIXEL' in sp.fibermap.dtype.names:
-                        meta['HPXPIXEL'] = sp.fibermap['HPXPIXEL'][ifiber]
-                        meta['HPXNSIDE'] = sp.meta['HPXNSIDE']
-                    else:
-                        import desimodel.footprint
-                        meta['HPXNSIDE'] = 64
-                        ra = sp.fibermap['RA_TARGET'][ifiber]
-                        dec = sp.fibermap['DEC_TARGET'][ifiber]
-                        meta['HPXPIXEL'] = desimodel.footprint.radec2pix(64, ra, dec)
+                toff = 0
+                for t in self._my_targets:
+                    if t in self._target_specs[sfile]:
+                        for trow in self._target_specs[sfile][t]:
+                            self._my_data[toff].spectra[tspec_ivar[t]].ivar = \
+                                hdata[trow].astype(np.float64).copy()
+                            tspec_ivar[t] += 1
+                    toff += 1
 
-                    spectra.append(spectrum_class(wave, flux[i], ivar[i], R, meta=meta))
+                extname = "{}_{}".format(b.upper(), "MASK")
+                hdata = None
+                if comm_rank == 0:
+                    if extname in hdus:
+                        hdata = hdus[extname].data[rows]
+                if comm is not None:
+                    hdata = comm.bcast(hdata, root=0)
 
-        #- end of for targetid in targetids loop
+                if hdata is not None:
+                    toff = 0
+                    for t in self._my_targets:
+                        if t in self._target_specs[sfile]:
+                            for trow in self._target_specs[sfile][t]:
+                                self._my_data[toff].spectra[tspec_mask[t]]\
+                                    .ivar *= (hdata[trow] == 0)
+                                tspec_mask[t] += 1
+                        toff += 1
 
-        if len(spectra) > 0:
-            numexp = len(set([sp.meta['EXPID'] for sp in spectra]))
-            if spectra[0].meta['TILEID'] >= 0:
-                numtile = len(set([sp.meta['TILEID'] for sp in spectra]))
-            else:
-                numtile = -1
+                extname = "{}_{}".format(b.upper(), "RESOLUTION")
+                hdata = None
+                if comm_rank == 0:
+                    hdata = hdus[extname].data[rows]
 
-            meta = dict(NUMEXP=numexp, NUMTILE=numtile)
-            targets.append(Target(targetid, spectra, meta=meta))
-        else:
-            print('ERROR: Target {} on {} has no good spectra'.format(targetid, os.path.basename(spectrafiles[0])))
+                if comm is not None:
+                    hdata = comm.bcast(hdata, root=0)
 
-    fibermap = vstack(input_fibermaps)
+                toff = 0
+                for t in self._my_targets:
+                    if t in self._target_specs[sfile]:
+                        for trow in self._target_specs[sfile][t]:
+                            dia = Resolution(hdata[trow].astype(np.float64))
+                            csr = dia.tocsr()
+                            self._my_data[toff].spectra[tspec_res[t]].R = dia
+                            self._my_data[toff].spectra[tspec_res[t]].Rcsr = \
+                                csr
+                            tspec_res[t] += 1
+                    toff += 1
 
-    return targets, fibermap
+                del hdata
+
+            if comm_rank == 0:
+                hdus.close()
+
+        # Compute the coadds now if we are going to use those
+
+        if coadd:
+            for t in self._my_data:
+                t.compute_coadd()
+
+        self.fibermap = Table(np.hstack([ self._fmaps[x] \
+            for x in self._spectrafiles ]))
+
+        super(DistTargetsDESI, self).__init__(self._keep_targets, comm=comm)
+
+
+    def _local_target_ids(self):
+        return self._my_targets
+
+    def _local_data(self):
+        return self._my_data
 
 
 def rrdesi(options=None, comm=None):
-    import optparse
-    from astropy.io import fits
-    import time
+    """Estimate redshifts for DESI targets.
 
-    # Note, in the pure multiprocessing case (comm == None), "rank"
-    # will always be set to zero, which is fine since we are outside
-    # any areas using multiprocessing and this is just used to control
-    # program flow.
-    rank = 0
-    nproc = 1
-    if comm is not None:
-        rank = comm.rank
-        nproc = comm.size
+    This loads distributed DESI targets from one or more spectra grouping
+    files and computes the redshifts.  The outputs are written to a redrock
+    scan file and a DESI redshift catalog.
 
-    start_time = time.time()
-    pid = os.getpid()
+    Args:
+        options (list): optional list of commandline options to parse.
+        comm (mpi4py.Comm): MPI communicator to use.
 
-    parser = optparse.OptionParser(usage = "%prog [options] spectra1 spectra2...")
-    parser.add_option("-t", "--templates", type="string",  help="template file or directory")
-    parser.add_option("-o", "--output", type="string",  help="output file")
-    parser.add_option("--zbest", type="string",  help="output zbest fits file")
-    parser.add_option("-n", "--ntargets", type=int,  help="number of targets to process")
-    parser.add_option("--mintarget", type=int,  help="first target to include", default=0)
-    parser.add_option("--ncpu", type=int,  help="number of cpu cores for multiprocessing", default=None)
-    parser.add_option("--debug", help="debug with ipython", action="store_true")
-    ### parser.add_option("--coadd", help="use coadd instead of individual spectra", action="store_true")
-    parser.add_option("--allspec", help="use individual spectra instead of coadd", action="store_true")
+    """
+    global_start = elapsed(None, "", comm=comm)
 
+    parser = argparse.ArgumentParser(description="Estimate redshifts from"
+        " DESI target spectra.")
+
+    parser.add_argument("-t", "--templates", type=str, default=None,
+        required=False, help="template file or directory")
+
+    parser.add_argument("-o", "--output", type=str, default=None,
+        required=False, help="output file")
+
+    parser.add_argument("--zbest", type=str, default=None,
+        required=False, help="output zbest FITS file")
+
+    parser.add_argument("--targetids", type=str, default=None,
+        required=False, help="comma-separated list of target IDs")
+
+    parser.add_argument("--mintarget", type=int, default=None,
+        required=False, help="first target to process")
+
+    parser.add_argument("-n", "--ntargets", type=int,
+        required=False, help="the number of targets to process")
+
+    parser.add_argument("--nminima", type=int, default=3,
+        required=False, help="the number of redshift minima to search")
+
+    parser.add_argument("--allspec", default=False, action="store_true",
+        required=False, help="use individual spectra instead of coadd")
+
+    parser.add_argument("--mp", type=int, default=0,
+        required=False, help="if not using MPI, the number of multiprocessing"
+            " processes to use (defaults to half of the hardware threads)")
+
+    parser.add_argument("--debug", default=False, action="store_true",
+        required=False, help="debug with ipython (only if communicator has a "
+        "single process)")
+
+    parser.add_argument("infiles", nargs='*')
+
+    args = None
     if options is None:
-        opts, infiles = parser.parse_args()
+        args = parser.parse_args()
     else:
-        opts, infiles = parser.parse_args(options)
+        args = parser.parse_args(options)
 
-    if (opts.output is None) and (opts.zbest is None):
-        print('ERROR: --output or --zbest required')
-        sys.exit(1)
+    comm_size = 1
+    comm_rank = 0
+    if comm is not None:
+        comm_size = comm.size
+        comm_rank = comm.rank
 
-    if len(infiles) == 0:
-        print('ERROR: must provide input spectra files')
-        sys.exit(1)
+    # Check arguments- all processes have this, so just check on the first
+    # process
 
-    templates = None
-    targets   = None
-    meta      = None
-    if rank == 0:
-        t0 = time.time()
-        print('INFO: reading targets')
-        sys.stdout.flush()
+    if comm_rank == 0:
+        if args.debug and comm_size != 1:
+            print("--debug can only be used if the communicator has one "
+                " process")
+            sys.stdout.flush()
+            if comm is not None:
+                comm.Abort()
 
-        spectrum_class = SimpleSpectrum
-        if opts.ncpu is None or opts.ncpu > 1:
-            spectrum_class = MultiprocessingSharedSpectrum
+        if (args.output is None) and (args.zbest is None):
+            print("--output or --zbest required")
+            sys.stdout.flush()
+            if comm is not None:
+                comm.Abort()
 
-        targets, fibermap = read_spectra(infiles,spectrum_class=spectrum_class)
+        if len(args.infiles) == 0:
+            print("must provide input files")
+            sys.stdout.flush()
+            if comm is not None:
+                comm.Abort()
 
-        if not opts.allspec:
-            for t in targets:
-                t._all_spectra = t.spectra
-                t.spectra = t.coadd
+        if (args.targetids is not None) and ((args.mintarget is not None) \
+            or (args.ntargets is not None)):
+            print("cannot select targets by both ID and range")
+            sys.stdout.flush()
+            if comm is not None:
+                comm.Abort()
 
-        if opts.ntargets is not None:
-            targets = targets[opts.mintarget:opts.mintarget+opts.ntargets]
-            targetids = [t.id for t in targets]
-            ii = np.in1d(fibermap['TARGETID'], targetids)
-            fibermap = fibermap[ii]
+    targetids = None
+    if args.targetids is not None:
+        targetids = [ int(x) for x in args.targetids.split(",") ]
 
-        print('INFO: reading templates')
-        sys.stdout.flush()
+    n_target = None
+    if args.ntargets is not None:
+        n_target = args.ntargets
 
-        if not opts.templates is None and os.path.isdir(opts.templates):
-            templates = io.read_templates(template_list=None, template_dir=opts.templates)
+    first_target = None
+    if args.mintarget is not None:
+        first_target = args.mintarget
+    elif n_target is not None:
+        first_target = 0
+
+    # Multiprocessing processes to use if MPI is disabled.
+    mpprocs = 0
+    if comm is None:
+        mpprocs = get_mp(args.mp)
+        print("Running with {} processes".format(mpprocs))
+        if "OMP_NUM_THREADS" in os.environ:
+            nthread = int(os.environ["OMP_NUM_THREADS"])
+            if nthread != 1:
+                print("WARNING:  {} multiprocesses running, each with "
+                    "{} threads ({} total)".format(mpprocs, nthread,
+                    mpprocs*nthread))
+                print("WARNING:  Please ensure this is <= the number of "
+                    "physical cores on the system")
         else:
-            templates = io.read_templates(template_list=opts.templates, template_dir=None)
-
-        dt = time.time() - t0
-        # print('DEBUG: PID {} read targets and templates in {:.1f} seconds'.format(pid,dt))
+            print("WARNING:  using multiprocessing, but the OMP_NUM_THREADS")
+            print("WARNING:  environment variable is not set- your system may")
+            print("WARNING:  be oversubscribed.")
+        sys.stdout.flush()
+    elif comm_rank == 0:
+        print("Running with {} processes".format(comm_size))
         sys.stdout.flush()
 
-    # all processes get a copy of the templates from rank 0
-    if comm is not None:
-        templates = comm.bcast(templates, root=0)
+    try:
+        # Load and distribute the targets
+        if comm_rank == 0:
+            print("Loading targets...")
+            sys.stdout.flush()
 
-    # Call zfind differently depending on our type of parallelism.
+        start = elapsed(None, "", comm=comm)
 
-    if comm is not None:
-        # Use MPI
-        with MPISharedTargets(targets, comm) as shared_targets:
-            zscan, zfit = zfind(shared_targets.targets, templates,
-                ncpu=None, comm=comm)
-    else:
-        # Use pure multiprocessing
-        zscan, zfit = zfind(targets, templates, ncpu=opts.ncpu)
+        # Load the targets.  If comm is None, then the target data will be
+        # stored in shared memory.
+        targets = DistTargetsDESI(args.infiles, coadd=(not args.allspec),
+            targetids=targetids, first_target=first_target, n_target=n_target,
+            comm=comm)
 
-    if rank == 0:
-        if opts.output:
-            print('INFO: writing {}'.format(opts.output))
-            io.write_zscan(opts.output, zscan, zfit, clobber=True)
+        # Get the dictionary of wavelength grids
+        dwave = targets.wavegrids()
 
-        if opts.zbest:
-            zbest = zfit[zfit['znum'] == 0]
+        stop = elapsed(start, "Read and distribution of {} targets"\
+            .format(len(targets.all_target_ids)), comm=comm)
 
-            #- Remove extra columns not needed for zbest
-            zbest.remove_columns(['zz', 'zzchi2', 'znum'])
+        # Read the template data
 
-            #- Change to upper case like DESI
-            for colname in zbest.colnames:
-                if colname.islower():
-                    zbest.rename_column(colname, colname.upper())
+        dtemplates = load_dist_templates(dwave, templates=args.templates,
+            comm=comm, mp_procs=mpprocs)
 
-            #- DEPRECATED, but keep for now: add brickname column
-            for i in range(len(zbest)):
-                ii = np.where(fibermap['TARGETID'] == zbest['TARGETID'][i])[0]
-                zbest['BRICKNAME'] = fibermap['BRICKNAME'][ii[0]]
+        # Compute the redshifts, including both the coarse scan and the
+        # refinement.  This function only returns data on the rank 0 process.
 
-            #- Cosmetic: move TARGETID to be first column as primary key
-            zbest.columns.move_to_end('TARGETID', last=False)
+        start = elapsed(None, "", comm=comm)
 
-            ntargets = len(targets)
-            zbest['NUMEXP'] = np.zeros(ntargets, dtype=np.int16)
-            zbest['NUMTILE'] = np.zeros(ntargets, dtype=np.int16)
-            for i in range(ntargets):
-                assert targets[i].id == zbest['TARGETID'][i]
-                zbest['NUMEXP'][i] = targets[i].meta['NUMEXP']
-                zbest['NUMTILE'][i] = targets[i].meta['NUMTILE']
+        scandata, zfit = zfind(targets, dtemplates, mpprocs,
+            nminima=args.nminima)
 
-            #- Cosmetic: move TARGETID to be first column as primary key
-            zbest.columns.move_to_end('TARGETID', last=False)
+        stop = elapsed(start, "Computing redshifts took", comm=comm)
 
-            ntargets = len(targets)
-            zbest['NUMEXP'] = np.zeros(ntargets, dtype=np.int16)
-            zbest['NUMTILE'] = np.zeros(ntargets, dtype=np.int16)
-            for i in range(ntargets):
-                assert targets[i].id == zbest['TARGETID'][i]
-                zbest['NUMEXP'][i] = targets[i].meta['NUMEXP']
-                zbest['NUMTILE'][i] = targets[i].meta['NUMTILE']
+        # Write the outputs
 
-            print('INFO: writing {}'.format(opts.zbest))
-            write_zbest(opts.zbest, zbest, fibermap)
+        if args.output is not None:
+            start = elapsed(None, "", comm=comm)
+            if comm_rank == 0:
+                write_zscan(args.output, scandata, zfit, clobber=True)
+            stop = elapsed(start, "Writing zscan data took", comm=comm)
 
-    run_time = time.time() - start_time
+        if args.zbest:
+            start = elapsed(None, "", comm=comm)
+            if comm_rank == 0:
+                zbest = zfit[zfit['znum'] == 0]
 
-    if comm is None or comm.rank == 0:
-        print('INFO: finished {} in {:.1f} seconds'.format(os.path.basename(infiles[0]), run_time))
+                # Remove extra columns not needed for zbest
+                zbest.remove_columns(['zz', 'zzchi2', 'znum'])
 
-    if opts.debug:
+                # Change to upper case like DESI
+                for colname in zbest.colnames:
+                    if colname.islower():
+                        zbest.rename_column(colname, colname.upper())
+
+                write_zbest(args.zbest, zbest, targets.fibermap)
+
+            stop = elapsed(start, "Writing zbest data took", comm=comm)
+
+    except:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+        lines = [ "Proc {}: {}".format(comm_rank, x) for x in lines ]
+        print("".join(lines))
+        sys.stdout.flush()
         if comm is not None:
-            print('INFO: ignoring ipython debugging when using MPI')
-        else:
-            import IPython
-            IPython.embed()
+            comm.Abort()
+
+    global_stop = elapsed(global_start, "Total run time", comm=comm)
+
+    if args.debug:
+        import IPython
+        IPython.embed()
 
     return

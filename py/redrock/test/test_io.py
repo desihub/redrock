@@ -5,10 +5,14 @@ import unittest
 from uuid import uuid1
 import numpy as np
 
-from ..io import (find_templates, native_endian, read_templates,
-                  read_zscan, write_zscan)
-from ..zfind import zfind as rrzfind
+from .. import utils as rrutils
+from ..results import read_zscan, write_zscan
+from ..targets import DistTargetsCopy
+from ..templates import DistTemplate, find_templates, load_dist_templates
+from ..zfind import zfind
+
 from . import util
+
 
 class TestIO(unittest.TestCase):
 
@@ -29,12 +33,12 @@ class TestIO(unittest.TestCase):
     def test_endian(self):
         x1 = np.arange(5, dtype='>f')
         x2 = np.arange(5, dtype='<f')
-        self.assertTrue(native_endian(x1).dtype.isnative)
-        self.assertTrue(native_endian(x2).dtype.isnative)
+        self.assertTrue(rrutils.native_endian(x1).dtype.isnative)
+        self.assertTrue(rrutils.native_endian(x2).dtype.isnative)
         if x1.dtype.isnative:
-            self.assertTrue(x1 is native_endian(x1))
+            self.assertTrue(x1 is rrutils.native_endian(x1))
         else:
-            self.assertTrue(x2 is native_endian(x2))
+            self.assertTrue(x2 is rrutils.native_endian(x2))
 
     ### @unittest.skipIf('RR_TEMPLATE_DIR' not in os.environ, '$RR_TEMPLATE_DIR not set')
     def test_find_templates(self):
@@ -46,23 +50,28 @@ class TestIO(unittest.TestCase):
 
     ### @unittest.skipIf('RR_TEMPLATE_DIR' not in os.environ, '$RR_TEMPLATE_DIR not set')
     def test_read_templates(self):
-        for template in read_templates().values():
-            self.assertIn('wave', template.__dict__)
-            self.assertIn('flux', template.__dict__)
-            self.assertIn('type', template.__dict__)
-            wave = template.wave
-            flux = template.flux
+        dtarg = util.fake_targets()
+        dwave = dtarg.wavegrids()
+        for dtp in load_dist_templates(dwave):
+            self.assertIn('wave', dtp.template.__dict__)
+            self.assertIn('flux', dtp.template.__dict__)
+            wave = dtp.template.wave
+            flux = dtp.template.flux
             self.assertEqual(wave.shape[0], flux.shape[1])
             self.assertEqual(wave.ndim, 1)
             self.assertEqual(flux.ndim, 2)
 
     def test_zscan_io(self):
-        t1 = util.get_target(0.2)
-        t1.id = 111
-        t2 = util.get_target(0.5)
-        t2.id = 222
+        dtarg = util.fake_targets()
+
+        # Get the dictionary of wavelength grids
+        dwave = dtarg.wavegrids()
+
+        # Construct the distributed template.
         template = util.get_template(subtype='BLAT')
-        zscan1, zfit1 = rrzfind([t1,t2], {template.fulltype:template}, ncpu=1)
+        dtemp = DistTemplate(template, dwave)
+
+        zscan1, zfit1 = zfind(dtarg, [ dtemp ])
 
         write_zscan(self.testfile, zscan1, zfit1)
         write_zscan(self.testfile, zscan1, zfit1, clobber=True)

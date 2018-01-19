@@ -2,20 +2,19 @@
 redrock.plotspec
 ================
 
-Plotting tools.
+Visualization tools for plotting spectra.
 """
+
 import time
 import numpy as np
 
-from . import io
 from . import zwarning
 
 
 class PlotSpec(object):
     def __init__(self, targets, templates, zscan, zfit, truth=None):
-        '''
-        TODO: document
-        '''
+        """TODO: document
+        """
 
         #- Isolate imports of optional dependencies
         import matplotlib.pyplot as plt
@@ -33,15 +32,19 @@ class PlotSpec(object):
         self._ax1 = self._fig.add_subplot(211)
         self._ax2 = self._fig.add_subplot(212)
 
-        self._cid = self._fig.canvas.mpl_connect('key_press_event', self._onkeypress)
+        self._cid = self._fig.canvas.mpl_connect('key_press_event',
+            self._onkeypress)
 
         #- Instructions
-        print("-------------------------------------------------------------------------")
+        print("---------------------------------------------------------------"
+            "----------")
         print("Select window then use keyboard shortcuts to navigate:")
         print("    up/down arrow: previous/next target")
-        print("    left/right arrow: previous/next redshift fit for this target")
+        print("    left/right arrow: previous/next redshift fit for this"
+            " target")
         print("    (d)etails")
-        print("-------------------------------------------------------------------------")
+        print("---------------------------------------------------------------"
+            "----------")
 
         #- Disable some default matplotlib key bindings so that we can use keys
         #- TODO: cache and reset when done
@@ -98,7 +101,8 @@ class PlotSpec(object):
         tp = self.templates[fulltype]
 
         if tp.type != zz['spectype']:
-            raise ValueError('spectype {} not in templates'.format(zz['spectype']))
+            raise ValueError('spectype {} not in'
+                ' templates'.format(zz['spectype']))
 
         #----- zscan plot
         if keepzoom:
@@ -109,13 +113,15 @@ class PlotSpec(object):
         for spectype, fmt in [('STAR', 'k-'), ('GALAXY', 'b-'), ('QSO', 'g-')]:
             if spectype in self.zscan[target.id]:
                 zx = self.zscan[target.id][spectype]
-                self._ax1.plot(zx['redshifts'], zx['zchi2'], fmt, alpha=0.2, label='_none_')
-                self._ax1.plot(zx['redshifts'], zx['zchi2']+zx['penalty'], fmt, label=spectype)
-
+                self._ax1.plot(zx['redshifts'], zx['zchi2'], fmt, alpha=0.2,
+                    label='_none_')
+                self._ax1.plot(zx['redshifts'], zx['zchi2']+zx['penalty'], fmt,
+                    label=spectype)
 
         self._ax1.plot(zfit['z'], zfit['chi2'], 'r.', label='_none_')
         for row in zfit:
-            self._ax1.text(row['z'], row['chi2'], str(row['znum']), verticalalignment='top')
+            self._ax1.text(row['z'], row['chi2'], str(row['znum']),
+                verticalalignment='top')
 
         if self.truth is not None:
             i = np.where(self.truth['targetid'] == target.id)[0]
@@ -123,12 +129,14 @@ class PlotSpec(object):
                 ztrue = self.truth['ztrue'][i[0]]
                 self._ax1.axvline(ztrue, color='g', alpha=0.5)
             else:
-                print('WARNING: target id {} not in truth table'.format(target.id))
+                print('WARNING: target id {} not in truth'
+                    ' table'.format(target.id))
 
         self._ax1.axvline(zz['z'], color='k', alpha=0.1)
         self._ax1.axhline(zz['chi2'], color='k', alpha=0.1)
         self._ax1.legend()
-        self._ax1.set_title('target {}  zbest={:.3f} {}'.format(target.id, zz['z'], zz['spectype']))
+        self._ax1.set_title('target {}  zbest={:.3f} {}'.format(target.id,
+            zz['z'], zz['spectype']))
         self._ax1.set_ylabel(r'$\chi^2$')
         self._ax1.set_xlabel('redshift')
         if keepzoom:
@@ -142,10 +150,7 @@ class PlotSpec(object):
 
         self._ax2.clear()
         ymin = ymax = 0.0
-        if hasattr(target,"coadd") and not target.coadd is None:
-            specs_to_read = target.coadd
-        else:
-            specs_to_read = target.spectra
+        specs_to_read = target.spectra
         for spec in specs_to_read:
             mx = tp.eval(coeff[0:tp.nbasis], spec.wave, zz['z']) * (1+zz['z'])
             model = spec.R.dot(mx)
@@ -156,10 +161,12 @@ class PlotSpec(object):
             self._ax2.plot(spec.wave, medfilt(flux, self.smooth), alpha=0.5)
             self._ax2.plot(spec.wave, medfilt(mx, self.smooth), 'k:', alpha=0.8)
             model[isbad] = np.NaN
-            self._ax2.plot(spec.wave, medfilt(model, self.smooth), 'k-', alpha=0.8)
+            self._ax2.plot(spec.wave, medfilt(model, self.smooth), 'k-',
+                alpha=0.8)
 
             ymin = min(ymin, np.percentile(flux[~isbad], 1))
-            ymax = max(ymax, np.percentile(flux[~isbad], 99), np.max(model)*1.05)
+            ymax = max(ymax, np.percentile(flux[~isbad], 99),
+                np.max(model)*1.05)
 
         #- Label object type and redshift
         label = 'znum {} {} z={:.3f}'.format(self.znum, tp.fulltype, zz['z'])
@@ -179,7 +186,8 @@ class PlotSpec(object):
             label = 'ZWARN=0'
             color = 'g'
 
-        self._ax2.text(10000, ytext, label, horizontalalignment='right', color=color)
+        self._ax2.text(10000, ytext, label, horizontalalignment='right',
+            color=color)
 
         self._ax2.axhline(0, color='k', alpha=0.2)
         if keepzoom:
