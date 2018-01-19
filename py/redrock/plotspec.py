@@ -97,7 +97,7 @@ class PlotSpec(object):
 
         fulltype = zz['spectype']
         if zz['subtype'] != '':
-            fulltype = fulltype+":"+zz['subtype']
+            fulltype = fulltype+':::'+zz['subtype']
         tp = self.templates[fulltype]
 
         if tp.type != zz['spectype']:

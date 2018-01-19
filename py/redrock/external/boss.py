@@ -309,14 +309,14 @@ def rrboss(options=None, comm=None):
     if args.targetids is not None:
         targetids = [ int(x) for x in args.targetids.split(",") ]
 
-    n_target = None
+    n_targets = None
     if args.ntargets is not None:
-        n_target = args.ntargets
+        n_targets = args.ntargets
 
     first_target = None
     if args.mintarget is not None:
         first_target = args.mintarget
-    elif n_target is not None:
+    elif n_targets is not None:
         first_target = 0
 
     # Multiprocessing processes to use if MPI is disabled.
