@@ -260,7 +260,11 @@ def zfind(targets, templates, mp_procs=1, nminima=3):
         allzfit = astropy.table.vstack(allzfit)
 
         # Cosmetic: move TARGETID to be first column as primary key
-        allzfit.columns.move_to_end('targetid', last=False)
+        try:
+            allzfit.columns.move_to_end('targetid', last=False)
+        except:
+            # Must be using python2, don't mess with the order.
+            pass
 
         # Now we have the final table of best fit results.  We want to add any
         # extra columns from the target metadata.  We assume that the meta keys
