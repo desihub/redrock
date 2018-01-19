@@ -121,7 +121,7 @@ class Template(object):
         """Return formatted type:subtype string.
         """
         if self._subtype != '':
-            return '{}:{}'.format(self._rrtype, self._subtype)
+            return '{}:::{}'.format(self._rrtype, self._subtype)
         else:
             return self._rrtype
 
@@ -180,7 +180,7 @@ def find_templates(template_dir=None):
     if template_dir is None:
         raise IOError("ERROR: can't find template_dir, $RR_TEMPLATE_DIR, or {rrcode}/templates/")
 
-    return glob(os.path.join(template_dir, 'rrtemplate-*.fits'))
+    return sorted(glob(os.path.join(template_dir, 'rrtemplate-*.fits')))
 
 
 class DistTemplatePiece(object):
