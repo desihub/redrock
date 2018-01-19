@@ -76,9 +76,9 @@ class DistTargetsDESI(DistTargets):
         targetids (list): (optional) restrict the global set of target IDs
             to this list.
         first_target (int): (optional) integer offset of the first target to
-            consider.  Useful for debugging / testing.
-        n_target (int): (optional) number of targets to consider.  Useful for
-            debugging / testing.
+            consider in each file.  Useful for debugging / testing.
+        n_target (int): (optional) number of targets to consider in each file.
+            Useful for debugging / testing.
         comm (mpi4py.MPI.Comm): (optional) the MPI communicator.
     """
 
@@ -140,6 +140,25 @@ class DistTargetsDESI(DistTargets):
             keep_targetids = targetids
             if targetids is None:
                 keep_targetids = fmap["TARGETID"]
+
+            # Select a subset of the target range from each file if desired.
+
+            if first_target is None:
+                first_target = 0
+            if first_target > len(keep_targetids):
+                raise RuntimeError("first_target value \"{}\" is beyond the "
+                    "number of selected targets in the file".\
+                    format(first_target))
+
+            if n_target is None:
+                n_target = len(keep_targetids)
+            if first_target + n_target > len(keep_targetids):
+                raise RuntimeError("Requested first_target / n_target "
+                    " range is larger than the number of selected targets "
+                    " in the file")
+
+            keep_targetids = keep_targetids[first_target:first_target+n_target]
+
             self._alltargetids.update(keep_targetids)
 
             # This is the spectral row to target mapping using the original
@@ -408,10 +427,10 @@ def rrdesi(options=None, comm=None):
         required=False, help="comma-separated list of target IDs")
 
     parser.add_argument("--mintarget", type=int, default=None,
-        required=False, help="first target to process")
+        required=False, help="first target to process in each file")
 
     parser.add_argument("-n", "--ntargets", type=int,
-        required=False, help="the number of targets to process")
+        required=False, help="the number of targets to process in each file")
 
     parser.add_argument("--nminima", type=int, default=3,
         required=False, help="the number of redshift minima to search")
