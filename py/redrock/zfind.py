@@ -111,10 +111,8 @@ def zfind(targets, templates, mp_procs=1, nminima=3):
     # For each of our local targets, refine the redshift fit close to the
     # minima in the coarse fit.
 
-    #sort = np.array([ t.template.full_type for t in templates]).argsort()
-    #for t in np.array(list(templates))[sort]:
-    #print([ t.template.full_type for t in templates])
-    for t in templates:
+    sort = np.array([ t.template.full_type for t in templates]).argsort()
+    for t in np.array(list(templates))[sort]:
         ft = t.template.full_type
 
         if am_root:
