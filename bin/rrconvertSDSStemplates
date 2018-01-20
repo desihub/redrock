@@ -2,13 +2,18 @@
 
 import sys
 import scipy as sp
+import optparse
 from astropy.io import fits
 
 def convert():
 
+    parser = optparse.OptionParser(usage = "%prog [options]")
+    parser.add_option("-i", "--infile", type="string",  help="input SDSS templates")
+    parser.add_option("-o", "--outpath", type="string",  help="output filename")
+    opts, args = parser.parse_args()
+
     ###
-    p = sys.argv[1]
-    cat = fits.open(p)
+    cat = fits.open(opts.infile)
 
     if len(cat)!=1:
         print("ERROR: FITS file has more than 1 header")
@@ -45,7 +50,7 @@ def convert():
         header['RRTYPE']   = spectype
         header['RRSUBTYP'] = subtype
         header['RRVER']    = ""
-        header['INSPEC']   = p
+        header['INSPEC']   = opts.infile
         header['EXTNAME']  = "BASIS_VECTORS"
 
         ###
@@ -58,9 +63,9 @@ def convert():
         subtype  = subtype.replace(" ","")
         spectype = spectype.lower()
         if name_mode:
-            outfile = "Templates/rrtemplate-"+spectype+"-"+subtype+".fits"
+            outfile = opts.outpath+"/rrtemplate-"+spectype+"-"+subtype+".fits"
         elif eigen_mode:
-            outfile = "Templates/rrtemplate-"+spectype+".fits"
+            outfile = opts.outpath+"/rrtemplate-"+spectype+".fits"
         hdus.writeto(outfile, overwrite=True)
         print('RR: Wrote '+outfile)
 
