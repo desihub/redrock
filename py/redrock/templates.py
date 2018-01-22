@@ -81,7 +81,7 @@ class Template(object):
                         np.log10(1+4.0), 5e-4) - 1
                 else:
                     raise ValueError("Unknown redshift range to use for "
-                        "template type {}".format(rrtype))
+                        "template type {}".format(self._rrtype))
 
             self._subtype = None
             if 'RRSUBTYP' in hdr:
