@@ -4,41 +4,45 @@ import sys
 import scipy as sp
 import optparse
 from astropy.io import fits
+import redrock
 
 def convert():
 
     parser = optparse.OptionParser(usage = "%prog [options]")
-    parser.add_option("-i", "--infile", type="string",  help="input SDSS templates")
-    parser.add_option("-o", "--outpath", type="string",  help="output filename")
+    parser.add_option("-i", "--infile", type="string", help="input SDSS templates")
+    parser.add_option("-o", "--outfolder", type="string", help="output folder")
     opts, args = parser.parse_args()
 
     ###
     cat = fits.open(opts.infile)
 
-    if len(cat)!=1:
-        print("ERROR: FITS file has more than 1 header")
+    if "OBJECT" not in cat[0].header or "COEFF0" not in cat[0].header:
+        print("ERROR: FITS file has no 'OBJECT' or 'COEFF0': "+opts.infile)
+        cat.close()
         return
 
+    if len(cat)!=1:
+        print("WARNING: FITS file has more than 1 header: "+opts.infile)
+
     ###
-    name_mode = False
-    eigen_mode = False
+    name_mode  = False
     if "NAME0" in cat[0].header:
         nb_templates = len([el for el in cat[0].header if len(el)>4 and el[:4]=="NAME"])
         name_mode = True
-    elif "EIGEN0" in cat[0].header:
+    else:
         nb_templates = 1
         eigen_mode = True
-    else:
-        print("ERROR: FITS file has no 'NAME' nor 'EIGEN'")
-        return
 
     ###
     for s in range(nb_templates):
 
         spectype = cat[0].header["OBJECT"].replace(" ","").upper()
+        if spectype not in ["STAR","GALAXY","QSO"]:
+            print("WARNING: spectype is not a known redrock spectype: "+spectype)
+
         if name_mode:
             subtype = cat[0].header["NAME"+str(s)].replace("-","").replace("/","")
-        elif eigen_mode:
+        else:
             subtype = ""
 
         ###
@@ -49,23 +53,23 @@ def convert():
         header['LOGLAM']   = 1
         header['RRTYPE']   = spectype
         header['RRSUBTYP'] = subtype
-        header['RRVER']    = ""
+        header['RRVER']    = redrock.__version__
         header['INSPEC']   = opts.infile
         header['EXTNAME']  = "BASIS_VECTORS"
 
         ###
         if name_mode:
             hdus.append(fits.PrimaryHDU(sp.asarray([cat[0].data[s,:]]), header=header))
-        elif eigen_mode:
+        else:
             hdus.append(fits.PrimaryHDU(sp.asarray(cat[0].data), header=header))
 
         ###
         subtype  = subtype.replace(" ","")
         spectype = spectype.lower()
         if name_mode:
-            outfile = opts.outpath+"/rrtemplate-"+spectype+"-"+subtype+".fits"
-        elif eigen_mode:
-            outfile = opts.outpath+"/rrtemplate-"+spectype+".fits"
+            outfile = opts.outfolder+"/rrtemplate-"+spectype+"-"+subtype+".fits"
+        else:
+            outfile = opts.outfolder+"/rrtemplate-"+spectype+".fits"
         hdus.writeto(outfile, overwrite=True)
         print('RR: Wrote '+outfile)
 
