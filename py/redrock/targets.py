@@ -53,6 +53,7 @@ class Spectrum(object):
             self.R_data = mp_array(self.R.data)
             del self.R
 
+            self._csrshape = self.Rcsr.shape
             self.Rcsr_indices = mp_array(self.Rcsr.indices)
             self.Rcsr_indptr = mp_array(self.Rcsr.indptr)
             self.Rcsr_data = mp_array(self.Rcsr.data)
@@ -75,7 +76,8 @@ class Spectrum(object):
             del self.R_offsets
 
             self.Rcsr = scipy.sparse.csr_matrix((np.array(self.Rcsr_data),
-                np.array(self.Rcsr_indices), np.array(self.Rcsr_indptr)))
+                np.array(self.Rcsr_indices), np.array(self.Rcsr_indptr)),
+                shape=self._csrshape)
             del self.Rcsr_data
             del self.Rcsr_indices
             del self.Rcsr_indptr
