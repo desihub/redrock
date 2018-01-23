@@ -31,7 +31,6 @@ def convert():
         name_mode = True
     else:
         nb_templates = 1
-        eigen_mode = True
 
     ###
     for s in range(nb_templates):
