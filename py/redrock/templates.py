@@ -30,7 +30,7 @@ class Template(object):
 
     """
     def __init__(self, filename=None, spectype=None, redshifts=None,
-        wave=None, flux=None, subtype=None):
+        wave=None, flux=None, subtype=None, bb_deg=None):
 
         if filename is not None:
             fx = None
@@ -95,6 +95,14 @@ class Template(object):
             self.wave = wave
             self.flux = flux
             self._subtype = subtype
+
+        if not bb_deg is None:
+            mean_wave = self.wave.mean()
+            if mean_wave==0.:
+                raise ValueError("Mean wavelength is zero")
+            for i in range(bb_deg+1):
+                f = np.asarray( [(self.wave/mean_wave-1.)**i],dtype=np.float64)
+                self.flux = np.append(self.flux,f,axis=0)
 
         self._nbasis = self.flux.shape[0]
         self._nwave = self.flux.shape[1]
@@ -363,7 +371,7 @@ class DistTemplate(object):
         return done
 
 
-def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1):
+def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1, bb_deg=None):
     """Read and distribute templates from disk.
 
     This reads one or more template files from disk and distributes them among
@@ -424,7 +432,7 @@ def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1):
     template_data = list()
     if (comm is None) or (comm.rank == 0):
         for t in template_files:
-            template_data.append(Template(filename=t))
+            template_data.append(Template(filename=t, bb_deg=bb_deg))
 
     if comm is not None:
         template_data = comm.bcast(template_data, root=0)
