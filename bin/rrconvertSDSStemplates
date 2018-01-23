@@ -40,10 +40,19 @@ def convert():
         if spectype not in ["STAR","GALAXY","QSO"]:
             print("WARNING: spectype is not a known redrock spectype: "+spectype)
 
+        #- NAMEnn files have values like "B3Ve (25940)" or "WDcooler"
         if name_mode:
-            subtype = cat[0].header["NAME"+str(s)].replace("-","").replace("/","")
+            #- Get name, but don't include (nnn) Indo-US template ID
+            header_name = cat[0].header["NAME"+str(s)]
+            tmp = header_name.split()
+            subtype = tmp[0].replace("-","_").replace("/","_")
+            if len(tmp) > 1:
+                indo_us_id = tmp[1][1:-1]
+            else:
+                indo_us_id = 'N/A'
         else:
             subtype = ""
+            indo_us_id = 'N/A'
 
         ###
         hdus = fits.HDUList()
@@ -53,9 +62,13 @@ def convert():
         header['LOGLAM']   = 1
         header['RRTYPE']   = spectype
         header['RRSUBTYP'] = subtype
+        header['INDOUSID'] = (indo_us_id, 'Indo-US spectral library ID')
+        header['SDSSNAME'] = header_name
         header['RRVER']    = redrock.__version__
         header['INSPEC']   = opts.infile
         header['EXTNAME']  = "BASIS_VECTORS"
+        header.add_comment('Converted from SDSS idlspec2d {}'.format(os.path.basename(opts.infile)))
+
 
         ###
         if name_mode:
