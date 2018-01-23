@@ -442,6 +442,9 @@ def rrdesi(options=None, comm=None):
         required=False, help="if not using MPI, the number of multiprocessing"
             " processes to use (defaults to half of the hardware threads)")
 
+    parser.add_argument("--broadband-degree", type=int, default=None,
+        required=False, help="Degree of broadband parameters (default is no broadbands)")
+
     parser.add_argument("--debug", default=False, action="store_true",
         required=False, help="debug with ipython (only if communicator has a "
         "single process)")
@@ -549,7 +552,7 @@ def rrdesi(options=None, comm=None):
         # Read the template data
 
         dtemplates = load_dist_templates(dwave, templates=args.templates,
-            comm=comm, mp_procs=mpprocs)
+            comm=comm, mp_procs=mpprocs, bb_deg=args.broadband_degree)
 
         # Compute the redshifts, including both the coarse scan and the
         # refinement.  This function only returns data on the rank 0 process.
