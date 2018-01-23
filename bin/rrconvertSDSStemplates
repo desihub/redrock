@@ -51,7 +51,6 @@ def convert():
                 indo_us_id = 'N/A'
         else:
             subtype = ""
-            indo_us_id = 'N/A'
 
         ###
         hdus = fits.HDUList()
@@ -61,12 +60,14 @@ def convert():
         header['LOGLAM']   = 1
         header['RRTYPE']   = spectype
         header['RRSUBTYP'] = subtype
-        header['INDOUSID'] = (indo_us_id, 'Indo-US spectral library ID')
-        header['SDSSNAME'] = header_name
+        if name_mode:
+            header['SDSSNAME'] = (header_name, 'Orig NAMEnn keyword')
+            header['INDOUSID'] = (indo_us_id, 'Indo-US spectral library ID')
+
         header['RRVER']    = redrock.__version__
         header['INSPEC']   = opts.infile
         header['EXTNAME']  = "BASIS_VECTORS"
-        header.add_comment('Converted from SDSS idlspec2d {}'.format(os.path.basename(opts.infile)))
+        header.add_comment('Converted from SDSS template format')
 
 
         ###
