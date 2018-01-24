@@ -9,8 +9,8 @@ import redrock
 def convert():
 
     parser = optparse.OptionParser(usage = "%prog [options]")
-    parser.add_option("-i", "--infile", type="string", required=True, help="input SDSS templates")
-    parser.add_option("-o", "--outfolder", type="string", required=True, help="output folder")
+    parser.add_option("-i", "--infile", type="string", help="input SDSS templates")
+    parser.add_option("-o", "--outfolder", type="string", help="output folder")
     opts, args = parser.parse_args()
 
     ###
