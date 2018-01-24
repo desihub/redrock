@@ -41,7 +41,8 @@ def convert():
             print("WARNING: spectype is not a known redrock spectype: "+spectype)
 
         if name_mode:
-            subtype = cat[0].header["NAME"+str(s)].replace("-","").replace("/","")
+            header_name = cat[0].header["NAME"+str(s)]
+            subtype = header_name.replace("-","").replace("/","")
         else:
             subtype = ""
 
@@ -53,13 +54,16 @@ def convert():
         header['LOGLAM']   = 1
         header['RRTYPE']   = spectype
         header['RRSUBTYP'] = subtype
-        header['RRVER']    = redrock.__version__
-        header['INSPEC']   = opts.infile
-        header['EXTNAME']  = "BASIS_VECTORS"
-
+        if name_mode:
+            header['SDSSNAME'] = (header_name, 'Orig NAMEnn keyword')
         rx = re.search('\((\d+)\)$', subtype)
         if rx:
             header['INDOUSID'] = (int(rx.groups()[0]), 'Indo-US stellar template ID')
+
+        header['RRVER']    = redrock.__version__
+        header['INSPEC']   = opts.infile
+        header['EXTNAME']  = "BASIS_VECTORS"
+        header.add_comment('Converted from SDSS template format')
 
         ###
         if name_mode:
