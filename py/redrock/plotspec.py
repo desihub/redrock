@@ -97,10 +97,10 @@ class PlotSpec(object):
 
         fulltype = zz['spectype']
         if zz['subtype'] != '':
-            fulltype = fulltype+":"+zz['subtype']
+            fulltype = fulltype+':::'+zz['subtype']
         tp = self.templates[fulltype]
 
-        if tp.type != zz['spectype']:
+        if tp.template_type != zz['spectype']:
             raise ValueError('spectype {} not in'
                 ' templates'.format(zz['spectype']))
 
@@ -169,7 +169,7 @@ class PlotSpec(object):
                 np.max(model)*1.05)
 
         #- Label object type and redshift
-        label = 'znum {} {} z={:.3f}'.format(self.znum, tp.fulltype, zz['z'])
+        label = 'znum {} {} z={:.3f}'.format(self.znum, tp.full_type, zz['z'])
         print('target {} id {} {}'.format(self.itarget, target.id, label))
         ytext = ymin+0.9*(ymax-ymin)
         self._ax2.text(3800, ytext, label)

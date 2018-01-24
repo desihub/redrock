@@ -111,7 +111,8 @@ def zfind(targets, templates, mp_procs=1, nminima=3):
     # For each of our local targets, refine the redshift fit close to the
     # minima in the coarse fit.
 
-    for t in templates:
+    sort = np.array([ t.template.full_type for t in templates]).argsort()
+    for t in np.array(list(templates))[sort]:
         ft = t.template.full_type
 
         if am_root:
@@ -207,8 +208,8 @@ def zfind(targets, templates, mp_procs=1, nminima=3):
                     continue
                 tmp = allresults[tid][fulltype]['zfit']
                 #- TODO: reconsider fragile parsing of fulltype
-                if fulltype.count(':') > 0:
-                    spectype, subtype = fulltype.split(':')
+                if fulltype.count(':::') > 0:
+                    spectype, subtype = fulltype.split(':::')
                 else:
                     spectype, subtype = (fulltype, '')
                 tmp['spectype'] = spectype

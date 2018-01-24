@@ -1,0 +1,88 @@
+#!/usr/bin/env python
+
+import sys
+import re
+import scipy as sp
+import optparse
+from astropy.io import fits
+import redrock
+
+def convert():
+
+    parser = optparse.OptionParser(usage = "%prog [options]")
+    parser.add_option("-i", "--infile", type="string", help="input SDSS templates")
+    parser.add_option("-o", "--outfolder", type="string", help="output folder")
+    opts, args = parser.parse_args()
+
+    ###
+    cat = fits.open(opts.infile)
+
+    if "OBJECT" not in cat[0].header or "COEFF0" not in cat[0].header:
+        print("ERROR: FITS file has no 'OBJECT' or 'COEFF0': "+opts.infile)
+        cat.close()
+        return
+
+    if len(cat)!=1:
+        print("WARNING: FITS file has more than 1 header: "+opts.infile)
+
+    ###
+    name_mode  = False
+    if "NAME0" in cat[0].header:
+        nb_templates = len([el for el in cat[0].header if len(el)>4 and el[:4]=="NAME"])
+        name_mode = True
+    else:
+        nb_templates = 1
+
+    ###
+    for s in range(nb_templates):
+
+        spectype = cat[0].header["OBJECT"].replace(" ","").upper()
+        if spectype not in ["STAR","GALAXY","QSO"]:
+            print("WARNING: spectype is not a known redrock spectype: "+spectype)
+
+        if name_mode:
+            header_name = cat[0].header["NAME"+str(s)]
+            subtype = header_name.replace("-","").replace("/","")
+        else:
+            subtype = ""
+
+        ###
+        hdus = fits.HDUList()
+        header = fits.Header()
+        header['CRVAL1']   = cat[0].header["COEFF0"]
+        header['CDELT1']   = cat[0].header["COEFF1"]
+        header['LOGLAM']   = 1
+        header['RRTYPE']   = spectype
+        header['RRSUBTYP'] = subtype
+        if name_mode:
+            header['SDSSNAME'] = (header_name, 'Orig NAMEnn keyword')
+        rx = re.search('\((\d+)\)$', subtype)
+        if rx:
+            header['INDOUSID'] = (int(rx.groups()[0]), 'Indo-US stellar template ID')
+
+        header['RRVER']    = redrock.__version__
+        header['INSPEC']   = opts.infile
+        header['EXTNAME']  = "BASIS_VECTORS"
+        header.add_comment('Converted from SDSS template format')
+
+        ###
+        if name_mode:
+            hdus.append(fits.PrimaryHDU(sp.asarray([cat[0].data[s,:]]), header=header))
+        else:
+            hdus.append(fits.PrimaryHDU(sp.asarray(cat[0].data), header=header))
+
+        ###
+        spectype = spectype.lower()
+        if name_mode:
+            filesubtype = subtype.replace(' ', '').replace('(', '_').replace(')', '')
+            outfile = opts.outfolder+"/rrtemplate-"+spectype+"-"+filesubtype+".fits"
+        else:
+            outfile = opts.outfolder+"/rrtemplate-"+spectype+".fits"
+        hdus.writeto(outfile, overwrite=True)
+        print('RR: Wrote '+outfile)
+
+    cat.close()
+
+    return
+
+convert()
