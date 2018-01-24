@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import sys
+import sys, re
 import scipy as sp
 import optparse
 from astropy.io import fits
@@ -9,8 +9,8 @@ import redrock
 def convert():
 
     parser = optparse.OptionParser(usage = "%prog [options]")
-    parser.add_option("-i", "--infile", type="string", help="input SDSS templates")
-    parser.add_option("-o", "--outfolder", type="string", help="output folder")
+    parser.add_option("-i", "--infile", type="string", required=True, help="input SDSS templates")
+    parser.add_option("-o", "--outfolder", type="string", required=True, help="output folder")
     opts, args = parser.parse_args()
 
     ###
@@ -43,10 +43,13 @@ def convert():
         if name_mode:
             #- Get name, but don't include (nnn) Indo-US template ID
             header_name = cat[0].header["NAME"+str(s)]
-            tmp = header_name.split()
-            subtype = tmp[0].replace("-","_").replace("/","_")
-            if len(tmp) > 1:
-                indo_us_id = tmp[1][1:-1]
+            subtype = header_name.replace('-','_').replace('/','_').replace(' ', '_')
+            subtype = subtype.replace('(', '').replace(')', '')
+
+            #- Regex search for parenthetical Indo-US ID at end
+            tmp = re.search(' \((\d+)\)$', header_name)
+            if tmp:
+                indo_us_id = tmp.groups()[0]
             else:
                 indo_us_id = 'N/A'
         else:
