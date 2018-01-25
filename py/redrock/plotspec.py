@@ -53,7 +53,7 @@ class PlotSpec(object):
 
         plt.ion()
         self.plot()
-        plt.show()
+        plt.show(block=True)
 
     def _onkeypress(self, event):
         ### print('key', event.key)
