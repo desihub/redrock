@@ -64,7 +64,7 @@ class PlotSpec(object):
             self.znum = (self.znum - 1) % self.nznum
             self.plot(keepzoom=True)
         elif event.key == 'down':
-            if self.itarget == len(self.targets)-1:
+            if self.itarget == min(len(self.targets),len(self.zscan))-1:
                 print('At last target')
             else:
                 self.znum = 0
