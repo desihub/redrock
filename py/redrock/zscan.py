@@ -107,9 +107,10 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None):
     zcoeff = np.zeros( (ntargets, nz, nbasis) )
 
     # Redshifts near [OII]; used only for galaxy templates
-    isOII = (3724 <= dtemplate.template.wave) & \
-        (dtemplate.template.wave <= 3733)
-    OIItemplate = dtemplate.template.flux[:,isOII].T
+    if dtemplate.template.template_type == 'GALAXY':
+        isOII = (3724 <= dtemplate.template.wave) & \
+            (dtemplate.template.wave <= 3733)
+        OIItemplate = dtemplate.template.flux[:,isOII].T
 
     for j in range(ntargets):
         (weights, flux, wflux) = spectral_data(target_data[j].spectra)
@@ -121,8 +122,7 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None):
             zchi2[j,i], zcoeff[j,i] = calc_zchi2_one(target_data[j].spectra,
                 weights, flux, wflux, dtemplate.local.data[i])
 
-        #- Penalize chi2 for negative [OII] flux; ad-hoc
-        for i, z in enumerate(dtemplate.local.redshifts):
+            #- Penalize chi2 for negative [OII] flux; ad-hoc
             if dtemplate.template.template_type == 'GALAXY':
                 OIIflux = np.sum( OIItemplate.dot(zcoeff[j,i]) )
                 if OIIflux < 0:
