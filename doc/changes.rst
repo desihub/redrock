@@ -6,9 +6,11 @@ redrock Change Log
 ------------------
 
 * Fully support desiInstall and DESI infrastructure generally (PR `#65`_).
-* Fix import errors that were preventing builds.
+* Fix import errors that were preventing builds (PR `#91`_).
 
 .. _`#65`: https://github.com/desihub/redrock/pull/65
+.. _`#91`: https://github.com/desihub/redrock/pull/91
+
 
 0.7.0 (2017-12-20)
 ------------------
