@@ -4,52 +4,40 @@ import argparse
 import redrock
 from astropy.table import Table
 
-def plotboss():
+parser = argparse.ArgumentParser(description="Plot redrock results for"
+    " BOSS target spectra.")
 
-    parser = argparse.ArgumentParser(description="Plot redrock results for"
-        " BOSS target spectra.")
+parser.add_argument("--datatype", type=str, default='desi',
+    required=False, help="input data type: desi or boss")
 
-    parser.add_argument("--datatype", type=str, default='desi',
-        required=False, help="input data type: desi or boss")
+parser.add_argument("--data", type=str, default=None,
+    required=True, help="input data path")
 
-    parser.add_argument("--data", type=str, default=None,
-        required=True, help="input data path")
+parser.add_argument("-o", "--output", type=str, default=None,
+    required=True, help="output redrock h5 file")
 
-    parser.add_argument("-o", "--output", type=str, default=None,
-        required=True, help="output redrock h5 file")
+parser.add_argument("-t", "--templates", type=str, default=None,
+    required=False, help="template directory")
 
-    parser.add_argument("--zbest", type=str, default=None,
-        required=True, help="output zbest FITS file")
+args = parser.parse_args()
 
-    parser.add_argument("-t", "--templates", type=str, default=None,
-        required=False, help="template directory")
+#- Templates
+templates_path = redrock.templates.find_templates(args.templates)
+templates = {}
+for el in templates_path:
+    t = redrock.templates.Template(filename=el)
+    templates[t.full_type] = t
 
-    args = parser.parse_args()
+#- Data
+if args.datatype=='desi':
+    from redrock.external import desi
+    targets = desi.DistTargetsDESI(args.data)._my_data
+elif args.datatype=='boss':
+    from redrock.external import boss
+    targets, targetids = boss.read_spectra(args.data)
 
-    #- Templates
-    templates_path = redrock.templates.find_templates(args.templates)
-    templates = {}
-    for el in templates_path:
-        t = redrock.templates.Template(filename=el)
-        templates[t.full_type] = t
+#- Redrock
+zscan, zfit = redrock.results.read_zscan(args.output)
 
-    #- Data
-    if args.datatype=='desi':
-        #- Don't know yet how to do this
-        #from redrock.external import desi
-        #targets, targetids = boss.read_spectra(args.spplate)
-        print("Not yet implemented")
-    elif args.datatype=='boss':
-        from redrock.external import boss
-        targets, targetids = boss.read_spectra(args.data)
-
-    #- Redrock
-    zscan, zfit = redrock.results.read_zscan(args.output)
-    zbest = Table.read(args.zbest)
-
-    #- Plot
-    p = redrock.PlotSpec(targets, templates, zscan, zfit)
-
-    return
-
-plotboss()
+#- Plot
+p = redrock.PlotSpec(targets, templates, zscan, zfit)

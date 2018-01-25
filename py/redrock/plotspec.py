@@ -27,6 +27,9 @@ class PlotSpec(object):
         self.znum = 0
         self.smooth = 1
         self.truth = truth
+        self.tagetid_to_itarget = {}
+        for i, t in enumerate(self.targets):
+            self.tagetid_to_itarget[t.id] = i
 
         self._fig = plt.figure()
         self._ax1 = self._fig.add_subplot(211)
@@ -53,7 +56,7 @@ class PlotSpec(object):
 
         plt.ion()
         self.plot()
-        plt.show(block=True)
+        plt.show()
 
     def _onkeypress(self, event):
         ### print('key', event.key)
