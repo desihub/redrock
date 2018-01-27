@@ -28,6 +28,7 @@ parser = optparse.OptionParser(usage = "%prog [options]")
 parser.add_option("-o", "--outfile", type=str,  help="Output filename")
 parser.add_option("--niter", type=int,  help="Number of EMPCA iterations to run [%default]", default=5)
 parser.add_option("--nvec", type=int,  help="Number of basis vectors to generate [%default]", default=5)
+parser.add_option("--seed", type=int,  help="Seed for desisim.templates.STAR [%default]", default=12345)
 
 opts, args = parser.parse_args()
 
@@ -41,7 +42,7 @@ if opts.outfile is None:
 dw = 0.1
 wave = np.arange(3000, 11000+dw/2, dw)
 nstar = 1000
-tflux, twave, meta = STAR().make_templates(nstar, restframe=True)
+tflux, twave, meta = STAR().make_templates(nstar, restframe=True,seed=opts.seed)
 flux = np.zeros((nstar, len(wave)))
 for i in range(nstar):
     flux[i] = resample_flux(wave, twave, tflux[i])
@@ -65,7 +66,8 @@ outbase, outext = os.path.splitext(opts.outfile)
 mx = dict()
 for spectype, (mintemp, maxtemp) in typetemp.items():
     ii = (mintemp <= meta['TEFF']) & (meta['TEFF'] <= maxtemp)
-    
+    print('RR: Using {} spectra to get the templates'.format(ii.sum()))
+
     #- EMPCA fit
     print('RR: Fitting basis vectors for spectral type {} with {} templates'.format(spectype, np.count_nonzero(ii)))
     mx[spectype] = model = empca(flux[ii], niter=opts.niter, nvec=opts.nvec)
@@ -93,6 +95,6 @@ for spectype, (mintemp, maxtemp) in typetemp.items():
     hdus.append(fits.ImageHDU(model.coeff, name='ARCHETYPE_COEFF'))
 
     outfile = outbase + '-' + spectype + outext
-    hdus.writeto(outfile, clobber=True)
+    hdus.writeto(outfile, overwrite=True)
     print('RR: Wrote '+outfile)
 
