@@ -2,7 +2,6 @@
 
 import argparse
 import redrock
-from astropy.table import Table
 
 parser = argparse.ArgumentParser(description="Plot redrock results for"
     " BOSS target spectra.")
