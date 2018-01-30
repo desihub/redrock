@@ -2,14 +2,28 @@
 redrock Change Log
 ==================
 
-0.7.1 (unreleased)
+0.8.0 (unreleased)
 ------------------
 
+* No changes yet.
+
+0.8.0 (2018-01-30)
+------------------
+
+* Major restructure of MPI and multiprocessing dataflow
+  (PR `#67`_, `#73`_, `#76`_).
 * Fully support desiInstall and DESI infrastructure generally (PR `#65`_).
-* Fix import errors that were preventing builds (PR `#91`_).
+* Fix import errors that were preventing RTD builds (PR `#91`_).
+* Add seed to template generation; increase number of stars used (PR `#93`_).
+* Add rrplot script to be called from ipython (PR `#90`_).
 
 .. _`#65`: https://github.com/desihub/redrock/pull/65
+.. _`#67`: https://github.com/desihub/redrock/pull/67
+.. _`#73`: https://github.com/desihub/redrock/pull/73
+.. _`#76`: https://github.com/desihub/redrock/pull/76
 .. _`#91`: https://github.com/desihub/redrock/pull/91
+.. _`#93`: https://github.com/desihub/redrock/pull/93
+.. _`#90`: https://github.com/desihub/redrock/pull/90
 
 
 0.7.0 (2017-12-20)

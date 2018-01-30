@@ -60,8 +60,7 @@ class Template(object):
                 redshifts = native_endian(fx['REDSHIFTS'].data)
                 old_style_templates = False
             except:
-                print("DEBUG: Can't find redshift range info in template "
-                    "file {}, using default values".format(filename))
+                pass
 
             fx.close()
 
@@ -80,6 +79,15 @@ class Template(object):
                 else:
                     raise ValueError("Unknown redshift range to use for "
                         "template type {}".format(self._rrtype))
+                zmin = self._redshifts[0]
+                zmax = self._redshifts[-1]
+                print("DEBUG: Using default redshift range {:.4f}-{:.4f} for "
+                    "{}".format(zmin, zmax, os.path.basename(filename)))
+            else:
+                zmin = self._redshifts[0]
+                zmax = self._redshifts[-1]
+                print("DEBUG: Using redshift range {:.4f}-{:.4f} for "
+                    "{}".format(zmin, zmax, os.path.basename(filename)))
 
             self._subtype = None
             if 'RRSUBTYP' in hdr:
