@@ -91,6 +91,6 @@ hdus = fits.HDUList()
 hdus.append(fits.PrimaryHDU(model.eigvec, header=header))
 hdus.append(fits.ImageHDU(model.coeff, name='ARCHETYPE_COEFF'))
 
-hdus.writeto(opts.outfile, clobber=True)
+hdus.writeto(opts.outfile, overwrite=True)
 print('RR: Wrote '+opts.outfile)
 
