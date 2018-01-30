@@ -27,6 +27,9 @@ class PlotSpec(object):
         self.znum = 0
         self.smooth = 1
         self.truth = truth
+        self.targetid_to_itarget = {}
+        for i, t in enumerate(self.targets):
+            self.targetid_to_itarget[t.id] = i
 
         self._fig = plt.figure()
         self._ax1 = self._fig.add_subplot(211)
