@@ -28,6 +28,7 @@ parser = optparse.OptionParser(usage = "%prog [options]")
 parser.add_option("-o", "--outfile", type=str,  help="Output filename")
 parser.add_option("--niter", type=int,  help="Number of EMPCA iterations to run [%default]", default=10)
 parser.add_option("--nvec", type=int,  help="Number of basis vectors to generate [%default]", default=10)
+parser.add_option("--seed", type=int,  help="Seed for desisim.templates.ELG and LRG [%default]", default=123456)
 
 opts, args = parser.parse_args()
 
@@ -44,12 +45,12 @@ dw = 0.1
 wave = np.arange(3500/(1+1.85), 11000+dw/2, dw)
 nelg = 1000
 nlrg = 500
-tflux, twave, tmeta = ELG().make_templates(nelg, restframe=True, nocolorcuts=True)
+tflux, twave, tmeta = ELG().make_templates(nelg, restframe=True, nocolorcuts=True,seed=opts.seed)
 elgflux = np.zeros((nelg, len(wave)))
 for i in range(nelg):
     elgflux[i] = resample_flux(wave, twave, tflux[i])
 
-tflux, twave, tmeta = LRG().make_templates(nlrg, restframe=True, nocolorcuts=True)
+tflux, twave, tmeta = LRG().make_templates(nlrg, restframe=True, nocolorcuts=True,seed=opts.seed+nelg)
 lrgflux = np.zeros((nlrg, len(wave)))
 for i in range(nlrg):
     lrgflux[i] = resample_flux(wave, twave, tflux[i])
@@ -83,12 +84,13 @@ header['RRSUBTYP'] = ''
 # header['RRINPUT'] = opts.infile
 header['RRVER'] = redrock.__version__
 header['INSPEC'] = os.environ['DESI_BASIS_TEMPLATES']
+header['SEED'] = opts.seed
 header['EXTNAME'] = 'BASIS_VECTORS'
 
 hdus = fits.HDUList()
 hdus.append(fits.PrimaryHDU(model.eigvec, header=header))
 hdus.append(fits.ImageHDU(model.coeff, name='ARCHETYPE_COEFF'))
 
-hdus.writeto(opts.outfile, clobber=True)
+hdus.writeto(opts.outfile, overwrite=True)
 print('RR: Wrote '+opts.outfile)
 
