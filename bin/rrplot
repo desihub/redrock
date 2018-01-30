@@ -4,16 +4,16 @@ import argparse
 import redrock
 
 parser = argparse.ArgumentParser(description="Plot redrock results for"
-    " BOSS target spectra.")
+    " DESI or BOSS target spectra.")
 
 parser.add_argument("--datatype", type=str, default='desi',
     required=False, help="input data type: desi or boss")
 
-parser.add_argument("--data", type=str, default=None,
-    required=True, help="input data path")
+parser.add_argument("--specfile", type=str, default=None,
+    required=True, help="input spectra or spPlate file")
 
-parser.add_argument("-o", "--output", type=str, default=None,
-    required=True, help="output redrock h5 file")
+parser.add_argument("--rrfile", type=str, default=None,
+    required=True, help="redrock details h5 file from rrdesi/rrboss")
 
 parser.add_argument("-t", "--templates", type=str, default=None,
     required=False, help="template directory")
@@ -30,13 +30,13 @@ for el in templates_path:
 #- Data
 if args.datatype=='desi':
     from redrock.external import desi
-    targets = desi.DistTargetsDESI(args.data)._my_data
+    targets = desi.DistTargetsDESI(args.specfile)._my_data
 elif args.datatype=='boss':
     from redrock.external import boss
-    targets, targetids = boss.read_spectra(args.data)
+    targets, targetids = boss.read_spectra(args.specfile)
 
 #- Redrock
-zscan, zfit = redrock.results.read_zscan(args.output)
+zscan, zfit = redrock.results.read_zscan(args.rrfile)
 
 #- Plot
 p = redrock.PlotSpec(targets, templates, zscan, zfit)
