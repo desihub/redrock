@@ -14,6 +14,7 @@ from astropy.table import Table
 
 from .utils import mp_array, distribute_work
 
+from . import constants
 
 class Spectrum(object):
     """Simple container class for an individual spectrum.
@@ -28,6 +29,9 @@ class Spectrum(object):
 
     """
     def __init__(self, wave, flux, ivar, R, Rcsr):
+        if R is not None:
+            w = np.asarray(R.sum(axis=1))[:,0]<constants.min_resolution_integral
+            ivar[w] = 0.
         self.nwave = wave.size
         self.wave = wave
         self.flux = flux
