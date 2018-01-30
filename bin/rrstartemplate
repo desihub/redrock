@@ -41,7 +41,7 @@ if opts.outfile is None:
 #- Generate templates and resample to 0.1A grid
 dw = 0.1
 wave = np.arange(3000, 11000+dw/2, dw)
-nstar = 1000
+nstar = 10000
 tflux, twave, meta = STAR().make_templates(nstar, restframe=True,seed=opts.seed)
 flux = np.zeros((nstar, len(wave)))
 for i in range(nstar):
@@ -88,6 +88,7 @@ for spectype, (mintemp, maxtemp) in typetemp.items():
     # header['RRINPUT'] = opts.infile
     header['RRVER'] = redrock.__version__
     header['INSPEC'] = os.environ['DESI_BASIS_TEMPLATES']
+    header['SEED'] = opts.seed
     header['EXTNAME'] = 'BASIS_VECTORS'
 
     hdus = fits.HDUList()
