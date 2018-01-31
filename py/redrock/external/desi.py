@@ -438,6 +438,10 @@ def rrdesi(options=None, comm=None):
     parser.add_argument("--allspec", default=False, action="store_true",
         required=False, help="use individual spectra instead of coadd")
 
+    parser.add_argument("--ncpu", type=int, default=None,
+        required=False, help="DEPRECATED: the number of multiprocessing"
+            " processes; use --mp instead")
+
     parser.add_argument("--mp", type=int, default=0,
         required=False, help="if not using MPI, the number of multiprocessing"
             " processes to use (defaults to half of the hardware threads)")
@@ -453,6 +457,10 @@ def rrdesi(options=None, comm=None):
         args = parser.parse_args()
     else:
         args = parser.parse_args(options)
+
+    if args.ncpu is not None:
+        print('WARNING: --ncpu is deprecated; use --mp instead')
+        args.mp = args.ncpu
 
     comm_size = 1
     comm_rank = 0
@@ -472,23 +480,30 @@ def rrdesi(options=None, comm=None):
                 comm.Abort()
 
         if (args.output is None) and (args.zbest is None):
-            print("--output or --zbest required")
+            parser.print_help()
+            print("ERROR: --output or --zbest required")
             sys.stdout.flush()
             if comm is not None:
                 comm.Abort()
+            else:
+                sys.exit(1)
 
         if len(args.infiles) == 0:
-            print("must provide input files")
+            print("ERROR: must provide input files")
             sys.stdout.flush()
             if comm is not None:
                 comm.Abort()
+            else:
+                sys.exit(1)
 
         if (args.targetids is not None) and ((args.mintarget is not None) \
             or (args.ntargets is not None)):
-            print("cannot select targets by both ID and range")
+            print("ERROR: cannot select targets by both ID and range")
             sys.stdout.flush()
             if comm is not None:
                 comm.Abort()
+            else:
+                sys.exit(1)
 
     targetids = None
     if args.targetids is not None:
