@@ -58,7 +58,7 @@ def spectra2outfiles(specfiles, inprefix, outprefix, ext=None, outdir=None):
         array of output filepaths
 
     Example::
-    
+
         spectra2outfiles(['/a/b/blat-1.fits', '/c/d/blat-2.fits'], \
             inprefix='blat', outprefix='foo', ext='h5', outdir='/tmp/')
         --> array(['/tmp/foo-1.h5', '/tmp/foo-2.h5'], dtype='<U13')
@@ -69,7 +69,7 @@ def spectra2outfiles(specfiles, inprefix, outprefix, ext=None, outdir=None):
         outfile = basename.replace(inprefix, outprefix)
         if ext is not None:
             outfile = outfile.replace('.fits', '.'+ext)
-    
+
         if outdir is None:
             outfiles.append(os.path.join(dirname, outfile))
         else:
