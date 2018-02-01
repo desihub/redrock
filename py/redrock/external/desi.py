@@ -304,11 +304,16 @@ class DistTargetsDESI(DistTargets):
             for b in self._bands[sfile]:
                 extname = "{}_{}".format(b.upper(), "FLUX")
                 hdata = None
+                badflux = None
                 if comm_rank == 0:
                     hdata = hdus[extname].data[rows]
+                    # check for NaN and Inf here (should never happen of course)
+                    badflux = np.isnan(hdata) | np.isinf(hdata) | np.isneginf(hdata)
+                    hdata[badflux] = 0.0
                 if comm is not None:
                     hdata = comm.bcast(hdata, root=0)
-
+                    badflux = comm.bcast(badflux, root=0)
+                    
                 toff = 0
                 for t in self._my_targets:
                     if t in self._target_specs[sfile]:
@@ -322,7 +327,10 @@ class DistTargetsDESI(DistTargets):
                 hdata = None
                 if comm_rank == 0:
                     hdata = hdus[extname].data[rows]
-
+                    # check for NaN and Inf here (should never happen of course)
+                    bad = np.isnan(hdata) | np.isinf(hdata) | np.isneginf(hdata)
+                    hdata[bad] = 0.0
+                    hdata[badflux] = 0.0 # also set ivar=0 to bad flux                    
                 if comm is not None:
                     hdata = comm.bcast(hdata, root=0)
 
@@ -334,7 +342,7 @@ class DistTargetsDESI(DistTargets):
                                 hdata[trow].astype(np.float64).copy()
                             tspec_ivar[t] += 1
                     toff += 1
-
+                
                 extname = "{}_{}".format(b.upper(), "MASK")
                 hdata = None
                 if comm_rank == 0:
