@@ -2,6 +2,8 @@
 
 import argparse
 import redrock
+import redrock.templates
+import redrock.plotspec
 
 parser = argparse.ArgumentParser(description="Plot redrock results for"
     " DESI or BOSS target spectra.")
@@ -39,4 +41,4 @@ elif args.datatype=='boss':
 zscan, zfit = redrock.results.read_zscan(args.rrfile)
 
 #- Plot
-p = redrock.PlotSpec(targets, templates, zscan, zfit)
+p = redrock.plotspec.PlotSpec(targets, templates, zscan, zfit)
