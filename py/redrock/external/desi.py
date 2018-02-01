@@ -304,22 +304,16 @@ class DistTargetsDESI(DistTargets):
             for b in self._bands[sfile]:
                 extname = "{}_{}".format(b.upper(), "FLUX")
                 hdata = None
+                badflux = None
                 if comm_rank == 0:
                     hdata = hdus[extname].data[rows]
-                    # check for NaN here (should never happen of course)
-                    # we do a sum on waves to identify Inf values as well
-                    isnan=np.isnan(np.sum(hdata,axis=1))
-                    if np.sum(isnan)>0 :
-                        # NaN or Inf values
-                        # We set flux to 0 for those
-                        # and will set ivar to 0 after
-                        # for entries with flux==0
-                        for i in np.where(isnan)[0] :
-                            hdata[i][np.isnan(hdata[i])]=0.
-                            hdata[i][np.isinf(hdata[i])]=0.                        
+                    # check for NaN and Inf here (should never happen of course)
+                    badflux = np.isnan(hdata) | np.isinf(hdata) | np.isneginf(hdata)
+                    hdata[badflux] = 0.0
                 if comm is not None:
                     hdata = comm.bcast(hdata, root=0)
-
+                    badflux = comm.bcast(badflux, root=0)
+                    
                 toff = 0
                 for t in self._my_targets:
                     if t in self._target_specs[sfile]:
@@ -333,18 +327,10 @@ class DistTargetsDESI(DistTargets):
                 hdata = None
                 if comm_rank == 0:
                     hdata = hdus[extname].data[rows]
-                    # as for flux,
-                    # check for NaN here (should never happen of course)
-                    # we do a sum on waves to identify Inf values as well
-                    isnan=np.isnan(np.sum(hdata,axis=1))
-                    if np.sum(isnan)>0 :
-                        # NaN or Inf values
-                        # We set flux to 0 for those
-                        # and will set ivar to 0 after
-                        # for entries with flux==0
-                        for i in np.where(isnan)[0] :
-                            hdata[i][np.isnan(hdata[i])]=0.
-                            hdata[i][np.isinf(hdata[i])]=0. 
+                    # check for NaN and Inf here (should never happen of course)
+                    bad = np.isnan(hdata) | np.isinf(hdata) | np.isneginf(hdata)
+                    hdata[bad] = 0.0
+                    hdata[badflux] = 0.0 # also set ivar=0 to bad flux                    
                 if comm is not None:
                     hdata = comm.bcast(hdata, root=0)
 
@@ -354,13 +340,9 @@ class DistTargetsDESI(DistTargets):
                         for trow in self._target_specs[sfile][t]:
                             self._my_data[toff].spectra[tspec_ivar[t]].ivar = \
                                 hdata[trow].astype(np.float64).copy()
-                            
-                            # set ivar=0 to entries with flux==0.
-                            self._my_data[toff].spectra[tspec_ivar[t]].ivar[self._my_data[toff].spectra[tspec_ivar[t]].flux == 0.] = 0.
-                            
                             tspec_ivar[t] += 1
                     toff += 1
-
+                
                 extname = "{}_{}".format(b.upper(), "MASK")
                 hdata = None
                 if comm_rank == 0:
