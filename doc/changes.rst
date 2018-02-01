@@ -2,10 +2,10 @@
 redrock Change Log
 ==================
 
-0.8.0 (unreleased)
+0.8.1 (unreleased)
 ------------------
 
-* No changes yet.
+* Adds wrap-redrock MPI wrapper script
 
 0.8.0 (2018-01-30)
 ------------------
