@@ -21,6 +21,7 @@ from .zscan import calc_zchi2_one, spectral_data
 
 from .zwarning import ZWarningMask as ZW
 
+from .utils import transmitted_flux_fraction
 
 def get_dv(z, zref):
     """Returns velocity difference in km/s for two redshifts
@@ -162,6 +163,8 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3):
 
         for i, z in enumerate(zz):
             binned = rebin_template(template, z, dwave)
+            for k in list(dwave.keys()):
+                binned[k][:,0] *= transmitted_flux_fraction(z,dwave[k])
             zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux,
                 wflux, binned)
 
@@ -171,6 +174,8 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3):
 
         try:
             binned = rebin_template(template, zmin, dwave)
+            for k in list(dwave.keys()):
+                binned[k][:,0] *= transmitted_flux_fraction(zmin,dwave[k])
             coeff = calc_zchi2_one(spectra, weights, flux, wflux,
                 binned)[1]
         except ValueError as err:
