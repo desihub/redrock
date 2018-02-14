@@ -8,6 +8,7 @@ max_velo_diff = 1000.0  # km/s
 min_resolution_integral = 0.99
 
 # From eqn 5 of Calura et al. 2012 (Arxiv: 1201.5121)
+# From McDonald et al. 2006 (Arxiv: 0405013)
 Lyman_series = {
-    'LYA' : { 'line':1215.67, 'A':0.0023, 'B':3.64 }
+    'LYA' : { 'line':1215.67, 'A':0.0023, 'B':3.64, 'var_evol':3.8 }
 }

@@ -284,7 +284,7 @@ def distribute_work(nproc, ids, weights=None):
     return dist
 
 
-def transmitted_flux_fraction(zObj,lObs):
+def transmission_Lyman(zObj,lObs):
     """Calculate the transmitted flux fraction from the Lyman series
     This returns the transmitted flux fraction:
         1 -> everything is transmitted (medium is transparent)
@@ -307,3 +307,23 @@ def transmitted_flux_fraction(zObj,lObs):
         T[w]  *= np.exp(-tauEff)
 
     return T
+def ivar_Lyman(zObj,lObs,ivarPipe,capValue=50.):
+    """Cap the inverse variance in the Lyman series
+    Args:
+        zObj     (float): Redshift of object
+        lObs     (array of float): wavelength grid
+        ivarPipe (array of float): pipeline inverse variance
+    Returns:
+        array of float: capped inverse variance
+    """
+
+    lRF  = lObs/(1.+zObj)
+    ivar = ivarPipe.copy()
+
+    Lyman_series = constants.Lyman_series
+    for l in list(Lyman_series.keys()):
+        w  = lRF<Lyman_series[l]['line']
+        w &= ivar>capValue
+        ivar[w] = capValue
+
+    return ivar

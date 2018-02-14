@@ -21,7 +21,7 @@ from .zscan import calc_zchi2_one, spectral_data
 
 from .zwarning import ZWarningMask as ZW
 
-from .utils import transmitted_flux_fraction
+from .utils import transmission_Lyman, ivar_Lyman
 
 def get_dv(z, zref):
     """Returns velocity difference in km/s for two redshifts
@@ -164,9 +164,12 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3):
         for i, z in enumerate(zz):
             binned = rebin_template(template, z, dwave)
             for k in list(dwave.keys()):
-                binned[k][:,0] *= transmitted_flux_fraction(z,dwave[k])
-            zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux,
-                wflux, binned)
+                binned[k][:,0] *= transmission_Lyman(z,dwave[k])
+            tmp_wave    = np.concatenate([ s.wave for s in spectra ])
+            tmp_weights = ivar_Lyman(z,tmp_wave,weights)
+            tmp_wflux   = tmp_weights*flux
+            zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, tmp_weights, flux,
+                tmp_wflux, binned)
 
         #- fit parabola to 3 points around minimum
         i = min(max(np.argmin(zzchi2),1), len(zz)-2)
@@ -175,8 +178,11 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3):
         try:
             binned = rebin_template(template, zmin, dwave)
             for k in list(dwave.keys()):
-                binned[k][:,0] *= transmitted_flux_fraction(zmin,dwave[k])
-            coeff = calc_zchi2_one(spectra, weights, flux, wflux,
+                binned[k][:,0] *= transmission_Lyman(zmin,dwave[k])
+            tmp_wave    = np.concatenate([ s.wave for s in spectra ])
+            tmp_weights = ivar_Lyman(zmin,tmp_wave,weights)
+            tmp_wflux   = tmp_weights*flux
+            coeff = calc_zchi2_one(spectra, tmp_weights, flux, tmp_wflux,
                 binned)[1]
         except ValueError as err:
             if zmin<redshifts[0] or redshifts[-1]<zmin:
