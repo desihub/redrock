@@ -2,10 +2,25 @@
 redrock Change Log
 ==================
 
-0.8.1 (unreleased)
+0.9.1 (unreleased)
 ------------------
 
-* Adds wrap-redrock MPI wrapper script
+* No changes yet.
+
+0.9.0 (2018-02-23)
+------------------
+
+* ivar=0 for edge pix with integral(resolution)<0.99 (PR `#94`_)
+* Restore --ncpu option (PR `#95`_)
+* Adds wrap-redrock MPI wrapper script (PR `#97`_)
+* Robust to input NaN and Inf (PR `#99`_)
+* Adds WD templates (PR `#101`_)
+
+.. _`#94`: https://github.com/desihub/redrock/pull/94
+.. _`#95`: https://github.com/desihub/redrock/pull/95
+.. _`#97`: https://github.com/desihub/redrock/pull/97
+.. _`#99`: https://github.com/desihub/redrock/pull/99
+.. _`#101`: https://github.com/desihub/redrock/pull/101
 
 0.8.0 (2018-01-30)
 ------------------
@@ -21,9 +36,9 @@ redrock Change Log
 .. _`#67`: https://github.com/desihub/redrock/pull/67
 .. _`#73`: https://github.com/desihub/redrock/pull/73
 .. _`#76`: https://github.com/desihub/redrock/pull/76
+.. _`#90`: https://github.com/desihub/redrock/pull/90
 .. _`#91`: https://github.com/desihub/redrock/pull/91
 .. _`#93`: https://github.com/desihub/redrock/pull/93
-.. _`#90`: https://github.com/desihub/redrock/pull/90
 
 
 0.7.0 (2017-12-20)
