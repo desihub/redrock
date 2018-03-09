@@ -287,8 +287,8 @@ def distribute_work(nproc, ids, weights=None):
 def transmission_Lyman(zObj,lObs):
     """Calculate the transmitted flux fraction from the Lyman series
     This returns the transmitted flux fraction:
-        1 -> everything is transmitted (medium is transparent)
-        0 -> nothing is transmitted (medium is opaque)
+    1 -> everything is transmitted (medium is transparent)
+    0 -> nothing is transmitted (medium is opaque)
     Args:
         zObj (float): Redshift of object
         lObs (array of float): wavelength grid
