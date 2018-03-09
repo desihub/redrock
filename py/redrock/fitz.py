@@ -164,7 +164,9 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3):
         for i, z in enumerate(zz):
             binned = rebin_template(template, z, dwave)
             for k in list(dwave.keys()):
-                binned[k][:,0] *= transmission_Lyman(z,dwave[k])
+                T = transmission_Lyman(z,dwave[k])
+                for vect in range(binned[k].shape[1]):
+                    binned[k][:,vect] *= T
             zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux,
                 wflux, binned)
 
@@ -175,7 +177,9 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3):
         try:
             binned = rebin_template(template, zmin, dwave)
             for k in list(dwave.keys()):
-                binned[k][:,0] *= transmission_Lyman(zmin,dwave[k])
+                T = transmission_Lyman(zmin,dwave[k])
+                for vect in range(binned[k].shape[1]):
+                    binned[k][:,vect] *= T
             coeff = calc_zchi2_one(spectra, weights, flux, wflux,
                 binned)[1]
         except ValueError as err:

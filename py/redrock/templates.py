@@ -303,7 +303,9 @@ class DistTemplate(object):
             # Correct spectra for Lyman-series
             for i, z in enumerate(myz):
                 for k in list(self._dwave.keys()):
-                    data[i][k][:,0] *= transmission_Lyman(z,self._dwave[k])
+                    T = transmission_Lyman(z,self._dwave[k])
+                    for vect in range(data[i][k].shape[1]):
+                        data[i][k][:,vect] *= T
 
         self._piece = DistTemplatePiece(self._comm_rank, myz, data)
 
