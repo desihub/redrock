@@ -2,10 +2,12 @@
 redrock Change Log
 ==================
 
-0.9.1 (unreleased)
+0.10.0 (unreleased)
 ------------------
 
-* No changes yet.
+* Correct QSO template for LyA during zscan (PR `#104`_).
+
+.. _`#104`: https://github.com/desihub/redrock/pull/104
 
 0.9.0 (2018-02-23)
 ------------------
