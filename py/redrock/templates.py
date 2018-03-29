@@ -13,7 +13,7 @@ import numpy as np
 from astropy.io import fits
 from astropy.table import Table
 
-from .utils import native_endian, elapsed, get_mp, mp_array
+from .utils import native_endian, elapsed, get_mp, mp_array, transmission_Lyman
 
 from .rebin import rebin_template, trapz_rebin
 
@@ -299,6 +299,13 @@ class DistTemplate(object):
                 results.update(res)
             for z in myz:
                 data.append(results[z])
+
+            # Correct spectra for Lyman-series
+            for i, z in enumerate(myz):
+                for k in list(self._dwave.keys()):
+                    T = transmission_Lyman(z,self._dwave[k])
+                    for vect in range(data[i][k].shape[1]):
+                        data[i][k][:,vect] *= T
 
         self._piece = DistTemplatePiece(self._comm_rank, myz, data)
 
