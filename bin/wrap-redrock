@@ -48,7 +48,7 @@ def spectra2outfiles(specfiles, inprefix, outprefix, ext=None, outdir=None):
     Args:
         specfiles: list of spectra filepaths
         inprefix: input file prefix, e.g. 'spectra' or 'spPlate'
-        outprefix: output file prefix, e.g. 'zbest' or 'rr'
+        outprefix: output file prefix, e.g. 'zbest' or 'redrock'
 
     Options:
         ext: output extension, e.g. 'h5' (default same as input extension)
@@ -92,7 +92,7 @@ def find_specfiles(reduxdir, outdir=None, prefix='spectra', avoiddir=None):
 
     Notes:
         Recursively walks directories under `reduxdir` looking for files
-        matching prefix*.fits.  Looks for rr*.h5 and zbest*.fits in the
+        matching prefix*.fits.  Looks for redrock*.h5 and zbest*.fits in the
         same directory as each spectra file, or in outdir if specified.
     '''
     # print("looking for spectra files under {}".format(reduxdir))
@@ -119,7 +119,11 @@ def find_specfiles(reduxdir, outdir=None, prefix='spectra', avoiddir=None):
     #     print('Found {} spectra files'.format(len(specfiles)))
 
     zbfiles = spectra2outfiles(specfiles, prefix, 'zbest', outdir=outdir)
-    rrfiles = spectra2outfiles(specfiles, prefix, 'rr', outdir=outdir, ext='h5')
+    rrfiles = spectra2outfiles(specfiles, prefix, 'redrock', outdir=outdir, ext='h5')
+
+    #- Default redrock hdf5 filename changed; look for old name too
+    if len(rrfiles) == 0 and len(zbfiles) > 0:
+        rrfiles = spectra2outfiles(specfiles, prefix, 'rr', outdir=outdir, ext='h5')
 
     npix = len(specfiles)
     todo = np.ones(npix, dtype=bool)
@@ -310,7 +314,7 @@ def run_redrock(args, comm=None):
 
     pixels = np.array([int(os.path.basename(os.path.dirname(x))) for x in specfiles])
     zbfiles = spectra2outfiles(specfiles, 'spectra', 'zbest', outdir=args.outdir)
-    rrfiles = spectra2outfiles(specfiles, 'spectra', 'rr', outdir=args.outdir, ext='h5')
+    rrfiles = spectra2outfiles(specfiles, 'spectra', 'redrock', outdir=args.outdir, ext='h5')
 
     for i in groups[rank]:
         print('---- rank {} pix {} {}'.format(rank, pixels[i], time.asctime()))
