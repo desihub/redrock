@@ -31,7 +31,7 @@ def _zchi2_one(Tb, weights, flux, wflux, zcoeff):
     try:
         zcoeff[:] = np.linalg.solve(M, y)
     except:
-        return np.nan
+        return -9.e99
 
     model = Tb.dot(zcoeff)
 
