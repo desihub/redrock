@@ -5,14 +5,16 @@ redrock Change Log
 0.10.2 (unreleased)
 -------------------
 
-* No changes yet.
+* Catch LinAlgErrors from bad input data (PR `#109`_).
+
+.. _`#109`: https://github.com/desihub/redrock/pull/109
 
 0.10.1 (2018-03-30)
 -------------------
 
 * Default QSO redshift range 0.05-4.0 instead of 0.5-4.0 (PR `#107`_).
 
-.. _`#107`: https://github.com/desihub/redrock/pull/104
+.. _`#107`: https://github.com/desihub/redrock/pull/107
 
 0.10.0 (2018-03-29)
 -------------------
