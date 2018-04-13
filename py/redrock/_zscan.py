@@ -20,10 +20,6 @@ def _zchi2_one(Tb, weights, flux, wflux, zcoeff):
     For one redshift and a set of spectral data, compute the chi2 for template
     data that is already on the correct grid.
     """
-    zchi2 = 0.0
-    M = np.zeros_like(flux)
-    y = np.zeros_like(zcoeff)
-    model = np.zeros_like(flux)
 
     M = Tb.T.dot(np.multiply(weights[:,None], Tb))
     y = Tb.T.dot(wflux)
