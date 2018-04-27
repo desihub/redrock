@@ -28,18 +28,26 @@ class Spectrum(object):
         Rcsr (scipy.sparse.csr_matrix): the resolution matrix in CSR format.
 
     """
-    def __init__(self, wave, flux, ivar, R, Rcsr):
+    # @profile
+    def __init__(self, wave, flux, ivar, R, Rcsr=None):
         if R is not None:
-            w = np.asarray(R.sum(axis=1))[:,0]<constants.min_resolution_integral
+            # w = np.asarray(R.sum(axis=1))[:,0]<constants.min_resolution_integral
+            w = np.asarray(R.data.sum(axis=0))<constants.min_resolution_integral
             ivar[w] = 0.
         self.nwave = wave.size
         self.wave = wave
         self.flux = flux
         self.ivar = ivar
         self.R = R
-        self.Rcsr = Rcsr
+        self._Rcsr = Rcsr
         self._mpshared = False
         self.wavehash = hash((len(wave), wave[0], wave[1], wave[-2], wave[-1]))
+
+    @property
+    def Rcsr(self):
+        if self._Rcsr is None:
+            self._Rcsr = self.R.tocsr()
+        return self._Rcsr
 
     def sharedmem_pack(self):
         """Pack spectral data into multiprocessing shared memory.
@@ -57,11 +65,14 @@ class Spectrum(object):
             self.R_data = mp_array(self.R.data)
             del self.R
 
-            self._csrshape = self.Rcsr.shape
-            self.Rcsr_indices = mp_array(self.Rcsr.indices)
-            self.Rcsr_indptr = mp_array(self.Rcsr.indptr)
-            self.Rcsr_data = mp_array(self.Rcsr.data)
-            del self.Rcsr
+            if self._Rcsr is not None:
+                self._csrshape = self._Rcsr.shape
+                self.Rcsr_indices = mp_array(self._Rcsr.indices)
+                self.Rcsr_indptr = mp_array(self._Rcsr.indptr)
+                self.Rcsr_data = mp_array(self._Rcsr.data)
+                del self._Rcsr
+            else:
+                self.Rcsr_data = None
 
             self._mpshared = True
         return
@@ -79,12 +90,15 @@ class Spectrum(object):
             del self.R_data
             del self.R_offsets
 
-            self.Rcsr = scipy.sparse.csr_matrix((np.array(self.Rcsr_data),
-                np.array(self.Rcsr_indices), np.array(self.Rcsr_indptr)),
-                shape=self._csrshape)
-            del self.Rcsr_data
-            del self.Rcsr_indices
-            del self.Rcsr_indptr
+            if self.Rcsr_data is not None:
+                self._Rcsr = scipy.sparse.csr_matrix((np.array(self.Rcsr_data),
+                    np.array(self.Rcsr_indices), np.array(self.Rcsr_indptr)),
+                    shape=self._csrshape)
+                del self.Rcsr_data
+                del self.Rcsr_indices
+                del self.Rcsr_indptr
+            else:
+                self._Rcsr = None
 
             self._mpshared = False
         return
@@ -112,8 +126,13 @@ class Target(object):
         if coadd:
             self.compute_coadd()
 
-    def compute_coadd(self):
+    ### @profile
+    def compute_coadd(self, cache_Rcsr):
         """Compute the coadd from the current spectra list.
+
+        Args:
+            cache_Rcsr: pre-calculate and cache sparse CSR format of
+                resolution matrix R
 
         This method REPLACES the list of individual spectra with coadds.
         """
@@ -123,7 +142,8 @@ class Target(object):
             unweightedflux = None
             weightedflux = None
             weights = None
-            R = None
+            Rdiags = None
+            offsets = None
             nspec = 0
             for s in self.spectra:
                 if s.wavehash != key: continue
@@ -133,27 +153,32 @@ class Target(object):
                     unweightedflux = np.copy(s.flux)
                     weightedflux = s.flux * s.ivar
                     weights = np.copy(s.ivar)
-                    n = len(s.ivar)
-                    W = scipy.sparse.dia_matrix((s.ivar, [0,]), (n,n))
-                    weightedR = W * s.R
+                    Rdiags = s.R.data * s.ivar
+                    offsets = s.R.offsets
                 else:
                     assert len(s.ivar) == n
                     unweightedflux += s.flux
                     weightedflux += s.flux * s.ivar
                     weights += s.ivar
-                    W = scipy.sparse.dia_matrix((s.ivar, [0,]), (n,n))
-                    weightedR += W * s.R
+                    Rdiags += s.R.data * s.ivar
 
             isbad = (weights == 0)
             flux = weightedflux / (weights + isbad)
             flux[isbad] = unweightedflux[isbad] / nspec
-            Winv = scipy.sparse.dia_matrix((1/(weights+isbad),
-                [0,]), (n,n))
-            R = Winv * weightedR
-            R = R.todia()
-            Rcsr = R.tocsr()
+
+            Rdiags /= (weights + isbad)
+            nwave = Rdiags.shape[1]
+            R = scipy.sparse.dia_matrix((Rdiags, offsets),
+                                            shape=(nwave, nwave))
+
+            if cache_Rcsr:
+                Rcsr = R.tocsr()
+            else:
+                Rcsr = None
+
             spc = Spectrum(wave, flux, weights, R, Rcsr)
             coadd.append(spc)
+
         # swap the coadds into place.
         self.spectra = coadd
         return

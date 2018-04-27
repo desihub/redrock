@@ -80,10 +80,13 @@ class DistTargetsDESI(DistTargets):
         n_target (int): (optional) number of targets to consider in each file.
             Useful for debugging / testing.
         comm (mpi4py.MPI.Comm): (optional) the MPI communicator.
+        cache_Rcsr: pre-calculate and cache sparse CSR format of resolution
+            matrix R
     """
 
+    ### @profile
     def __init__(self, spectrafiles, coadd=True, targetids=None,
-        first_target=None, n_target=None, comm=None):
+        first_target=None, n_target=None, comm=None, cache_Rcsr=False):
 
         comm_size = 1
         comm_rank = 0
@@ -258,6 +261,7 @@ class DistTargetsDESI(DistTargets):
             exps = set()
             bname = None
             for sfile in spectrafiles:
+                hastileid = ("TILEID" in self._fmaps[sfile].colnames)
                 for b in self._bands[sfile]:
                     if t in self._target_specs[sfile]:
                         nspec = len(self._target_specs[sfile][t])
@@ -267,7 +271,7 @@ class DistTargetsDESI(DistTargets):
                             if bname is None:
                                 bname = frow["BRICKNAME"]
                             exps.add(frow["EXPID"])
-                            if "TILEID" in frow.dtype.names:
+                            if hastileid:
                                 tileids.add(frow["TILEID"])
                             speclist.append(Spectrum(self._wave[sfile][b],
                                 None, None, None, None))
@@ -374,10 +378,10 @@ class DistTargetsDESI(DistTargets):
                     if t in self._target_specs[sfile]:
                         for trow in self._target_specs[sfile][t]:
                             dia = Resolution(hdata[trow].astype(np.float64))
-                            csr = dia.tocsr()
                             self._my_data[toff].spectra[tspec_res[t]].R = dia
-                            self._my_data[toff].spectra[tspec_res[t]].Rcsr = \
-                                csr
+                            #- Coadds replace Rcsr so only compute if not coadding
+                            if not coadd and cache_Rcsr:
+                                self._my_data[toff].spectra[tspec_res[t]].Rcsr = dia.tocsr()
                             tspec_res[t] += 1
                     toff += 1
 
@@ -390,7 +394,7 @@ class DistTargetsDESI(DistTargets):
 
         if coadd:
             for t in self._my_data:
-                t.compute_coadd()
+                t.compute_coadd(cache_Rcsr)
 
         self.fibermap = Table(np.hstack([ self._fmaps[x] \
             for x in self._spectrafiles ]))
@@ -561,7 +565,7 @@ def rrdesi(options=None, comm=None):
         # stored in shared memory.
         targets = DistTargetsDESI(args.infiles, coadd=(not args.allspec),
             targetids=targetids, first_target=first_target, n_target=n_target,
-            comm=comm)
+            comm=comm, cache_Rcsr=True)
 
         # Get the dictionary of wavelength grids
         dwave = targets.wavegrids()
