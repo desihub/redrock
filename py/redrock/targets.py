@@ -127,7 +127,7 @@ class Target(object):
             self.compute_coadd()
 
     ### @profile
-    def compute_coadd(self, cache_Rcsr):
+    def compute_coadd(self, cache_Rcsr=False):
         """Compute the coadd from the current spectra list.
 
         Args:
