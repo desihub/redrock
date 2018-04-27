@@ -156,7 +156,7 @@ class Target(object):
                     Rdiags = s.R.data * s.ivar
                     offsets = s.R.offsets
                 else:
-                    assert len(s.ivar) == n
+                    assert len(s.ivar) == len(weightedflux)
                     unweightedflux += s.flux
                     weightedflux += s.flux * s.ivar
                     weights += s.ivar
