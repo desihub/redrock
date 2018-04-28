@@ -64,9 +64,9 @@ def write_zbest(outfile, zbest):
     hx.writeto(outfile, overwrite=True)
     return
 
-
+### @profile
 def read_spectra(spplate_name, targetids=None, use_frames=False,
-    fiberid=None, coadd=False):
+    fiberid=None, coadd=False, cache_Rcsr=False):
     """Read targets from a list of spectra files
 
     Args:
@@ -75,6 +75,8 @@ def read_spectra(spplate_name, targetids=None, use_frames=False,
         use_frames (bool): if True, use frames.
         fiberid (int): Use this fiber ID.
         coadd (bool): if True, compute and use the coadds.
+        cache_Rcsr (bool): pre-calculate and cache sparse CSR format of
+            resolution matrix R
 
     Returns:
         tuple: (targets, meta) where targets is a list of Target objects and
@@ -178,10 +180,21 @@ def read_spectra(spplate_name, targetids=None, use_frames=False,
                 else:
                     reso[idiag,nbins-len(d):nbins]=np.exp(-d/2/wd[i,nbins-len(d):nbins]**2)
 
-            R = Resolution(reso)
-            ccd = sparse.spdiags(1./R.sum(axis=1).T, 0, *R.shape)
-            R = (ccd*R).todia()
-            dic_spectra[t].append(Spectrum(la[i], fl[i], iv[i], R, R.tocsr()))
+            # R = Resolution(reso)
+            # ccd = sparse.spdiags(1./R.sum(axis=1).T, 0, *R.shape)
+            # R = (ccd*R).todia()
+
+            reso /= np.sum(reso, axis=0)
+            offsets = ndiag//2 - np.arange(ndiag)
+            nwave = reso.shape[1]
+            R = sparse.dia_matrix((reso, offsets), (nwave, nwave))
+
+            if cache_Rcsr:
+                Rcsr = R.tocsr()
+            else:
+                Rcsr = None
+
+            dic_spectra[t].append(Spectrum(la[i], fl[i], iv[i], R, Rcsr))
 
         h.close()
         print("DEBUG: read {} ".format(infile))
@@ -206,9 +219,14 @@ def read_spectra(spplate_name, targetids=None, use_frames=False,
     #- in the future
     assert len(bricknames.keys()) == len(targets)
 
-    metatable = Table(names=("TARGETID", "BRICKNAME"), dtype=("i8", "S8",))
-    for t in targetids:
-        metatable.add_row( (t, bricknames[t]) )
+    metatable = Table()
+    metatable['TARGETID'] = targetids
+    bx = np.array([bricknames[t] for t in targetids], dtype='S8')
+    metatable['BRICKNAME'] = bx
+
+    # metatable = Table(names=("TARGETID", "BRICKNAME"), dtype=("i8", "S8",))
+    # for i, t in enumerate(targetids):
+    #     metatable.add_row( (t, bricknames[t]) )
 
     return targets, metatable
 
@@ -355,7 +373,8 @@ def rrboss(options=None, comm=None):
         # Each target contains metadata which is propagated to the output zbest
         # table though.
         targets, meta = read_spectra(args.spplate, targetids=targetids,
-            use_frames=args.use_frames, coadd=(not args.allspec))
+            use_frames=args.use_frames, coadd=(not args.allspec),
+            cache_Rcsr=True)
 
         if args.ntargets is not None:
             targets = targets[first_target:first_target+n_targets]
