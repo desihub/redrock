@@ -325,6 +325,7 @@ def run_redrock(args, comm=None):
         elif args.datatype == 'boss':
             cmd = 'rrboss --spplate {}'.format(specfiles[i])
 
+        cmd += ' --nminima {}'.format(args.nminima)
         cmd += ' -o {} --zbest {}'.format(rrfiles[i], zbfiles[i])
         logfile = rrfiles[i].replace('.h5', '.log')
         assert logfile != rrfiles[i]
@@ -390,6 +391,7 @@ def main():
     parser.add_argument("--nompi", action="store_true", help="Do not use MPI parallelism")
     parser.add_argument("--dryrun", action="store_true", help="Generate but don't run commands")
     parser.add_argument("--maxnodes", type=int, default=256, help="maximum number of nodes to use")
+    parser.add_argument("--nminima", type=int, default=3, help="number of zchi2 minima to keep per template type")
     parser.add_argument("--plan", action="store_true", help="plan how many nodes to use and pixel distribution")
     parser.add_argument("--datatype", type=str, default='desi',
         help="desi (default) or boss", choices=['desi', 'boss'])
