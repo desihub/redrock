@@ -81,3 +81,4 @@ setenv [string toupper $product] $PRODUCT_DIR
 setenv KMP_AFFINITY disabled
 setenv MPICH_GNI_FORK_MODE FULLCOPY
 setenv OMP_NUM_THREADS 1
+setenv HDF5_USE_FILE_LOCKING FALSE
