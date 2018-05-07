@@ -28,7 +28,7 @@ parser = optparse.OptionParser(usage = "%prog [options]")
 parser.add_option("-o", "--outfile", type=str,  help="Output filename")
 parser.add_option("--niter", type=int,  help="Number of EMPCA iterations to run [%default]", default=5)
 parser.add_option("--nvec", type=int,  help="Number of basis vectors to generate [%default]", default=5)
-parser.add_option("--seed", type=int, help="Seed for desisim.templates.ELG and LRG [%default]", default=1234567)
+parser.add_option("--seed", type=int, help="Seed for WD(subtype='..').make_templates [%default]", default=1234567)
 
 opts, args = parser.parse_args()
 
@@ -41,11 +41,20 @@ if opts.outfile is None:
 #- Generate templates and resample to 0.1A grid
 dw = 0.1
 wave = np.arange(3000, 11000+dw/2, dw)
-nstar = 10000
-tflux, twave, meta = WD().make_templates(nstar, restframe=True,seed=opts.seed)
-flux = np.zeros((nstar, len(wave)))
-for i in range(nstar):
-    flux[i] = resample_flux(wave, twave, tflux[i])
+nstar_DA = 10000
+nstar_DB = 10000
+
+tflux, twave, meta = WD(subtype='DA').make_templates(nstar_DA, restframe=True,seed=opts.seed)
+flux_DA = np.zeros((nstar_DA, len(wave)))
+for i in range(nstar_DA):
+    flux_DA[i] = resample_flux(wave, twave, tflux[i])
+
+tflux, twave, meta = WD(subtype='DB').make_templates(nstar_DB, restframe=True,seed=opts.seed+nstar_DA)
+flux_DB = np.zeros((nstar_DB, len(wave)))
+for i in range(nstar_DB):
+    flux_DB[i] = resample_flux(wave, twave, tflux[i])
+
+flux = np.vstack([flux_DA,flux_DB])
 
 #- Normalize spectra so that PCA captures variance rather than normalization
 for i in range(flux.shape[0]):
