@@ -2,12 +2,27 @@
 redrock Change Log
 ==================
 
-0.10.2 (unreleased)
+0.11.1 (unreleased)
+-------------------
+
+* No changes yet
+
+0.11.0 (2018-05-10)
 -------------------
 
 * Catch LinAlgErrors from bad input data (PR `#109`_).
+* Add --nminima option (PR `#113`_).
+* Improve spectra reading speed (PR `#114`_).
+* hdf5 file locking workaround (PR `#116`_).
+* Fix MPI version of LyA transmission correction (PR `#117`_).
+* WD DA and DB templates (PR `#118`_).
 
 .. _`#109`: https://github.com/desihub/redrock/pull/109
+.. _`#113`: https://github.com/desihub/redrock/pull/113
+.. _`#114`: https://github.com/desihub/redrock/pull/114
+.. _`#116`: https://github.com/desihub/redrock/pull/116
+.. _`#117`: https://github.com/desihub/redrock/pull/117
+.. _`#118`: https://github.com/desihub/redrock/pull/118
 
 0.10.1 (2018-03-30)
 -------------------
