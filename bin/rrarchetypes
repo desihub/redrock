@@ -1,0 +1,204 @@
+#!/usr/bin/env python
+
+import os
+import scipy as sp
+import fitsio
+import argparse
+
+from desisim.templates import ELG, LRG, BGS, STAR, WD
+from desispec.interpolation import resample_flux
+from desisim.archetypes import ArcheTypes
+
+
+def compute_chi2(flux):
+    """Compute the chi2 between all the input spectra
+
+    Args:
+        flux (float array): Array (nSpec,nPixel) with each spectra on the same
+            wavenlength grid
+    Returns:
+        chi2 (float array): Chi2 (nSpec,nSpec) between all spectra
+
+    """
+
+    nspec, npix = flux.shape
+
+    chi2 = sp.zeros((nspec, nspec))
+    flux *= sp.sqrt(npix/sp.sum(flux**2,axis=1))[:,None]
+
+    for ii in range(nspec):
+        if ii%50==0: print('Computing chi2 matrix {} over {}'.format(ii,nspec))
+        amp1 = sp.sum(flux[ii]*flux,axis=1)/npix
+        chi2[ii,:] = npix*(1.-amp1**2)
+        chi2[ii,ii] = 0.
+
+    return chi2
+def get_stars(nb,wave):
+    """Get the stars spectra
+
+    Args:
+        nb (int): Number of spectra
+        wave (float array): Rest-Frame wavelength grid in Angstrom
+    Returns:
+        flux (float array): Each spectra (nSpec,nPixel) on the same
+            wavenlength grid
+        subtype (str array): Subtype of each spectra
+
+    """
+
+    def subtype_star(temp):
+        if temp>30000.:
+            print('ERROR: No subtype')
+        elif temp>10000.:
+            return 'B'
+        elif temp>7500.:
+            return 'A'
+        elif temp>6000.:
+            return 'F'
+        elif temp>5200.:
+            return 'G'
+        elif temp>3700.:
+            return 'K'
+        elif temp>2400.:
+            return 'M'
+        else:
+            print('ERROR: No subtype')
+
+    ###
+    data = {}
+    seed = 1234
+
+    ###
+    data['STAR'] = {}
+    data['WD_DA'] = {}
+    data['WD_DB'] = {}
+    data['STAR']['NB'] = int(0.5*nb)
+    data['WD_DA']['NB'] = int(0.25*nb)
+    data['WD_DB']['NB'] = nb-data['STAR']['NB']-data['WD_DA']['NB']
+
+    tseed = seed
+    data['STAR']['FLUX'], data['STAR']['WAVE'], data['STAR']['META'] = STAR().make_templates(data['STAR']['NB'], restframe=True,seed=tseed)
+
+    tseed = seed+data['STAR']['NB']
+    data['WD_DA']['FLUX'], data['WD_DA']['WAVE'], data['WD_DA']['META'] = WD(subtype='DA').make_templates(data['WD_DA']['NB'], restframe=True,seed=tseed)
+
+    tseed = seed+data['STAR']['NB']+data['WD_DA']['NB']
+    data['WD_DB']['FLUX'], data['WD_DB']['WAVE'], data['WD_DB']['META'] = WD(subtype='DB').make_templates(data['WD_DB']['NB'], restframe=True,seed=tseed)
+
+    ###
+    nTot = sp.sum([ data[k]['NB'] for k in list(data.keys()) ])
+
+    ### On same grid
+    i = 0
+    flux = sp.zeros((nTot, wave.size))
+    subtype = sp.array(['00000']*nTot, dtype='S5')
+    for k in list(data.keys()):
+        for j in range(data[k]['NB']):
+            if k=='STAR':
+                subtype[i] = subtype_star(data[k]['META'][j]['TEFF'])
+            else:
+                subtype[i] = k
+            flux[i] = resample_flux(wave, data[k]['WAVE'], data[k]['FLUX'][j])
+            i += 1
+
+    return flux, subtype
+def get_galaxies(nb,wave):
+    """Get the galaxy spectra
+
+    Args:
+        nb (int): Number of spectra
+        wave (float array): Rest-Frame wavelength grid in Angstrom
+    Returns:
+        flux (float array): Each spectra (nSpec,nPixel) on the same
+            wavenlength grid
+        subtype (string array): Subtype of each spectra
+
+    """
+
+    ###
+    seed = 12345
+    data = {}
+
+    ###
+    data['ELG'] = {}
+    data['LRG'] = {}
+    data['BGS'] = {}
+    data['ELG']['NB'] = int(1./3.*nb)
+    data['LRG']['NB'] = int(1./3.*nb)
+    data['BGS']['NB'] = nb-data['ELG']['NB']-data['LRG']['NB']
+
+    tseed = seed
+    data['ELG']['FLUX'], data['ELG']['WAVE'], data['ELG']['META'] = ELG().make_templates(data['ELG']['NB'],restframe=True,nocolorcuts=True,seed=tseed)
+
+    tseed = seed+data['ELG']['NB']
+    data['LRG']['FLUX'], data['LRG']['WAVE'], data['LRG']['META'] = LRG().make_templates(data['LRG']['NB'],restframe=True,nocolorcuts=True,seed=tseed)
+
+    tseed = seed+data['ELG']['NB']+data['LRG']['NB']
+    data['BGS']['FLUX'], data['BGS']['WAVE'], data['BGS']['META'] = BGS().make_templates(data['BGS']['NB'],restframe=True,nocolorcuts=True,seed=tseed)
+
+    ###
+    nTot = sp.sum([ data[k]['NB'] for k in list(data.keys()) ])
+
+    ### On same grid
+    i = 0
+    flux = sp.zeros((nTot, wave.size))
+    subtype = sp.array(['00000']*nTot, dtype='S5')
+    for k in list(data.keys()):
+        for j in range(data[k]['NB']):
+            subtype[i] = k
+            flux[i] = resample_flux(wave, data[k]['WAVE'], data[k]['FLUX'][j])
+            i += 1
+
+    return flux, subtype
+
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description='Get archetype for the given spectype')
+
+    parser.add_argument('--spectype', type=str, default=None, required=True,
+        help = "Spectype: 'STAR' or 'GALAXY'")
+
+    parser.add_argument('--out', type=str, default=None, required=True,
+        help = 'Output file name')
+
+    parser.add_argument('--nb', type=int, default=1000, required=False,
+        help = 'Number of spectra to generate')
+
+    parser.add_argument('--chi2-thresh', type=float, default=10**2.5, required=False,
+        help = 'Threshold for the chi2')
+
+    args = parser.parse_args()
+
+    ###
+    dw = 0.1
+    if args.spectype=='STAR':
+        wave = sp.arange(3000., 11000.+dw/2., dw)
+        flux, subtype = get_stars(args.nb,wave)
+    elif args.spectype=='GALAXY':
+        wave = sp.arange(3500./(1.+1.85), 11000.+dw/2., dw)
+        flux, subtype = get_galaxies(args.nb,wave)
+
+    ###
+    chi2 = compute_chi2(flux)
+    Arch = ArcheTypes(chi2)
+    iarch, resp, respindx = Arch.get_archetypes(chi2_thresh=args.chi2_thresh, responsibility=True)
+    print('Generated {} archetypes.'.format(iarch.size))
+
+    ###
+    sort = resp.argsort()[::-1]
+    resp = resp[sort]/resp.sum()
+    subtype = (subtype[iarch])[sort]
+    flux = (flux[iarch,:])[sort]
+    flux /= sp.median(flux,axis=1)[:,None]
+
+    ###
+    header = {}
+    header['CRVAL1'] = wave[0]
+    header['CDELT1'] = dw
+    header['RRTYPE'] = args.spectype
+    header['INSPEC'] = os.environ['DESI_BASIS_TEMPLATES']
+    out = fitsio.FITS(args.out,'rw',clobber=True)
+    out.write([flux,resp,subtype],names=['ARCHETYPE','RESP','SUBTYPE'],extname='ARCHETYPES',header=header)
+    out.close()
