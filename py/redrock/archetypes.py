@@ -14,9 +14,6 @@ class Archetype():
 
     """
     def __init__(self, filename):
-        """
-
-        """
 
         ### Load the file
         h = fitsio.FITS(filename)
@@ -38,12 +35,34 @@ class Archetype():
         self._full_type[self._subtype==''] = self._rrtype
 
         ### Dic of templates
-        self.archetype = {}
-        self.archetype['INTERP'] = sp.array([None]*self._narch)
+        self._archetype = {}
+        self._archetype['INTERP'] = sp.array([None]*self._narch)
         for i in range(self._narch):
-            self.archetype['INTERP'][i] = interp1d(self.wave,self.flux[i,:],fill_value='extrapolate',kind='linear')
+            self._archetype['INTERP'][i] = interp1d(self.wave,self.flux[i,:],fill_value='extrapolate',kind='linear')
 
         return
+class All_archetypes():
+    """
+
+    """
+    def __init__(self, lstfilename=None, archetypes_dir=None):
+
+        ### Get list of path to archetype
+        if lstfilename is None:
+            lstfilename = find_archetypes(archetypes_dir)
+
+        ### Load archetype
+        self.lst_archetypes = {}
+        self.archetypes = {}
+        for f in lstfilename:
+            archetype = Archetype(f)
+            self.lst_archetypes[archetype._rrtype] = archetype
+            self.archetypes[archetype._rrtype] = {}
+            self.archetypes[archetype._rrtype]['SUBTYPE'] = archetype._subtype
+            self.archetypes[archetype._rrtype]['INTERP'] = archetype._archetype
+
+        return
+
 
 def find_archetypes(archetypes_dir=None):
     """Return list of rrarchetype-\*.fits archetype files
@@ -72,3 +91,4 @@ def find_archetypes(archetypes_dir=None):
                 raise IOError("ERROR: can't find archetypes_dir, $RR_ARCHETYPE_DIR, or {rrcode}/archetypes/")
 
     return sorted(glob(os.path.join(archetypes_dir, 'rrarchetype-*.fits')))
+

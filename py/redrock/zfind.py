@@ -26,6 +26,8 @@ from .targets import Spectrum, Target, DistTargets, distribute_targets
 
 from .templates import Template, DistTemplate
 
+from .archetypes import All_archetypes
+
 from .zscan import calc_zchi2_targets
 
 from .fitz import fitz, get_dv
@@ -84,6 +86,11 @@ def zfind(targets, templates, mp_procs=1, nminima=3):
             for a limited set of minima.
 
     """
+
+
+    # Get list archetype
+    archetypes = redrock.archetypes.All_archetypes().archetypes
+
 
     # Find most likely candidate redshifts by scanning over the
     # pre-interpolated templates on a coarse redshift spacing.
