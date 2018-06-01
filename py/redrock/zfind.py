@@ -88,9 +88,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3):
     """
 
 
-    # Get list archetype
-    archetypes = redrock.archetypes.All_archetypes().archetypes
-
+    archetypes = All_archetypes()
 
     # Find most likely candidate redshifts by scanning over the
     # pre-interpolated templates on a coarse redshift spacing.
@@ -263,6 +261,15 @@ def zfind(targets, templates, mp_procs=1, nminima=3):
                 #- grouping by spectype could get chi2 out of order; resort
                 tzfit.sort('chi2')
 
+            #
+            # Use archetypes to resort
+            #
+            wave = np.arange(3600.,7235.,0.1)
+            flux = np.ones(wave.size)
+            ivar = np.ones(wave.size)
+            archetypes.get_best_archetype(wave,flux,ivar,tzfit)
+
+            # Store
             allzfit.append(tzfit)
 
         allzfit = astropy.table.vstack(allzfit)
