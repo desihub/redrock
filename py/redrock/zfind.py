@@ -261,13 +261,8 @@ def zfind(targets, templates, mp_procs=1, nminima=3):
                 #- grouping by spectype could get chi2 out of order; resort
                 tzfit.sort('chi2')
 
-            #
             # Use archetypes to resort
-            #
-            wave = np.arange(3600.,7235.,0.1)
-            flux = np.ones(wave.size)
-            ivar = np.ones(wave.size)
-            archetypes.get_best_archetype(wave,flux,ivar,tzfit)
+            archetypes.get_best_archetype(targets.local()[tid].spectra,tzfit)
 
             # Store
             allzfit.append(tzfit)

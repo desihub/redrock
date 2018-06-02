@@ -68,7 +68,7 @@ class Archetype():
                 paramBest = zcoeff
                 iBest = i
 
-        return chi2Best, paramBest, self._subtype[i]
+        return chi2Best, paramBest, self._subtype[iBest]
 class All_archetypes():
     """
 
@@ -86,10 +86,14 @@ class All_archetypes():
             self.archetypes[archetype._rrtype] = archetype
 
         return
-    def get_best_archetype(self,wave,flux,ivar,tzfit):
+    def get_best_archetype(self,spectra,tzfit):
         """
 
         """
+
+        wave = sp.concatenate([ spec.wave for spec in spectra ])
+        flux = sp.concatenate([ spec.flux for spec in spectra ])
+        ivar = sp.concatenate([ spec.ivar for spec in spectra ])
 
         ### TODO: set this as a parameter
         deg_legendre = 3
@@ -104,6 +108,7 @@ class All_archetypes():
             tzfit_arch[znum]['spectype'] = res['spectype']
             tzfit_arch[znum]['chi2'], tzfit_arch[znum]['coeff'], tzfit_arch[znum]['subtype'] = \
                 self.archetypes[res['spectype']].get_best_archetype(wave,flux,ivar,res['z'],legendre)
+
         '''
         chi2 = sp.array([ tzfit_arch[znum]['chi2'] for znum in tzfit_arch ])
         new_min_idx = sp.array([ znum for znum in tzfit_arch ])[chi2==chi2.min()][0]
