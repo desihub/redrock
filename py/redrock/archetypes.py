@@ -12,6 +12,8 @@ from scipy import special
 
 from .zscan import spectral_data
 
+from ._zscan import _zchi2_one
+
 class Archetype():
     """
 
@@ -20,8 +22,6 @@ class Archetype():
 
         ### Load the file
         h = fitsio.FITS(filename)
-
-        print("hello")
 
         hdr = h['ARCHETYPES'].read_header()
         self.flux = sp.array(h['ARCHETYPES']['ARCHETYPE'][:])
@@ -48,18 +48,18 @@ class Archetype():
         return
 
     def get_best_archetype(self,spectra,weights,flux,wflux,dwave,z,legendre):
+        """
 
+        """
         wave = sp.concatenate([ spec.wave for spec in spectra ])
         waveRF = wave/(1.+z)
 
-        zzchi2 = sp.zeros(self._narch, dtype=sp.float64)
-        zzcoeff = sp.zeros((self._narch, 1+legendre.shape[1]), dtype=sp.float64)
-
         leg = sp.concatenate([ v for v in legendre.values() ]).transpose()
         Tb = sp.append( sp.zeros((flux.size,1)),leg, axis=1 )
+        nbasis = 1+leg.shape[1]
 
-        for i in range(4):
-            plt.plot(wave,Tb[:,i])
+        zzchi2 = sp.zeros(self._narch, dtype=sp.float64)
+        zzcoeff = sp.zeros((self._narch, nbasis), dtype=sp.float64)
 
         for i, arch in enumerate(self._archetype['INTERP']):
 
@@ -68,24 +68,22 @@ class Archetype():
 
             Tb[:,0] = arch(waveRF)
 
-            M = Tb.T.dot(sp.multiply(weights[:,None], Tb))
-            y = Tb.T.dot(wflux)
-            try:
-                zcoeff = sp.linalg.solve(M, y)
-            except sp.linalg.LinAlgError:
-                return 9e99
-
-            model = Tb.dot(zcoeff)
-
-            zzchi2[i] = sp.dot( (flux - model)**2, weights )
+            zcoeff = sp.zeros(nbasis, dtype=sp.float64)
+            zzchi2[i] = _zchi2_one(Tb, weights, flux, wflux, zcoeff)
             zzcoeff[i] = zcoeff
 
         iBest = sp.argmin(zzchi2)
 
-        plt.plot(wave,flux)
-        plt.plot(wave,self._archetype['INTERP'][iBest](waveRF))
+        #'''
+        import matplotlib.pyplot as plt
+        plt.plot(wave,flux,color='black')
+        Tb[:,0] = self._archetype['INTERP'][iBest](waveRF)
+        model = Tb.dot(zzcoeff[iBest])
+        plt.plot(wave,model,color='blue',linewidth=4)
+        plt.title(self._rrtype+' '+self._subtype[iBest]+': z = '+str(z))
         plt.grid()
         plt.show()
+        #'''
 
         return zzchi2[iBest], zzcoeff[iBest], self._subtype[iBest]
 class All_archetypes():

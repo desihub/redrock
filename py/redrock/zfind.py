@@ -206,7 +206,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3):
         #     ft = t.template.full_type
 
         allzfit = list()
-        for tid in targets.all_target_ids:
+        for tid_idx, tid in enumerate(targets.all_target_ids):
             tzfit = list()
             for fulltype in allresults[tid]:
                 if fulltype == 'meta':
@@ -261,8 +261,8 @@ def zfind(targets, templates, mp_procs=1, nminima=3):
                 #- grouping by spectype could get chi2 out of order; resort
                 tzfit.sort('chi2')
 
-            # Use archetypes to resort
-            archetypes.get_best_archetype(targets.local()[tid].spectra,tzfit)
+            # Use archetypes to sort the best fits
+            archetypes.get_best_archetype(targets.local()[tid_idx].spectra,tzfit)
 
             # Store
             allzfit.append(tzfit)
