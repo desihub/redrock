@@ -9,7 +9,8 @@ import fitsio
 import scipy as sp
 from scipy.interpolate import interp1d
 from scipy import special
-import numba
+
+from .zscan import spectral_data
 
 class Archetype():
     """
@@ -19,6 +20,8 @@ class Archetype():
 
         ### Load the file
         h = fitsio.FITS(filename)
+
+        print("hello")
 
         hdr = h['ARCHETYPES'].read_header()
         self.flux = sp.array(h['ARCHETYPES']['ARCHETYPE'][:])
@@ -44,31 +47,47 @@ class Archetype():
 
         return
 
-    def get_best_archetype(self,wave,flux,ivar,z,legendre):
+    def get_best_archetype(self,spectra,weights,flux,wflux,dwave,z,legendre):
 
-        chi2Best = None
-        iBest = None
-        paramBest = None
-
+        wave = sp.concatenate([ spec.wave for spec in spectra ])
         waveRF = wave/(1.+z)
-        Tb = sp.append( sp.zeros((flux.size,1)),legendre, axis=1 )
+
+        zzchi2 = sp.zeros(self._narch, dtype=sp.float64)
+        zzcoeff = sp.zeros((self._narch, 1+legendre.shape[1]), dtype=sp.float64)
+
+        leg = sp.concatenate([ v for v in legendre.values() ]).transpose()
+        Tb = sp.append( sp.zeros((flux.size,1)),leg, axis=1 )
+
+        for i in range(4):
+            plt.plot(wave,Tb[:,i])
 
         for i, arch in enumerate(self._archetype['INTERP']):
 
+            #binned = rebin_template(template, z, dwave)
+            #zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux, wflux, binned)
+
             Tb[:,0] = arch(waveRF)
 
-            M = Tb.T.dot(sp.multiply(ivar[:,None], Tb))
-            y = Tb.T.dot(flux*ivar)
-            zcoeff = sp.linalg.solve(M, y)
-            m = Tb.dot(zcoeff)
-            fval = sp.sum( (flux-m)**2*ivar )
+            M = Tb.T.dot(sp.multiply(weights[:,None], Tb))
+            y = Tb.T.dot(wflux)
+            try:
+                zcoeff = sp.linalg.solve(M, y)
+            except sp.linalg.LinAlgError:
+                return 9e99
 
-            if chi2Best is None or chi2Best>fval:
-                chi2Best = fval
-                paramBest = zcoeff
-                iBest = i
+            model = Tb.dot(zcoeff)
 
-        return chi2Best, paramBest, self._subtype[iBest]
+            zzchi2[i] = sp.dot( (flux - model)**2, weights )
+            zzcoeff[i] = zcoeff
+
+        iBest = sp.argmin(zzchi2)
+
+        plt.plot(wave,flux)
+        plt.plot(wave,self._archetype['INTERP'][iBest](waveRF))
+        plt.grid()
+        plt.show()
+
+        return zzchi2[iBest], zzcoeff[iBest], self._subtype[iBest]
 class All_archetypes():
     """
 
@@ -90,15 +109,20 @@ class All_archetypes():
         """
 
         """
-
-        wave = sp.concatenate([ spec.wave for spec in spectra ])
-        flux = sp.concatenate([ spec.flux for spec in spectra ])
-        ivar = sp.concatenate([ spec.ivar for spec in spectra ])
-
         ### TODO: set this as a parameter
         deg_legendre = 3
-        waveLegendre = (wave-wave[0])/(wave[-1]-wave[0])*2.-1.
-        legendre = sp.array([ special.legendre(i)(waveLegendre) for i in range(deg_legendre) ]).transpose()
+
+        # Build dictionary of wavelength grids
+        wave = sp.concatenate([ spec.wave for spec in spectra ])
+        dwave = {}
+        legendre = {}
+        for s in spectra:
+            if s.wavehash not in dwave:
+                dwave[s.wavehash] = s.wave
+                x = (s.wave-wave.min())/(wave.max()-wave.min())*2.-1.
+                legendre[s.wavehash] = sp.array( [special.legendre(i)(x) for i in range(deg_legendre) ] )
+
+        (weights, flux, wflux) = spectral_data(spectra)
 
         tzfit_arch = {}
         for res in tzfit:
@@ -107,7 +131,7 @@ class All_archetypes():
             tzfit_arch[znum]['zwarn'] = res['zwarn']
             tzfit_arch[znum]['spectype'] = res['spectype']
             tzfit_arch[znum]['chi2'], tzfit_arch[znum]['coeff'], tzfit_arch[znum]['subtype'] = \
-                self.archetypes[res['spectype']].get_best_archetype(wave,flux,ivar,res['z'],legendre)
+                self.archetypes[res['spectype']].get_best_archetype(spectra, weights, flux, wflux, dwave, res['z'], legendre)
 
         '''
         chi2 = sp.array([ tzfit_arch[znum]['chi2'] for znum in tzfit_arch ])
@@ -155,4 +179,3 @@ def find_archetypes(archetypes_dir=None):
                 raise IOError("ERROR: can't find archetypes_dir, $RR_ARCHETYPE_DIR, or {rrcode}/archetypes/")
 
     return sorted(glob(os.path.join(archetypes_dir, 'rrarchetype-*.fits')))
-
