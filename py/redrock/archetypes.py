@@ -5,12 +5,12 @@ Classes and functions for archetypes.
 import sys
 import os
 from glob import glob
-import fitsio
+from astropy.io import fits
 import scipy as sp
 from scipy.interpolate import interp1d
 from scipy import special
 
-from .zscan import spectral_data
+from .zscan import spectral_data, calc_zchi2_one
 
 from ._zscan import _zchi2_one
 
@@ -21,12 +21,12 @@ class Archetype():
     def __init__(self, filename):
 
         ### Load the file
-        h = fitsio.FITS(filename)
+        h = fits.open(filename, memmap=False)
 
-        hdr = h['ARCHETYPES'].read_header()
-        self.flux = sp.array(h['ARCHETYPES']['ARCHETYPE'][:])
+        hdr = h['ARCHETYPES'].header
+        self.flux = sp.array(h['ARCHETYPES'].data['ARCHETYPE'])
         self._rrtype = hdr['RRTYPE'].strip()
-        self._subtype = sp.array(sp.char.strip(h['ARCHETYPES']['SUBTYPE'][:].astype(str)))
+        self._subtype = sp.array(sp.char.strip(h['ARCHETYPES'].data['SUBTYPE'].astype(str)))
 
         self.wave = sp.asarray(hdr['CRVAL1'] + hdr['CDELT1']*sp.arange(self.flux.shape[1]))
         if 'LOGLAM' in hdr and hdr['LOGLAM'] != 0:
@@ -62,19 +62,16 @@ class Archetype():
         zzcoeff = sp.zeros((self._narch, nbasis), dtype=sp.float64)
 
         for i, arch in enumerate(self._archetype['INTERP']):
-
             #binned = rebin_template(template, z, dwave)
             #zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux, wflux, binned)
-
             Tb[:,0] = arch(waveRF)
-
             zcoeff = sp.zeros(nbasis, dtype=sp.float64)
             zzchi2[i] = _zchi2_one(Tb, weights, flux, wflux, zcoeff)
             zzcoeff[i] = zcoeff
 
         iBest = sp.argmin(zzchi2)
 
-        #'''
+        '''
         import matplotlib.pyplot as plt
         plt.plot(wave,flux,color='black')
         Tb[:,0] = self._archetype['INTERP'][iBest](waveRF)
@@ -83,7 +80,7 @@ class Archetype():
         plt.title(self._rrtype+' '+self._subtype[iBest]+': z = '+str(z))
         plt.grid()
         plt.show()
-        #'''
+        '''
 
         return zzchi2[iBest], zzcoeff[iBest], self._subtype[iBest]
 class All_archetypes():
@@ -126,10 +123,11 @@ class All_archetypes():
         for res in tzfit:
             znum = res['znum']
             tzfit_arch[znum] = {}
-            tzfit_arch[znum]['zwarn'] = res['zwarn']
-            tzfit_arch[znum]['spectype'] = res['spectype']
             tzfit_arch[znum]['chi2'], tzfit_arch[znum]['coeff'], tzfit_arch[znum]['subtype'] = \
                 self.archetypes[res['spectype']].get_best_archetype(spectra, weights, flux, wflux, dwave, res['z'], legendre)
+
+        print([ tzfit[znum]['chi2'] for znum in tzfit['znum'] ] )
+        print(' ')
 
         '''
         chi2 = sp.array([ tzfit_arch[znum]['chi2'] for znum in tzfit_arch ])
