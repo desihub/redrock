@@ -101,7 +101,12 @@ class PlotSpec(object):
         fulltype = zz['spectype']
         if zz['subtype'] != '':
             fulltype = fulltype+':::'+zz['subtype']
-        tp = self.templates[fulltype]
+        if fulltype in self.templates:
+            tp = self.templates[fulltype]
+        elif zz['spectype'] in self.templates:
+            tp = self.templates[zz['spectype']]
+        else:
+            print('WARNING: '+fulltype+' is not in template list')
 
         if tp.template_type != zz['spectype']:
             raise ValueError('spectype {} not in'
