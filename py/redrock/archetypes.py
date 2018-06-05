@@ -88,7 +88,7 @@ class Archetype():
 
         for i, arch in enumerate(self._archetype['INTERP']):
             # TODO: use rebin_template and calc_zchi2_one to use
-            # the resolution matrix and the different spectrograph
+            #   the resolution matrix and the different spectrograph
             #binned = rebin_template(template, z, dwave)
             #zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux, wflux, binned)
             Tb[:,0] = arch(waveRF)
@@ -97,6 +97,8 @@ class Archetype():
             zzcoeff[i] = zcoeff
 
         iBest = sp.argmin(zzchi2)
+        # TODO: should we look at the value of zzcoeff[0] and if negative
+        #   set the chi2 to very big?
 
         return zzchi2[iBest], zzcoeff[iBest], self._subtype[iBest]
 
