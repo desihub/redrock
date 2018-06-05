@@ -244,7 +244,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3):
                 alldeltachi2 = np.absolute(tzfit['chi2'][noti]-tzfit['chi2'][i])
                 alldv = np.absolute(get_dv(z=tzfit['z'][noti],
                     zref=tzfit['z'][i]))
-                zwarn = np.any( (alldeltachi2<9.) & \
+                zwarn = np.any( (alldeltachi2<constants.min_deltachi2) & \
                     (alldv>=constants.max_velo_diff) )
                 if zwarn:
                     tzfit['zwarn'][i] |= ZW.SMALL_DELTA_CHI2
@@ -261,8 +261,10 @@ def zfind(targets, templates, mp_procs=1, nminima=3):
                 #- grouping by spectype could get chi2 out of order; resort
                 tzfit.sort('chi2')
 
+            tzfit['znum'] = np.arange(len(tzfit))
+
             # Use archetypes to sort the best fits
-            archetypes.get_best_archetype(targets.local()[tid_idx].spectra,tzfit)
+            tzfit = archetypes.get_best_archetype(targets.local()[tid_idx].spectra,tzfit)
 
             # Store
             allzfit.append(tzfit)

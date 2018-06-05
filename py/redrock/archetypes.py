@@ -14,13 +14,24 @@ from .zscan import spectral_data, calc_zchi2_one
 
 from ._zscan import _zchi2_one
 
+from .fitz import fitz, get_dv
+
+from .zwarning import ZWarningMask as ZW
+
+from . import constants
+
 class Archetype():
-    """
+    """Class to store all different archetypes from the same spectype.
+
+    The archetype data are read from a redrock-format archetype file.
+
+    Args:
+        filename (str): the path to the archetype file
 
     """
     def __init__(self, filename):
 
-        ### Load the file
+        # Load the file
         h = fits.open(filename, memmap=False)
 
         hdr = h['ARCHETYPES'].header
@@ -39,7 +50,7 @@ class Archetype():
         self._full_type = sp.char.add(self._rrtype+':::',self._subtype)
         self._full_type[self._subtype==''] = self._rrtype
 
-        ### Dic of templates
+        # Dic of templates
         self._archetype = {}
         self._archetype['INTERP'] = sp.array([None]*self._narch)
         for i in range(self._narch):
@@ -48,7 +59,21 @@ class Archetype():
         return
 
     def get_best_archetype(self,spectra,weights,flux,wflux,dwave,z,legendre):
-        """
+        """Get the best archetype for the given redshift and spectype.
+
+        Args:
+            spectra (list): list of Spectrum objects.
+            weights (array): concatenated spectral weights (ivar).
+            flux (array): concatenated flux values.
+            wflux (array): concatenated weighted flux values.
+            dwave (dic): dictionary of wavelength grids
+            z (float): best redshift
+            legendre (dic): legendre polynomial
+
+        Returns:
+            chi2 (float): chi2 of best archetype
+            zcoef (array): zcoef of best archetype
+            subtype (str): subtype of best archetype
 
         """
         wave = sp.concatenate([ spec.wave for spec in spectra ])
@@ -71,29 +96,24 @@ class Archetype():
 
         iBest = sp.argmin(zzchi2)
 
-        '''
-        import matplotlib.pyplot as plt
-        plt.plot(wave,flux,color='black')
-        Tb[:,0] = self._archetype['INTERP'][iBest](waveRF)
-        model = Tb.dot(zzcoeff[iBest])
-        plt.plot(wave,model,color='blue',linewidth=4)
-        plt.title(self._rrtype+' '+self._subtype[iBest]+': z = '+str(z))
-        plt.grid()
-        plt.show()
-        '''
-
         return zzchi2[iBest], zzcoeff[iBest], self._subtype[iBest]
+
+
 class All_archetypes():
-    """
+    """Class to store all different archetypes of all the different spectype.
+
+    Args:
+        lstfilename (lst str): List of file to get the templates from
+        archetypes_dir (str): Directory to the archetypes
 
     """
     def __init__(self, lstfilename=None, archetypes_dir=None):
 
-        ### Get list of path to archetype
+        # Get list of path to archetype
         if lstfilename is None:
             lstfilename = find_archetypes(archetypes_dir)
 
-        ### Load archetype
+        # Load archetype
         self.archetypes = {}
         for f in lstfilename:
             archetype = Archetype(f)
@@ -101,10 +121,18 @@ class All_archetypes():
 
         return
     def get_best_archetype(self,spectra,tzfit):
-        """
+        """Rearange tzfit according to chi2 from archetype
+
+        Args:
+            spectra
+            tzfit (astropy.table):
+
+        Returns:
+            tzfit (astropy.table):
 
         """
-        ### TODO: set this as a parameter
+
+        # TODO: set this as a parameter
         deg_legendre = 3
 
         # Build dictionary of wavelength grids
@@ -119,34 +147,30 @@ class All_archetypes():
 
         (weights, flux, wflux) = spectral_data(spectra)
 
-        tzfit_arch = {}
+        # Fit each archetype
+        tzfit_arch = tzfit.copy()
         for res in tzfit:
+            chi2, coeff, subtype = self.archetypes[res['spectype']].get_best_archetype(spectra, weights, flux, wflux, dwave, res['z'], legendre)
             znum = res['znum']
-            tzfit_arch[znum] = {}
-            tzfit_arch[znum]['chi2'], tzfit_arch[znum]['coeff'], tzfit_arch[znum]['subtype'] = \
-                self.archetypes[res['spectype']].get_best_archetype(spectra, weights, flux, wflux, dwave, res['z'], legendre)
+            tzfit_arch[znum]['chi2'] = chi2
+            # TODO keep subtype? keep coeff?
 
-        print([ tzfit[znum]['chi2'] for znum in tzfit['znum'] ] )
-        print(' ')
+        tzfit_arch.sort('chi2')
+        tzfit_arch['znum'] = sp.arange(len(tzfit_arch))
+        tzfit_arch['deltachi2'] = sp.ediff1d(tzfit_arch['chi2'], to_end=0.0)
 
-        '''
-        chi2 = sp.array([ tzfit_arch[znum]['chi2'] for znum in tzfit_arch ])
-        new_min_idx = sp.array([ znum for znum in tzfit_arch ])[chi2==chi2.min()][0]
-        tz = tzfit_arch[new_min_idx]['z']
-        tchi2 = tzfit_arch[new_min_idx]['chi2']
+        #- set ZW.SMALL_DELTA_CHI2 flag
+        for i in range(len(tzfit_arch)-1):
+            noti = sp.arange(len(tzfit_arch))!=i
+            alldeltachi2 = sp.absolute(tzfit_arch['chi2'][noti]-tzfit_arch['chi2'][i])
+            alldv = sp.absolute(get_dv(z=tzfit_arch['z'][noti],zref=tzfit_arch['z'][i]))
+            zwarn = sp.any( (alldeltachi2<constants.min_deltachi2) & (alldv>=constants.max_velo_diff) )
+            if zwarn:
+                tzfit_arch['zwarn'][i] |= ZW.SMALL_DELTA_CHI2
+            elif tzfit_arch['zwarn'][i]&ZW.SMALL_DELTA_CHI2:
+                tzfit_arch['zwarn'][i] &= ~ZW.SMALL_DELTA_CHI2
 
-        noti = sp.arange(chi2.size)!=new_min_idx
-        dv = sp.absolute( sp.array([ get_dv(tzfit_arch[znum]['z'],tz) for znum in list(tzfit_arch.keys()) if znum!=new_min_idx ]) )
-        deltachi2 = sp.array([ tzfit_arch[znum]['chi2']-tchi2 for znum in list(tzfit_arch.keys()) if znum!=new_min_idx ])
-
-        dic_cat['Z'][i] = tz
-        dic_cat['SPECTYPE'][i] = tzfit_arch[new_min_idx]['SPECTYPE']
-        if sp.any( (deltachi2<9.) & (dv>=1000.) ):
-            dic_cat['ZWARN'][i] |= 2**2
-        elif dic_cat['ZWARN'][i] == 2**2:
-            dic_cat['ZWARN'][i] = 0
-        '''
-        return
+        return tzfit_arch
 
 def find_archetypes(archetypes_dir=None):
     """Return list of rrarchetype-\*.fits archetype files
