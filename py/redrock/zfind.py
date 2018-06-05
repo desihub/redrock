@@ -264,6 +264,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3):
             tzfit['znum'] = np.arange(len(tzfit))
 
             # Use archetypes to sort the best fits
+            print(tid_idx, tid)
             archetypes.get_best_archetype(targets.local()[tid_idx].spectra,tzfit)
 
             # Store

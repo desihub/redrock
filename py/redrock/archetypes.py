@@ -2,7 +2,6 @@
 Classes and functions for archetypes.
 """
 
-import sys
 import os
 from glob import glob
 from astropy.io import fits
@@ -10,11 +9,11 @@ import scipy as sp
 from scipy.interpolate import interp1d
 from scipy import special
 
-from .zscan import spectral_data, calc_zchi2_one
+from .zscan import spectral_data
 
 from ._zscan import _zchi2_one
 
-from .fitz import fitz, get_dv
+from .fitz import get_dv
 
 from .zwarning import ZWarningMask as ZW
 
@@ -154,7 +153,7 @@ class All_archetypes():
         # Fit each archetype
         for res in tzfit:
             # TODO keep coeff archetype?
-            res['chi2'], coeff, res['subtype'] = self.archetypes[res['spectype']].get_best_archetype(spectra,
+            res['chi2'], _, res['subtype'] = self.archetypes[res['spectype']].get_best_archetype(spectra,
                 weights, flux, wflux, dwave, res['z'], legendre)
 
         tzfit.sort('chi2')
