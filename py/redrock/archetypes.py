@@ -75,10 +75,16 @@ class Archetype():
             subtype (str): subtype of best archetype
 
         """
-        wave = sp.concatenate([ spec.wave for spec in spectra ])
+        wave = sp.concatenate([wave for wave in dwave.values()])
         waveRF = wave/(1.+z)
 
-        leg = sp.concatenate([ v for v in legendre.values() ]).transpose()
+        leg = sp.zeros((wave.size,legendre[list(legendre.keys())[0]].shape[0]))
+        for i in range(leg.shape[1]):
+            leg[:,i] = sp.concatenate( [legendre[k][i] for k in legendre.keys()] )
+        #print(leg.shape)
+        #leg = sp.array( sp.concatenate( [legendre[k][i] for k in legendre.keys()] ) for i in range(legendre[list(legendre.keys())[0]].shape[0]) )
+        #print(leg.shape)
+        #print('')
         Tb = sp.append( sp.zeros((flux.size,1)),leg, axis=1 )
         nbasis = 1+leg.shape[1]
 
@@ -98,6 +104,17 @@ class Archetype():
         iBest = sp.argmin(zzchi2)
         # TODO: should we look at the value of zzcoeff[0] and if negative
         #   set the chi2 to very big?
+
+        import matplotlib.pyplot as plt
+        plt.errorbar(wave,flux,fmt='.')
+        #plt.errorbar(wave,weights,fmt='.')
+        plt.errorbar(wave,leg[:,0],fmt='.')
+        plt.errorbar(wave,leg[:,1],fmt='.')
+        plt.errorbar(wave,leg[:,2],fmt='.')
+        Tb[:,0] = self._archetype['INTERP'][iBest](waveRF)
+        m = Tb.dot(zzcoeff[iBest])
+        plt.errorbar(wave,m,fmt='.')
+        plt.show()
 
         return zzchi2[iBest], zzcoeff[iBest], self._subtype[iBest]
 
