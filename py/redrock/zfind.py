@@ -59,7 +59,7 @@ def _mp_fitz(chi2, target_data, t, nminima, qout):
         sys.stdout.flush()
 
 
-def zfind(targets, templates, mp_procs=1, nminima=3):
+def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=False):
     """Compute all redshift fits for the local set of targets and collect.
 
     Given targets and templates distributed across a set of MPI processes,
@@ -87,8 +87,11 @@ def zfind(targets, templates, mp_procs=1, nminima=3):
 
     """
 
-
-    archetypes = All_archetypes()
+    if archetypes or archetypes is None:
+        use_archetypes = True
+        archetypes = All_archetypes(archetypes)
+    else:
+        use_archetypes = False
 
     # Find most likely candidate redshifts by scanning over the
     # pre-interpolated templates on a coarse redshift spacing.
@@ -264,8 +267,8 @@ def zfind(targets, templates, mp_procs=1, nminima=3):
             tzfit['znum'] = np.arange(len(tzfit))
 
             # Use archetypes to sort the best fits
-            print(tid_idx, tid)
-            archetypes.get_best_archetype(targets.local()[tid_idx].spectra,tzfit)
+            if use_archetypes:
+                archetypes.get_best_archetype(targets.local()[tid_idx].spectra,tzfit)
 
             # Store
             allzfit.append(tzfit)
