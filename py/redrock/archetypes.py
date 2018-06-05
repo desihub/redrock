@@ -87,6 +87,8 @@ class Archetype():
         zzcoeff = sp.zeros((self._narch, nbasis), dtype=sp.float64)
 
         for i, arch in enumerate(self._archetype['INTERP']):
+            # TODO: use rebin_template and calc_zchi2_one to use
+            # the resolution matrix and the different spectrograph
             #binned = rebin_template(template, z, dwave)
             #zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux, wflux, binned)
             Tb[:,0] = arch(waveRF)
@@ -124,11 +126,11 @@ class All_archetypes():
         """Rearange tzfit according to chi2 from archetype
 
         Args:
-            spectra
-            tzfit (astropy.table):
+            spectra (list): list of Spectrum objects.
+            tzfit (astropy.table): attributes of all the different minima
 
         Returns:
-            tzfit (astropy.table):
+            tzfit (astropy.table): attributes of all the different minima
 
         """
 
@@ -148,29 +150,27 @@ class All_archetypes():
         (weights, flux, wflux) = spectral_data(spectra)
 
         # Fit each archetype
-        tzfit_arch = tzfit.copy()
         for res in tzfit:
-            chi2, coeff, subtype = self.archetypes[res['spectype']].get_best_archetype(spectra, weights, flux, wflux, dwave, res['z'], legendre)
-            znum = res['znum']
-            tzfit_arch[znum]['chi2'] = chi2
-            # TODO keep subtype? keep coeff?
+            # TODO keep coeff archetype?
+            res['chi2'], coeff, res['subtype'] = self.archetypes[res['spectype']].get_best_archetype(spectra,
+                weights, flux, wflux, dwave, res['z'], legendre)
 
-        tzfit_arch.sort('chi2')
-        tzfit_arch['znum'] = sp.arange(len(tzfit_arch))
-        tzfit_arch['deltachi2'] = sp.ediff1d(tzfit_arch['chi2'], to_end=0.0)
+        tzfit.sort('chi2')
+        tzfit['znum'] = sp.arange(len(tzfit))
+        tzfit['deltachi2'] = sp.ediff1d(tzfit['chi2'], to_end=0.0)
 
         #- set ZW.SMALL_DELTA_CHI2 flag
-        for i in range(len(tzfit_arch)-1):
-            noti = sp.arange(len(tzfit_arch))!=i
-            alldeltachi2 = sp.absolute(tzfit_arch['chi2'][noti]-tzfit_arch['chi2'][i])
-            alldv = sp.absolute(get_dv(z=tzfit_arch['z'][noti],zref=tzfit_arch['z'][i]))
+        for i in range(len(tzfit)-1):
+            noti = sp.arange(len(tzfit))!=i
+            alldeltachi2 = sp.absolute(tzfit['chi2'][noti]-tzfit['chi2'][i])
+            alldv = sp.absolute(get_dv(z=tzfit['z'][noti],zref=tzfit['z'][i]))
             zwarn = sp.any( (alldeltachi2<constants.min_deltachi2) & (alldv>=constants.max_velo_diff) )
             if zwarn:
-                tzfit_arch['zwarn'][i] |= ZW.SMALL_DELTA_CHI2
-            elif tzfit_arch['zwarn'][i]&ZW.SMALL_DELTA_CHI2:
-                tzfit_arch['zwarn'][i] &= ~ZW.SMALL_DELTA_CHI2
+                tzfit['zwarn'][i] |= ZW.SMALL_DELTA_CHI2
+            elif tzfit['zwarn'][i]&ZW.SMALL_DELTA_CHI2:
+                tzfit['zwarn'][i] &= ~ZW.SMALL_DELTA_CHI2
 
-        return tzfit_arch
+        return
 
 def find_archetypes(archetypes_dir=None):
     """Return list of rrarchetype-\*.fits archetype files
