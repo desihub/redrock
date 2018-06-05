@@ -23,7 +23,7 @@ def _zchi2_one(Tb, weights, flux, wflux, zcoeff):
 
     M = Tb.T.dot(np.multiply(weights[:,None], Tb))
     y = Tb.T.dot(wflux)
-    
+
     try:
         zcoeff[:] = np.linalg.solve(M, y)
     except np.linalg.LinAlgError:
