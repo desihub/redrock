@@ -153,7 +153,7 @@ class All_archetypes():
 
         # Fit each archetype
         for res in tzfit:
-            # TODO keep coeff archetype?
+            # TODO: Keep coeff archetype?
             res['chi2'], _, res['subtype'] = self.archetypes[res['spectype']].get_best_archetype(spectra,
                 weights, flux, wflux, dwave, res['z'], legendre)
 

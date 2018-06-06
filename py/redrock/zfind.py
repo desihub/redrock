@@ -220,8 +220,9 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=False):
                     spectype, subtype = fulltype.split(':::')
                 else:
                     spectype, subtype = (fulltype, '')
-                tmp['spectype'] = spectype
-                tmp['subtype'] = subtype
+                #- TODO: better way to cast spectype, subtype
+                tmp['spectype'] = spectype.ljust(6)
+                tmp['subtype'] = subtype.ljust(6)
                 tmp['ncoeff'] = tmp['coeff'].shape[1]
                 tzfit.append(tmp)
                 del allresults[tid][fulltype]['zfit']
@@ -265,6 +266,11 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=False):
                 tzfit.sort('chi2')
 
             tzfit['znum'] = np.arange(len(tzfit))
+
+            #- TODO: better way to cast spectype, subtype
+            for res in tzfit:
+                res['spectype'] = res['spectype'].strip()
+                res['subtype'] = res['subtype'].strip()
 
             # Use archetypes to sort the best fits
             if use_archetypes:
