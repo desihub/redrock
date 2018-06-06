@@ -13,6 +13,8 @@ from .zscan import spectral_data
 
 from ._zscan import _zchi2_one
 
+from .rebin import trapz_rebin
+
 from .fitz import get_dv
 
 from .zwarning import ZWarningMask as ZW
@@ -56,6 +58,13 @@ class Archetype():
             self._archetype['INTERP'][i] = interp1d(self.wave,self.flux[i,:],fill_value='extrapolate',kind='linear')
 
         return
+    def rebin_template(self,index,z,dwave):
+        """
+        """
+        result = {}
+        for hs, wave in dwave.items():
+            result[hs] = trapz_rebin((1.+z)*self.wave, self.flux[index], wave)
+        return result
 
     def get_best_archetype(self,spectra,weights,flux,wflux,dwave,z,legendre):
         """Get the best archetype for the given redshift and spectype.
@@ -86,12 +95,13 @@ class Archetype():
         zzchi2 = sp.zeros(self._narch, dtype=sp.float64)
         zzcoeff = sp.zeros((self._narch, nbasis), dtype=sp.float64)
 
-        for i, arch in enumerate(self._archetype['INTERP']):
+        for i in range(self._narch):
             # TODO: use rebin_template and calc_zchi2_one to use
             #   the resolution matrix and the different spectrograph
-            #binned = rebin_template(template, z, dwave)
+            #binned = self.rebin_template(i, z, dwave)
+            #Tb[:,0] = sp.concatenate([ spec for spec in binned.values()])
             #zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux, wflux, binned)
-            Tb[:,0] = arch(waveRF)
+            Tb[:,0] = self._archetype['INTERP'][i](waveRF)
             zcoeff = sp.zeros(nbasis, dtype=sp.float64)
             zzchi2[i] = _zchi2_one(Tb, weights, flux, wflux, zcoeff)
             zzcoeff[i] = zcoeff
