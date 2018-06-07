@@ -267,13 +267,13 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=False):
 
             tzfit['znum'] = np.arange(len(tzfit))
 
-            #- TODO: better way to cast spectype, subtype
-            tzfit['spectype'] = [v.strip() for v in tzfit['spectype']]
-            tzfit['subtype'] = [v.strip() for v in tzfit['subtype']]
-
             # Use archetypes to sort the best fits
             if use_archetypes:
                 archetypes.get_best_archetype(targets.local()[tid_idx].spectra,tzfit)
+
+            #- TODO: better way to cast spectype, subtype
+            tzfit['spectype'] = [v.strip() for v in tzfit['spectype']]
+            tzfit['subtype'] = [v.strip() for v in tzfit['subtype']]
 
             # Store
             allzfit.append(tzfit)
