@@ -268,9 +268,8 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=False):
             tzfit['znum'] = np.arange(len(tzfit))
 
             #- TODO: better way to cast spectype, subtype
-            for res in tzfit:
-                res['spectype'] = res['spectype'].strip()
-                res['subtype'] = res['subtype'].strip()
+            tzfit['spectype'] = [v.strip() for v in tzfit['spectype']]
+            tzfit['subtype'] = [v.strip() for v in tzfit['subtype']]
 
             # Use archetypes to sort the best fits
             if use_archetypes:

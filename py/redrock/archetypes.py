@@ -61,10 +61,7 @@ class Archetype():
     def rebin_template(self,index,z,dwave):
         """
         """
-        result = {}
-        for hs, wave in dwave.items():
-            result[hs] = trapz_rebin((1.+z)*self.wave, self.flux[index], wave)
-        return result
+        return {hs:self._archetype['INTERP'][index](wave/(1.+z)) for hs, wave in dwave.items()}
 
     def get_best_archetype(self,spectra,weights,flux,wflux,dwave,z,legendre):
         """Get the best archetype for the given redshift and spectype.
@@ -84,25 +81,21 @@ class Archetype():
             subtype (str): subtype of best archetype
 
         """
-        wave = sp.concatenate([wave for wave in dwave.values()])
-        waveRF = wave/(1.+z)
 
-        nbasis = 1+legendre[list(legendre.keys())[0]].shape[0]
-        Tb = sp.zeros((wave.size,nbasis))
-        for i in range(1,nbasis):
-            Tb[:,i] = sp.concatenate( [legendre[k][i-1] for k in legendre.keys()] )
+        nleg = legendre[list(legendre.keys())[0]].shape[0]
+        leg = sp.array([sp.concatenate( [legendre[k][i] for k in legendre.keys()] ) for i in range(nleg)])
+        Tb = sp.append( sp.zeros((flux.size,1)),leg.transpose(), axis=1 )
 
         zzchi2 = sp.zeros(self._narch, dtype=sp.float64)
-        zzcoeff = sp.zeros((self._narch, nbasis), dtype=sp.float64)
+        zzcoeff = sp.zeros((self._narch, Tb.shape[1]), dtype=sp.float64)
+        zcoeff = sp.zeros(Tb.shape[1], dtype=sp.float64)
 
         for i in range(self._narch):
             # TODO: use rebin_template and calc_zchi2_one to use
             #   the resolution matrix and the different spectrograph
-            #binned = self.rebin_template(i, z, dwave)
-            #Tb[:,0] = sp.concatenate([ spec for spec in binned.values()])
+            binned = self.rebin_template(i, z, dwave)
+            Tb[:,0] = sp.concatenate([ spec for spec in binned.values()])
             #zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux, wflux, binned)
-            Tb[:,0] = self._archetype['INTERP'][i](waveRF)
-            zcoeff = sp.zeros(nbasis, dtype=sp.float64)
             zzchi2[i] = _zchi2_one(Tb, weights, flux, wflux, zcoeff)
             zzcoeff[i] = zcoeff
 
@@ -150,14 +143,11 @@ class All_archetypes():
         deg_legendre = 3
 
         # Build dictionary of wavelength grids
-        wave = sp.concatenate([ spec.wave for spec in spectra ])
-        dwave = {}
-        legendre = {}
-        for s in spectra:
-            if s.wavehash not in dwave:
-                dwave[s.wavehash] = s.wave
-                x = (s.wave-wave.min())/(wave.max()-wave.min())*2.-1.
-                legendre[s.wavehash] = sp.array( [special.legendre(i)(x) for i in range(deg_legendre) ] )
+        dwave = { s.wavehash:s.wave for s in spectra }
+        wave = sp.concatenate([ w for w in dwave.values() ])
+        wave_min = wave.min()
+        wave_max = wave.max()
+        legendre = { hs:sp.array([special.legendre(i)( (w-wave_min)/(wave_max-wave_min)*2.-1. ) for i in range(deg_legendre)]) for hs, w in dwave.items() }
 
         (weights, flux, wflux) = spectral_data(spectra)
 
