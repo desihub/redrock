@@ -61,6 +61,7 @@ class Archetype():
     def rebin_template(self,index,z,dwave):
         """
         """
+        #return {hs:trapz_rebin((1.+z)*self.wave, self.flux[index], wave) for hs, wave in dwave.items())
         return {hs:self._archetype['INTERP'][index](wave/(1.+z)) for hs, wave in dwave.items()}
 
     def get_best_archetype(self,spectra,weights,flux,wflux,dwave,z,legendre):
