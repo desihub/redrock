@@ -221,7 +221,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=False):
                 else:
                     spectype, subtype = (fulltype, '')
                 #- TODO: better way to cast spectype, subtype
-                tmp['spectype'] = spectype.ljust(6)
+                tmp['spectype'] = spectype
                 tmp['subtype'] = subtype.ljust(6)
                 tmp['ncoeff'] = tmp['coeff'].shape[1]
                 tzfit.append(tmp)
@@ -272,7 +272,6 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=False):
                 archetypes.get_best_archetype(targets.local()[tid_idx].spectra,tzfit)
 
             #- TODO: better way to cast spectype, subtype
-            tzfit['spectype'] = [v.strip() for v in tzfit['spectype']]
             tzfit['subtype'] = [v.strip() for v in tzfit['subtype']]
 
             # Store
