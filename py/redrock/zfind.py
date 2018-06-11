@@ -212,15 +212,15 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=False):
         #     ft = t.template.full_type
 
         allzfit = list()
-        for tid_idx, tid in enumerate(targets.all_target_ids):
+        for tid in targets.all_target_ids:
             tzfit = list()
             for fulltype in allresults[tid]:
                 if fulltype == 'meta':
                     continue
                 tmp = allresults[tid][fulltype]['zfit']
 
+                #- TODO: reconsider fragile parsing of fulltype
                 if archetypes is None:
-                    #- TODO: reconsider fragile parsing of fulltype
                     if fulltype.count(':::') > 0:
                         spectype, subtype = fulltype.split(':::')
                     else:
