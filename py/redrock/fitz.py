@@ -223,7 +223,7 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3, archetype=None):
 
         if not archetype is None:
             #TODO How to pass subtype
-            zzchi2, coeff, subtype = archetype.get_best_archetype(spectra,weights,flux,wflux,dwave,zbest,legendre)
+            chi2min, coeff, subtype = archetype.get_best_archetype(spectra,weights,flux,wflux,dwave,zbest,legendre)
 
         results.append(dict(z=zbest, zerr=zerr, zwarn=zwarn,
             chi2=chi2min, zz=zz, zzchi2=zzchi2,

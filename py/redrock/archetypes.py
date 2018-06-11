@@ -9,8 +9,6 @@ import numpy as np
 
 from .zscan import calc_zchi2_one
 
-from ._zscan import _zchi2_one
-
 from .rebin import trapz_rebin
 
 
@@ -70,35 +68,19 @@ class Archetype():
         """
 
         nleg = legendre[list(legendre.keys())[0]].shape[0]
-        leg = np.array([np.concatenate( [legendre[k][i] for k in legendre.keys()] ) for i in range(nleg)])
-        Tb = np.append( np.zeros((flux.size,1)),leg.transpose(), axis=1 )
-
         zzchi2 = np.zeros(self._narch, dtype=np.float64)
-        zzcoeff = np.zeros((self._narch, Tb.shape[1]), dtype=np.float64)
-        zcoeff = np.zeros(Tb.shape[1], dtype=np.float64)
+        zzcoeff = np.zeros((self._narch, nleg+1), dtype=np.float64)
+
+        binned = self.rebin_template(0, z, dwave)
 
         for i in range(self._narch):
-            print(i,self._narch)
-            # TODO: use rebin_template and calc_zchi2_one to use
-            #   the resolution matrix and the different spectrograph
-            binned = self.rebin_template(i, z, dwave)
-            #zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux, wflux, binned)
-            Tb[:,0] = np.concatenate([ spec for spec in binned.values()])
-            zzchi2[i] = _zchi2_one(Tb, weights, flux, wflux, zcoeff)
-            zzcoeff[i] = zcoeff
+            #binned = self.rebin_template(i, z, dwave)
+            tdata = { hs:np.append(binned[hs][:,None],legendre[hs].transpose(), axis=1 ) for hs, wave in dwave.items() }
+            zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux, wflux, tdata)
 
         iBest = np.argmin(zzchi2)
         # TODO: should we look at the value of zzcoeff[0] and if negative
         #   set the chi2 to very big?
-
-        import matplotlib.pyplot as plt
-        wave = np.concatenate([ w for w in dwave.values() ])
-        binned = self.rebin_template(iBest, z, dwave)
-        Tb[:,0] = np.concatenate([ spec for spec in binned.values()])
-        plt.plot(wave*(1.+z),flux)
-        plt.plot(wave*(1.+z),Tb.dot(zzcoeff[iBest]))
-        plt.grid()
-        plt.show()
 
         return zzchi2[iBest], zzcoeff[iBest], self._subtype[iBest]
 
