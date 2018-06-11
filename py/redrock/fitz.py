@@ -109,7 +109,7 @@ def minfit(x, y):
     return (x0, xerr, y0, zwarn)
 
 
-def fitz(zchi2, redshifts, spectra, template, nminima=3):
+def fitz(zchi2, redshifts, spectra, template, nminima=3, archetypes=None):
     """Refines redshift measurement around up to nminima minima.
 
     TODO:
@@ -214,6 +214,9 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3):
         dv = get_dv(z=zbest, zref=zprev)
         if np.any(np.abs(dv) < constants.max_velo_diff):
             continue
+
+        if not archetypes is None:
+            archetypes.get_best_archetype(spectra,template._rrtype,zbest)
 
         results.append(dict(z=zbest, zerr=zerr, zwarn=zwarn,
             chi2=chi2min, zz=zz, zzchi2=zzchi2,

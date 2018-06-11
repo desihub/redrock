@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 
 import os
-import scipy as sp
+import numpy as np
 import fitsio
 import argparse
 
 from desisim.templates import ELG, LRG, BGS, STAR, WD
 from desispec.interpolation import resample_flux
 from desisim.archetypes import ArcheTypes
-
+import redrock
 
 def compute_chi2(flux):
     """Compute the chi2 between all the input spectra
@@ -23,17 +23,17 @@ def compute_chi2(flux):
 
     nspec, npix = flux.shape
 
-    chi2 = sp.zeros((nspec, nspec))
-    flux *= sp.sqrt(npix/sp.sum(flux**2,axis=1))[:,None]
+    chi2 = np.zeros((nspec, nspec))
+    flux *= np.sqrt(npix/np.sum(flux**2,axis=1))[:,None]
 
     for ii in range(nspec):
         if ii%50==0: print('Computing chi2 matrix {} over {}'.format(ii,nspec))
-        amp1 = sp.sum(flux[ii]*flux,axis=1)/npix
+        amp1 = np.sum(flux[ii]*flux,axis=1)/npix
         chi2[ii,:] = npix*(1.-amp1**2)
-        chi2[ii,ii] = 0.
+    np.fill_diagonal(chi2,0.)
 
     return chi2
-def get_stars(nb,wave):
+def get_stars(nb,wave,seed):
     """Get the stars spectra
 
     Args:
@@ -66,7 +66,6 @@ def get_stars(nb,wave):
 
     ###
     data = {}
-    seed = 1234
 
     ###
     data['STAR'] = {}
@@ -86,12 +85,12 @@ def get_stars(nb,wave):
     data['WD_DB']['FLUX'], data['WD_DB']['WAVE'], data['WD_DB']['META'] = WD(subtype='DB').make_templates(data['WD_DB']['NB'], restframe=True,seed=tseed)
 
     ###
-    nTot = sp.sum([ data[k]['NB'] for k in list(data.keys()) ])
+    nTot = np.sum([ data[k]['NB'] for k in list(data.keys()) ])
 
     ### On same grid
     i = 0
-    flux = sp.zeros((nTot, wave.size))
-    subtype = sp.array(['00000']*nTot, dtype='S5')
+    flux = np.zeros((nTot, wave.size))
+    subtype = np.array(['00000']*nTot, dtype='S5')
     for k in list(data.keys()):
         for j in range(data[k]['NB']):
             if k=='STAR':
@@ -102,7 +101,7 @@ def get_stars(nb,wave):
             i += 1
 
     return flux, subtype
-def get_galaxies(nb,wave):
+def get_galaxies(nb,wave,seed):
     """Get the galaxy spectra
 
     Args:
@@ -116,7 +115,6 @@ def get_galaxies(nb,wave):
     """
 
     ###
-    seed = 12345
     data = {}
 
     ###
@@ -137,12 +135,12 @@ def get_galaxies(nb,wave):
     data['BGS']['FLUX'], data['BGS']['WAVE'], data['BGS']['META'] = BGS().make_templates(data['BGS']['NB'],restframe=True,nocolorcuts=True,seed=tseed)
 
     ###
-    nTot = sp.sum([ data[k]['NB'] for k in list(data.keys()) ])
+    nTot = np.sum([ data[k]['NB'] for k in list(data.keys()) ])
 
     ### On same grid
     i = 0
-    flux = sp.zeros((nTot, wave.size))
-    subtype = sp.array(['00000']*nTot, dtype='S5')
+    flux = np.zeros((nTot, wave.size))
+    subtype = np.array(['00000']*nTot, dtype='S5')
     for k in list(data.keys()):
         for j in range(data[k]['NB']):
             subtype[i] = k
@@ -169,16 +167,19 @@ if __name__ == '__main__':
     parser.add_argument('--chi2-thresh', type=float, default=10**2.5, required=False,
         help = 'Threshold for the chi2')
 
+    parser.add_argument('--seed', type=int, default=1234, required=False,
+        help = 'Seed for desisim.templates')
+
     args = parser.parse_args()
 
     ###
-    dw = 0.1
+    dw = 0.5
     if args.spectype=='STAR':
-        wave = sp.arange(3000., 11000.+dw/2., dw)
-        flux, subtype = get_stars(args.nb,wave)
+        wave = np.arange(3000., 11000.+dw/2., dw)
+        flux, subtype = get_stars(args.nb,wave,args.seed)
     elif args.spectype=='GALAXY':
-        wave = sp.arange(3500./(1.+1.85), 11000.+dw/2., dw)
-        flux, subtype = get_galaxies(args.nb,wave)
+        wave = np.arange(3500./(1.+1.85), 11000.+dw/2., dw)
+        flux, subtype = get_galaxies(args.nb,wave,args.seed)
 
     ###
     chi2 = compute_chi2(flux)
@@ -191,14 +192,20 @@ if __name__ == '__main__':
     resp = resp[sort]/resp.sum()
     subtype = (subtype[iarch])[sort]
     flux = (flux[iarch,:])[sort]
-    flux /= sp.median(flux,axis=1)[:,None]
+    flux /= np.median(flux,axis=1)[:,None]
 
     ###
-    header = {}
-    header['CRVAL1'] = wave[0]
-    header['CDELT1'] = dw
-    header['RRTYPE'] = args.spectype
-    header['INSPEC'] = os.environ['DESI_BASIS_TEMPLATES']
+    header = [
+    {'name':'CRVAL1','value':wave[0],'comment':'Rest-Frame starting wavelength [Angstroms]'},
+    {'name':'CDELT1','value':dw,'comment':'Rest-Frame wavelength step'},
+    {'name':'LOGLAM','value':False,'comment':'Wavelength in log lambda'},
+    {'name':'RRTYPE','value':args.spectype,'comment':'Spectral type'},
+    {'name':'INSPEC','value':os.environ['DESI_BASIS_TEMPLATES'],'comment':'Vector basis'},
+    {'name':'RRVER','value':redrock.__version__,'comment':'Redrock version'},
+    {'name':'SEED','value':args.seed,'comment':'Input seed'},
+    {'name':'NBINPUT','value':args.nb,'comment':'Number of generated spectra'},
+    {'name':'CHI2THRE','value':args.chi2_thresh,'comment':'Chi2 Threshold'},
+    ]
     out = fitsio.FITS(args.out,'rw',clobber=True)
-    out.write([flux,resp,subtype],names=['ARCHETYPE','RESP','SUBTYPE'],extname='ARCHETYPES',header=header)
+    out.write([flux.astype('float32'),resp.astype('float32'),subtype],names=['ARCHETYPE','RESP','SUBTYPE'],extname='ARCHETYPES',header=header)
     out.close()

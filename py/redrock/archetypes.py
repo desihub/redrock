@@ -7,19 +7,22 @@ from glob import glob
 from astropy.io import fits
 import scipy as sp
 from scipy.interpolate import interp1d
+from scipy.integrate import trapz, quad
 from scipy import special
 
-from .zscan import spectral_data
+from .zscan import spectral_data, calc_zchi2_one
 
 from ._zscan import _zchi2_one
 
-from .rebin import trapz_rebin
+from .rebin import trapz_rebin, centers2edges
 
 from .fitz import get_dv
 
 from .zwarning import ZWarningMask as ZW
 
 from . import constants
+
+from .utils import native_endian
 
 class Archetype():
     """Class to store all different archetypes from the same spectype.
@@ -36,7 +39,7 @@ class Archetype():
         h = fits.open(filename, memmap=False)
 
         hdr = h['ARCHETYPES'].header
-        self.flux = sp.array(h['ARCHETYPES'].data['ARCHETYPE'])
+        self.flux = sp.asarray(native_endian(h['ARCHETYPES'].data['ARCHETYPE']))
         self._rrtype = hdr['RRTYPE'].strip()
         self._subtype = sp.array(sp.char.strip(h['ARCHETYPES'].data['SUBTYPE'].astype(str)))
 
@@ -61,8 +64,14 @@ class Archetype():
     def rebin_template(self,index,z,dwave):
         """
         """
-        #return {hs:trapz_rebin((1.+z)*self.wave, self.flux[index], wave) for hs, wave in dwave.items())
-        return {hs:self._archetype['INTERP'][index](wave/(1.+z)) for hs, wave in dwave.items()}
+        #result = {}
+        #for hs, wave in dwave.items():
+        #    binned = sp.zeros((wave.shape[0], 1), dtype=sp.float64)
+        #    binned[:,0] = trapz_rebin((1.+z)*self.wave, self.flux[index], wave)
+        #    result[hs] = binned
+        #return result
+        return {hs:trapz_rebin((1.+z)*self.wave, self.flux[index], wave) for hs, wave in dwave.items()}
+        #return {hs:self._archetype['INTERP'][index](wave/(1.+z)) for hs, wave in dwave.items()}
 
     def get_best_archetype(self,spectra,weights,flux,wflux,dwave,z,legendre):
         """Get the best archetype for the given redshift and spectype.
@@ -95,8 +104,8 @@ class Archetype():
             # TODO: use rebin_template and calc_zchi2_one to use
             #   the resolution matrix and the different spectrograph
             binned = self.rebin_template(i, z, dwave)
-            Tb[:,0] = sp.concatenate([ spec for spec in binned.values()])
             #zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux, wflux, binned)
+            Tb[:,0] = sp.concatenate([ spec for spec in binned.values()])
             zzchi2[i] = _zchi2_one(Tb, weights, flux, wflux, zcoeff)
             zzcoeff[i] = zcoeff
 
@@ -128,7 +137,7 @@ class All_archetypes():
             self.archetypes[archetype._rrtype] = archetype
 
         return
-    def get_best_archetype(self,spectra,tzfit):
+    def get_best_archetype(self,spectra,spectype,z):#,tzfit):
         """Rearange tzfit according to chi2 from archetype
 
         Args:
@@ -152,6 +161,10 @@ class All_archetypes():
 
         (weights, flux, wflux) = spectral_data(spectra)
 
+        chi2, _, subtype = self.archetypes[spectype].get_best_archetype(spectra,
+                weights, flux, wflux, dwave, z, legendre)
+
+        '''
         # Fit each archetype
         for res in tzfit:
             # TODO: Keep coeff archetype?
@@ -172,7 +185,7 @@ class All_archetypes():
                 tzfit['zwarn'][i] |= ZW.SMALL_DELTA_CHI2
             elif tzfit['zwarn'][i]&ZW.SMALL_DELTA_CHI2:
                 tzfit['zwarn'][i] &= ~ZW.SMALL_DELTA_CHI2
-
+        '''
         return
 
 def find_archetypes(archetypes_dir=None):

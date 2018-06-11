@@ -35,7 +35,7 @@ from .fitz import fitz, get_dv
 from .zwarning import ZWarningMask as ZW
 
 
-def _mp_fitz(chi2, target_data, t, nminima, qout):
+def _mp_fitz(chi2, target_data, t, nminima, qout, archetypes):
     """Wrapper for multiprocessing version of fitz.
     """
     try:
@@ -45,7 +45,7 @@ def _mp_fitz(chi2, target_data, t, nminima, qout):
         results = list()
         for i, tg in enumerate(target_data):
             zfit = fitz(chi2[i], t.template.redshifts, tg.spectra,
-                t.template, nminima=nminima)
+                t.template, nminima=nminima, archetypes=archetypes)
             npix = 0
             for spc in tg.spectra:
                 npix += (spc.ivar > 0.).sum()
@@ -139,7 +139,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=False):
                 zfit = fitz(results[tg.id][ft]['zchi2'] \
                     + results[tg.id][ft]['penalty'],
                     t.template.redshifts, tg.spectra,
-                    t.template, nminima=nminima)
+                    t.template, nminima=nminima,archetypes=archetypes)
                 results[tg.id][ft]['zfit'] = zfit
                 results[tg.id][ft]['zfit']['npixels'] = 0
                 for spectrum in tg.spectra:
@@ -168,7 +168,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=False):
                     eff_chi2[i,:] = results[tg.id][ft]['zchi2'] \
                         + results[tg.id][ft]['penalty']
                 p = mp.Process(target=_mp_fitz, args=(eff_chi2,
-                    target_data, t, nminima, qout))
+                    target_data, t, nminima, qout, archetypes))
                 procs.append(p)
                 p.start()
 
@@ -268,8 +268,8 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=False):
             tzfit['znum'] = np.arange(len(tzfit))
 
             # Use archetypes to sort the best fits
-            if use_archetypes:
-                archetypes.get_best_archetype(targets.local()[tid_idx].spectra,tzfit)
+            #if use_archetypes:
+            #    archetypes.get_best_archetype(targets.local()[tid_idx].spectra,tzfit)
 
             #- TODO: better way to cast spectype, subtype
             tzfit['subtype'] = [v.strip() for v in tzfit['subtype']]
