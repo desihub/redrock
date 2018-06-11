@@ -6,6 +6,7 @@ import os
 from glob import glob
 from astropy.io import fits
 import numpy as np
+from scipy.interpolate import interp1d
 import scipy.special
 
 from .zscan import calc_zchi2_one
@@ -34,20 +35,28 @@ class Archetype():
         self._rrtype = hdr['RRTYPE'].strip()
         self._subtype = np.array(np.char.strip(h['ARCHETYPES'].data['SUBTYPE'].astype(str)))
         self._subtype = np.char.add(np.char.add(self._subtype,'_'),np.arange(self._narch,dtype=int).astype(str))
+        self._full_type = np.char.add(self._rrtype+':::',self._subtype)
 
         self.wave = np.asarray(hdr['CRVAL1'] + hdr['CDELT1']*np.arange(self.flux.shape[1]))
-        if 'LOGLAM' in hdr and hdr['LOGLAM'] != 0:
+        if hdr['LOGLAM']:
             self.wave = 10**self.wave
 
         h.close()
 
-        self._full_type = np.char.add(self._rrtype+':::',self._subtype)
+        # Dic of templates
+        self._archetype = {}
+        self._archetype['INTERP'] = np.array([None]*self._narch)
+        for i in range(self._narch):
+            self._archetype['INTERP'][i] = interp1d(self.wave,self.flux[i,:],fill_value='extrapolate',kind='linear')
 
         return
-    def rebin_template(self,index,z,dwave):
+    def rebin_template(self,index,z,dwave,trapz=True):
         """
         """
-        return {hs:trapz_rebin((1.+z)*self.wave, self.flux[index], wave) for hs, wave in dwave.items()}
+        if trapz:
+            return {hs:trapz_rebin((1.+z)*self.wave, self.flux[index], wave) for hs, wave in dwave.items()}
+        else:
+            return {hs:self._archetype['INTERP'][index](wave/(1.+z)) for hs, wave in dwave.items()}
 
     def eval(self, subtype, dwave, coeff, wave, z):
         """
@@ -90,16 +99,19 @@ class Archetype():
         zzchi2 = np.zeros(self._narch, dtype=np.float64)
         zzcoeff = np.zeros((self._narch, nleg+1), dtype=np.float64)
 
+        # TODO: should we look at the value of zzcoeff[0] and if negative
+        #   set the chi2 to very big?
         for i in range(self._narch):
-            binned = self.rebin_template(i, z, dwave)
+            binned = self.rebin_template(i, z, dwave,trapz=False)
             tdata = { hs:np.append(binned[hs][:,None],legendre[hs].transpose(), axis=1 ) for hs, wave in dwave.items() }
             zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux, wflux, tdata)
 
         iBest = np.argmin(zzchi2)
-        # TODO: should we look at the value of zzcoeff[0] and if negative
-        #   set the chi2 to very big?
+        binned = self.rebin_template(iBest, z, dwave,trapz=True)
+        tdata = { hs:np.append(binned[hs][:,None],legendre[hs].transpose(), axis=1 ) for hs, wave in dwave.items() }
+        zzchi2, zzcoeff = calc_zchi2_one(spectra, weights, flux, wflux, tdata)
 
-        return zzchi2[iBest], zzcoeff[iBest], self._full_type[iBest]
+        return zzchi2, zzcoeff, self._full_type[iBest]
 
 
 class All_archetypes():
