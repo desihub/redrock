@@ -228,6 +228,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=False):
                 else:
                     spectype = [ el.split(':::')[0] for el in tmp['fulltype'] ]
                     subtype = [ el.split(':::')[1] for el in tmp['fulltype'] ]
+                    tmp.remove_column('fulltype')
                 tmp['spectype'] = spectype
                 tmp['subtype'] = subtype
 
