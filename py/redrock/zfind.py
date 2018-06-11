@@ -35,7 +35,7 @@ from .fitz import fitz, get_dv
 from .zwarning import ZWarningMask as ZW
 
 
-def _mp_fitz(chi2, target_data, t, nminima, qout, archetypes):
+def _mp_fitz(chi2, target_data, t, nminima, qout, archetype):
     """Wrapper for multiprocessing version of fitz.
     """
     try:
@@ -45,7 +45,7 @@ def _mp_fitz(chi2, target_data, t, nminima, qout, archetypes):
         results = list()
         for i, tg in enumerate(target_data):
             zfit = fitz(chi2[i], t.template.redshifts, tg.spectra,
-                t.template, nminima=nminima, archetypes=archetypes)
+                t.template, nminima=nminima, archetype=archetype)
             npix = 0
             for spc in tg.spectra:
                 npix += (spc.ivar > 0.).sum()
@@ -88,10 +88,9 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=False):
     """
 
     if archetypes or archetypes is None:
-        use_archetypes = True
-        archetypes = All_archetypes(archetypes)
+        archetypes = All_archetypes(archetypes).archetypes
     else:
-        use_archetypes = False
+        archetypes = None
 
     # Find most likely candidate redshifts by scanning over the
     # pre-interpolated templates on a coarse redshift spacing.
@@ -122,6 +121,10 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=False):
     sort = np.array([ t.template.full_type for t in templates]).argsort()
     for t in np.array(list(templates))[sort]:
         ft = t.template.full_type
+        if not archetypes is None:
+            archetype = archetypes[t.template._rrtype]
+        else:
+            archetype = None
 
         if am_root:
             print("  Finding best fits for template {}"\
@@ -139,7 +142,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=False):
                 zfit = fitz(results[tg.id][ft]['zchi2'] \
                     + results[tg.id][ft]['penalty'],
                     t.template.redshifts, tg.spectra,
-                    t.template, nminima=nminima,archetypes=archetypes)
+                    t.template, nminima=nminima,archetype=archetype)
                 results[tg.id][ft]['zfit'] = zfit
                 results[tg.id][ft]['zfit']['npixels'] = 0
                 for spectrum in tg.spectra:
@@ -168,7 +171,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=False):
                     eff_chi2[i,:] = results[tg.id][ft]['zchi2'] \
                         + results[tg.id][ft]['penalty']
                 p = mp.Process(target=_mp_fitz, args=(eff_chi2,
-                    target_data, t, nminima, qout, archetypes))
+                    target_data, t, nminima, qout, archetype))
                 procs.append(p)
                 p.start()
 
@@ -220,9 +223,8 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=False):
                     spectype, subtype = fulltype.split(':::')
                 else:
                     spectype, subtype = (fulltype, '')
-                #- TODO: better way to cast spectype, subtype
                 tmp['spectype'] = spectype
-                tmp['subtype'] = subtype.ljust(6)
+                tmp['subtype'] = subtype
                 tmp['ncoeff'] = tmp['coeff'].shape[1]
                 tzfit.append(tmp)
                 del allresults[tid][fulltype]['zfit']
@@ -266,13 +268,6 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=False):
                 tzfit.sort('chi2')
 
             tzfit['znum'] = np.arange(len(tzfit))
-
-            # Use archetypes to sort the best fits
-            #if use_archetypes:
-            #    archetypes.get_best_archetype(targets.local()[tid_idx].spectra,tzfit)
-
-            #- TODO: better way to cast spectype, subtype
-            tzfit['subtype'] = [v.strip() for v in tzfit['subtype']]
 
             # Store
             allzfit.append(tzfit)
