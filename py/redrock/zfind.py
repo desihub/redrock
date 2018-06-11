@@ -218,13 +218,19 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=False):
                 if fulltype == 'meta':
                     continue
                 tmp = allresults[tid][fulltype]['zfit']
-                #- TODO: reconsider fragile parsing of fulltype
-                if fulltype.count(':::') > 0:
-                    spectype, subtype = fulltype.split(':::')
+
+                if archetypes is None:
+                    #- TODO: reconsider fragile parsing of fulltype
+                    if fulltype.count(':::') > 0:
+                        spectype, subtype = fulltype.split(':::')
+                    else:
+                        spectype, subtype = (fulltype, '')
                 else:
-                    spectype, subtype = (fulltype, '')
+                    spectype = [ el.split(':::')[0] for el in tmp['fulltype'] ]
+                    subtype = [ el.split(':::')[1] for el in tmp['fulltype'] ]
                 tmp['spectype'] = spectype
                 tmp['subtype'] = subtype
+
                 tmp['ncoeff'] = tmp['coeff'].shape[1]
                 tzfit.append(tmp)
                 del allresults[tid][fulltype]['zfit']

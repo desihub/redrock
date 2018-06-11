@@ -12,7 +12,7 @@ from . import zwarning
 
 
 class PlotSpec(object):
-    def __init__(self, targets, templates, zscan, zfit, truth=None):
+    def __init__(self, targets, templates, zscan, zfit, truth=None, archetypes=False):
         """TODO: document
         """
 
@@ -21,6 +21,7 @@ class PlotSpec(object):
 
         self.targets = targets
         self.templates = templates
+        self.archetypes = archetypes
         self.zscan = zscan
         self.zfit = zfit
         self.itarget = 0
@@ -101,16 +102,14 @@ class PlotSpec(object):
         fulltype = zz['spectype']
         if zz['subtype'] != '':
             fulltype = fulltype+':::'+zz['subtype']
-        if fulltype in self.templates:
-            tp = self.templates[fulltype]
-        elif zz['spectype'] in self.templates:
-            tp = self.templates[zz['spectype']]
+        if self.archetypes:
+            dwave = { s.wavehash:s.wave for s in target.spectra }
+            tp = self.archetypes.archetypes[zz['spectype']]
         else:
-            print('WARNING: '+fulltype+' is not in template list')
-
-        if tp.template_type != zz['spectype']:
-            raise ValueError('spectype {} not in'
-                ' templates'.format(zz['spectype']))
+            tp = self.templates[fulltype]
+            if tp.template_type != zz['spectype']:
+                raise ValueError('spectype {} not in'
+                    ' templates'.format(zz['spectype']))
 
         #----- zscan plot
         if keepzoom:
@@ -160,7 +159,10 @@ class PlotSpec(object):
         ymin = ymax = 0.0
         specs_to_read = target.spectra
         for spec in specs_to_read:
-            mx = tp.eval(coeff[0:tp.nbasis], spec.wave, zz['z']) * (1+zz['z'])
+            if self.archetypes:
+                mx = tp.eval(zz['subtype'], dwave, coeff, spec.wave, zz['z']) * (1+zz['z'])
+            else:
+                mx = tp.eval(coeff[0:tp.nbasis], spec.wave, zz['z']) * (1+zz['z'])
             model = spec.R.dot(mx)
             flux = spec.flux.copy()
             isbad = (spec.ivar == 0)
@@ -177,7 +179,7 @@ class PlotSpec(object):
                 np.max(model)*1.05)
 
         #- Label object type and redshift
-        label = 'znum {} {} z={:.3f}'.format(self.znum, tp.full_type, zz['z'])
+        label = 'znum {} {} z={:.3f}'.format(self.znum, fulltype, zz['z'])
         print('target {} id {} {}'.format(self.itarget, target.id, label))
         ytext = ymin+0.9*(ymax-ymin)
         self._ax2.text(3800, ytext, label)

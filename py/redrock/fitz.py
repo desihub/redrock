@@ -221,13 +221,17 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3, archetype=None):
         if np.any(np.abs(dv) < constants.max_velo_diff):
             continue
 
-        if not archetype is None:
+        if archetype is None:
+            results.append(dict(z=zbest, zerr=zerr, zwarn=zwarn,
+                chi2=chi2min, zz=zz, zzchi2=zzchi2,
+                coeff=coeff))
+        else:
             #TODO How to pass subtype
-            chi2min, coeff, subtype = archetype.get_best_archetype(spectra,weights,flux,wflux,dwave,zbest,legendre)
+            chi2min, coeff, fulltype = archetype.get_best_archetype(spectra,weights,flux,wflux,dwave,zbest,legendre)
 
-        results.append(dict(z=zbest, zerr=zerr, zwarn=zwarn,
-            chi2=chi2min, zz=zz, zzchi2=zzchi2,
-            coeff=coeff))
+            results.append(dict(z=zbest, zerr=zerr, zwarn=zwarn,
+                chi2=chi2min, zz=zz, zzchi2=zzchi2,
+                coeff=coeff, fulltype=fulltype))
 
     #- Sort results by chi2min; detailed fits may have changed order
     ii = np.argsort([tmp['chi2'] for tmp in results])
