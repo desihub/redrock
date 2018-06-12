@@ -6,11 +6,12 @@ import os
 from glob import glob
 from astropy.io import fits
 import numpy as np
+from scipy.interpolate import interp1d
 import scipy.special
 
 from .zscan import calc_zchi2_one
 
-from desispec.interpolation import resample_flux
+from .rebin import trapz_rebin
 
 
 class Archetype():
@@ -40,13 +41,21 @@ class Archetype():
         if hdr['LOGLAM']:
             self.wave = 10**self.wave
 
+        self._archetype = {}
+        self._archetype['INTERP'] = np.array([None]*self._narch)
+        for i in range(self._narch):
+            self._archetype['INTERP'][i] = interp1d(self.wave,self.flux[i,:],fill_value='extrapolate',kind='linear')
+
         h.close()
 
         return
     def rebin_template(self,index,z,dwave,trapz=True):
         """
         """
-        return {hs:resample_flux(wave, (1.+z)*self.wave, self.flux[index]) for hs, wave in dwave.items()}
+        if trapz:
+            return {hs:trapz_rebin((1.+z)*self.wave, self.flux[index], wave) for hs, wave in dwave.items()}
+        else:
+            return {hs:self._archetype['INTERP'][index](wave/(1.+z)) for hs, wave in dwave.items()}
 
     def eval(self, subtype, dwave, coeff, wave, z):
         """
@@ -60,7 +69,7 @@ class Archetype():
         wave_min = w.min()
         wave_max = w.max()
         legendre = np.array([scipy.special.legendre(i)( (wave-wave_min)/(wave_max-wave_min)*2.-1. ) for i in range(deg_legendre)])
-        binned = resample_flux(wave, (1+z)*self.wave, self.flux[index])
+        binned = trapz_rebin((1+z)*self.wave, self.flux[index], wave)
         flux = np.append(binned[None,:],legendre, axis=0)
         flux = flux.T.dot(coeff).T / (1+z)
 

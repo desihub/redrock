@@ -13,8 +13,6 @@ from ._rebin import _trapz_rebin
 
 from .utils import mp_array
 
-from desispec.interpolation import resample_flux
-
 
 def centers2edges(centers):
     """Convert bin centers to bin edges, guessing at what you probably meant
@@ -93,5 +91,5 @@ def rebin_template(template, z, dwave):
 
     """
     nbasis = template.flux.shape[0]  #- number of template basis vectors
-    result = { hs:np.array([ resample_flux(wave, (1.+z)*template.wave, template.flux[b]) for b in range(nbasis) ]).transpose() for hs, wave in dwave.items() }
+    result = { hs:np.array([ trapz_rebin((1.+z)*template.wave, template.flux[b], wave) for b in range(nbasis) ]).transpose() for hs, wave in dwave.items() }
     return result
