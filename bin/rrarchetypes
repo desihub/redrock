@@ -33,7 +33,7 @@ def compute_chi2(flux):
     np.fill_diagonal(chi2,0.)
 
     return chi2
-def get_stars(nb,wave,seed):
+def get_stars(nb,wave,seed,SDSS_stellar_templates):
     """Get the stars spectra
 
     Args:
@@ -65,6 +65,7 @@ def get_stars(nb,wave,seed):
             print('ERROR: No subtype')
 
     ###
+    sizeSubtype = 5
     data = {}
 
     ###
@@ -74,6 +75,22 @@ def get_stars(nb,wave,seed):
     data['STAR']['NB'] = int(0.5*nb)
     data['WD_DA']['NB'] = int(0.25*nb)
     data['WD_DB']['NB'] = nb-data['STAR']['NB']-data['WD_DA']['NB']
+
+    ### Read from SDSS stellar templates
+    if not SDSS_stellar_templates is None:
+        h = fitsio.FITS(SDSS_stellar_templates)
+        head = h[0].read_header()
+        flux = h[0].read()
+        import matplotlib.pyplot as plt
+        w = 10.**(np.asarray(head['COEFF0'] + head['COEFF1']*np.arange(flux.shape[1])))
+        for s in range(flux.shape[0]):
+            subtype = head['NAME'+str(s)].replace('-','').replace('/','').rstrip()
+            sizeSubtype = max(sizeSubtype,len(subtype))
+            data[subtype] = {}
+            data[subtype]['NB'] = 1
+            data[subtype]['WAVE'] = w
+            data[subtype]['FLUX'] = np.array([flux[s,:]])
+        h.close()
 
     tseed = seed
     data['STAR']['FLUX'], data['STAR']['WAVE'], data['STAR']['META'] = STAR().make_templates(data['STAR']['NB'], restframe=True,seed=tseed)
@@ -90,15 +107,16 @@ def get_stars(nb,wave,seed):
     ### On same grid
     i = 0
     flux = np.zeros((nTot, wave.size))
-    subtype = np.array(['00000']*nTot, dtype='S5')
+    subtype = np.array([''.zfill(sizeSubtype)]*nTot, dtype='S'+str(sizeSubtype))
     for k in list(data.keys()):
         for j in range(data[k]['NB']):
             if k=='STAR':
                 subtype[i] = subtype_star(data[k]['META'][j]['TEFF'])
             else:
                 subtype[i] = k
-            flux[i] = resample_flux(wave, data[k]['WAVE'], data[k]['FLUX'][j])
+            flux[i] = resample_flux(wave, data[k]['WAVE'], data[k]['FLUX'][j], extrapolate=True)
             i += 1
+    flux /= np.median(flux,axis=1)[:,None]
 
     return flux, subtype
 def get_galaxies(nb,wave,seed):
@@ -146,6 +164,7 @@ def get_galaxies(nb,wave,seed):
             subtype[i] = k
             flux[i] = resample_flux(wave, data[k]['WAVE'], data[k]['FLUX'][j])
             i += 1
+    flux /= np.median(flux,axis=1)[:,None]
 
     return flux, subtype
 
@@ -170,13 +189,16 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=1234, required=False,
         help = 'Seed for desisim.templates')
 
+    parser.add_argument('--SDSS-stellar-templates', type=str, default=None, required=False,
+        help = 'SDSS stellar templates')
+
     args = parser.parse_args()
 
     ###
     dw = 0.5
     if args.spectype=='STAR':
         wave = np.arange(3000., 11000.+dw/2., dw)
-        flux, subtype = get_stars(args.nb,wave,args.seed)
+        flux, subtype = get_stars(args.nb,wave,args.seed,args.SDSS_stellar_templates)
     elif args.spectype=='GALAXY':
         wave = np.arange(3500./(1.+1.85), 11000.+dw/2., dw)
         flux, subtype = get_galaxies(args.nb,wave,args.seed)
