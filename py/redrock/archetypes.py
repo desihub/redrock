@@ -104,7 +104,6 @@ class Archetype():
             binned = self.rebin_template(i, z, dwave,trapz=False)
             tdata = { hs:np.append(binned[hs][:,None],legendre[hs].transpose(), axis=1 ) for hs, wave in dwave.items() }
             zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux, wflux, tdata)
-        zzchi2[ zzcoeff[:,0]<=0. ] = 9e99
 
         iBest = np.argmin(zzchi2)
         binned = self.rebin_template(iBest, z, dwave,trapz=True)
