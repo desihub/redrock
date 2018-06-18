@@ -131,6 +131,7 @@ class All_archetypes():
         self.archetypes = {}
         for f in lstfilename:
             archetype = Archetype(f)
+            print('DEBUG: Found {} archetypes for SPECTYPE {} in file {}'.format(archetype._narch, archetype._rrtype, f) )
             self.archetypes[archetype._rrtype] = archetype
 
         return
