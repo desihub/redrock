@@ -217,6 +217,9 @@ def read_spectra(spplate_name, targetids=None, use_frames=False,
 
     #- Create a metadata table in case we might want to add other columns
     #- in the future
+    for k in sorted(list(bricknames.keys())):
+        if k not in targetids:
+            del bricknames[k]
     assert len(bricknames.keys()) == len(targets)
 
     metatable = Table()
