@@ -35,7 +35,7 @@ header['RRTYPE']   = 'QSO'
 header['RRSUBTYP'] = ''
 # header['RRINPUT'] = opts.infile
 header['RRVER'] = redrock.__version__
-header['INSPEC'] = opts.infile
+header['INSPEC'] = opts.infile.split('/')[-1]
 header['EXTNAME'] = 'BASIS_VECTORS'
 
 hdus = fits.HDUList()
