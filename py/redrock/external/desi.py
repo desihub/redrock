@@ -36,8 +36,10 @@ from ..results import write_zscan
 
 from ..zfind import zfind
 
+from .._version import __version__
 
-def write_zbest(outfile, zbest, fibermap):
+
+def write_zbest(outfile, zbest, fibermap, template_version=''):
     """Write zbest and fibermap Tables to outfile
 
     Args:
@@ -46,11 +48,16 @@ def write_zbest(outfile, zbest, fibermap):
         fibermap (Table): the fibermap from the original inputs.
 
     """
+    header = fits.Header()
+    header['RRVER'] = (__version__, 'Redrock version')
+    for i, fulltype in enumerate(template_version.keys()):
+        header['TEMNAM'+str(i).zfill(2)] = fulltype
+        header['TEMVER'+str(i).zfill(2)] = template_version[fulltype]
     zbest.meta['EXTNAME'] = 'ZBEST'
     fibermap.meta['EXTNAME'] = 'FIBERMAP'
 
     hx = fits.HDUList()
-    hx.append(fits.PrimaryHDU())
+    hx.append(fits.PrimaryHDU(header=header))
     hx.append(fits.convenience.table_to_hdu(zbest))
     hx.append(fits.convenience.table_to_hdu(fibermap))
     hx.writeto(outfile, overwrite=True)
@@ -609,7 +616,8 @@ def rrdesi(options=None, comm=None):
                     if colname.islower():
                         zbest.rename_column(colname, colname.upper())
 
-                write_zbest(args.zbest, zbest, targets.fibermap)
+                template_version = {t._template.full_type:t._template._version for t in dtemplates}
+                write_zbest(args.zbest, zbest, targets.fibermap, template_version)
 
             stop = elapsed(start, "Writing zbest data took", comm=comm)
 

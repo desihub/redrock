@@ -36,6 +36,8 @@ from ..results import write_zscan
 
 from ..zfind import zfind
 
+from .._version import __version__
+
 
 def platemjdfiber2targetid(plate, mjd, fiber):
     return plate*1000000000 + mjd*10000 + fiber
@@ -48,7 +50,7 @@ def targetid2platemjdfiber(targetid):
     return (plate, mjd, fiber)
 
 
-def write_zbest(outfile, zbest):
+def write_zbest(outfile, zbest, template_version):
     """Write zbest Table to outfile
 
     Args:
@@ -56,10 +58,15 @@ def write_zbest(outfile, zbest):
         zbest (Table): the output best fit results.
 
     """
+    header = fits.Header()
+    header['RRVER'] = (__version__, 'Redrock version')
+    for i, fulltype in enumerate(template_version.keys()):
+        header['TEMNAM'+str(i).zfill(2)] = fulltype
+        header['TEMVER'+str(i).zfill(2)] = template_version[fulltype]
     zbest.meta['EXTNAME'] = 'ZBEST'
 
     hx = fits.HDUList()
-    hx.append(fits.PrimaryHDU())
+    hx.append(fits.PrimaryHDU(header=header))
     hx.append(fits.convenience.table_to_hdu(zbest))
     hx.writeto(outfile, overwrite=True)
     return
@@ -431,7 +438,8 @@ def rrboss(options=None, comm=None):
                     if colname.islower():
                         zbest.rename_column(colname, colname.upper())
 
-                write_zbest(args.zbest, zbest)
+                template_version = {t._template.full_type:t._template._version for t in dtemplates}
+                write_zbest(args.zbest, zbest, template_version)
 
             stop = elapsed(start, "Writing zbest data took", comm=comm)
 
