@@ -11,11 +11,12 @@
 #
 # All configuration values have a default; values that are commented out
 # serve to show the default.
+from __future__ import absolute_import, division, print_function, unicode_literals
 
 import sys
 import os
 import os.path
-
+from importlib import import_module
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
@@ -45,7 +46,7 @@ extensions = [
     'sphinx.ext.todo',
     'sphinx.ext.mathjax',
     'sphinx.ext.viewcode',
-    napoleon_extension
+    'sphinx.ext.napoleon'
 ]
 
 # Configuration for intersphinx, copied from astropy.
@@ -131,10 +132,13 @@ napoleon_include_private_with_doc = True
 # This value contains a list of modules to be mocked up. This is useful when
 # some external dependencies are not met at build time and break the
 # building process.
-autodoc_mock_imports = ['astropy', 'astropy.io', 'astropy.table',
-                        'desispec', 'desispec.io', 'desispec.resolution',
-                        'fitsio', 'numba', 'numpy',
-                        'scipy.constants', 'scipy.sparse']
+autodoc_mock_imports = []
+for missing in ('astropy', 'desispec', 'desiutil', 'fitsio', 'numba',
+                'numpy', 'scipy'):
+    try:
+        foo = import_module(missing)
+    except ImportError:
+        autodoc_mock_imports.append(missing)
 
 # -- Options for HTML output ----------------------------------------------
 
