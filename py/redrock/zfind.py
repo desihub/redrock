@@ -250,6 +250,8 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=False):
             tzfit['deltachi2'] = np.ediff1d(tzfit['chi2'], to_end=0.0)
             tzfit['zwarn'][ (tzfit['npixels']<10*tzfit['ncoeff']) ] |= \
                 ZW.LITTLE_COVERAGE
+            if not archetypes is None:
+                tzfit['zwarn'][ tzfit['coeff'][:,0]<=0. ] |= ZW.NEGATIVE_MODEL
 
             #- set ZW.SMALL_DELTA_CHI2 flag
             for i in range(len(tzfit)-1):
