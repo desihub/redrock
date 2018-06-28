@@ -88,7 +88,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=False):
     """
 
     if archetypes or archetypes is None:
-        archetypes = All_archetypes(archetypes).archetypes
+        archetypes = All_archetypes(archetypes_dir=archetypes).archetypes
     else:
         archetypes = None
 

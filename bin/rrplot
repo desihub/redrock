@@ -38,7 +38,7 @@ for el in templates_path:
 
 #- Archetypes
 if args.use_archetype:
-    archetypes = redrock.archetypes.All_archetypes(args.templates)
+    archetypes = redrock.archetypes.All_archetypes(archetypes_dir=args.archetypes)
 else:
     archetypes = False
 
