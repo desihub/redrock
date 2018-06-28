@@ -13,6 +13,8 @@ from .zscan import calc_zchi2_one
 
 from .rebin import trapz_rebin
 
+from .utils import transmission_Lyman
+
 
 class Archetype():
     """Class to store all different archetypes from the same spectype.
@@ -70,7 +72,7 @@ class Archetype():
         wave_min = w.min()
         wave_max = w.max()
         legendre = np.array([scipy.special.legendre(i)( (wave-wave_min)/(wave_max-wave_min)*2.-1. ) for i in range(deg_legendre)])
-        binned = trapz_rebin((1+z)*self.wave, self.flux[index], wave)
+        binned = trapz_rebin((1+z)*self.wave, self.flux[index], wave)*transmission_Lyman(z,wave)
         flux = np.append(binned[None,:],legendre, axis=0)
         flux = flux.T.dot(coeff).T / (1+z)
 
@@ -98,16 +100,17 @@ class Archetype():
         nleg = legendre[list(legendre.keys())[0]].shape[0]
         zzchi2 = np.zeros(self._narch, dtype=np.float64)
         zzcoeff = np.zeros((self._narch, nleg+1), dtype=np.float64)
+        trans = { hs:transmission_Lyman(z,w) for hs, w in dwave.items() }
 
-        # TODO: should we look at the value of zzcoeff[0] and if negative
-        #   set the chi2 to very big?
         for i in range(self._narch):
             binned = self.rebin_template(i, z, dwave,trapz=False)
+            binned = { hs:trans[hs]*binned[hs] for hs, w in dwave.items() }
             tdata = { hs:np.append(binned[hs][:,None],legendre[hs].transpose(), axis=1 ) for hs, wave in dwave.items() }
             zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux, wflux, tdata)
 
         iBest = np.argmin(zzchi2)
         binned = self.rebin_template(iBest, z, dwave,trapz=True)
+        binned = { hs:trans[hs]*binned[hs] for hs, w in dwave.items() }
         tdata = { hs:np.append(binned[hs][:,None],legendre[hs].transpose(), axis=1 ) for hs, wave in dwave.items() }
         zzchi2, zzcoeff = calc_zchi2_one(spectra, weights, flux, wflux, tdata)
 
