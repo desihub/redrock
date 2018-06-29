@@ -37,7 +37,7 @@ header['RRSUBTYP'] = ''
 # header['RRINPUT'] = opts.infile
 header['RRVER'] = redrock.__version__
 header['VERSION'] = (opts.version, 'Template version')
-header['INSPEC'] = opts.infile
+header['INSPEC'] = os.path.basename(opts.infile)
 header['EXTNAME'] = 'BASIS_VECTORS'
 
 hdus = fits.HDUList()
