@@ -59,7 +59,7 @@ def _mp_fitz(chi2, target_data, t, nminima, qout, archetype):
         sys.stdout.flush()
 
 
-def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=False):
+def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None):
     """Compute all redshift fits for the local set of targets and collect.
 
     Given targets and templates distributed across a set of MPI processes,
@@ -75,9 +75,12 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=False):
     Args:
         targets (DistTargets): distributed targets.
         templates (list): list of DistTemplate objects.
-        mp_procs (int): if not using MPI, this is the number of multiprocessing
-            processes to use.
-        nminima (int): number of chi^2 minima to consider.  Passed to fitz().
+        mp_procs (int, optional): if not using MPI, this is the number of
+            multiprocessing processes to use.
+        nminima (int, optional): number of chi^2 minima to consider.
+            Passed to fitz().
+        archetypes (str, optional): file or directory containing archetypes
+            to use for final fitz choice of best chi2 vs. z minimum.
 
     Returns:
         tuple: (allresults, allzfit), where "allresults" is a dictionary of the
@@ -87,10 +90,8 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=False):
 
     """
 
-    if archetypes or archetypes is None:
+    if archetypes:
         archetypes = All_archetypes(archetypes_dir=archetypes).archetypes
-    else:
-        archetypes = None
 
     # Find most likely candidate redshifts by scanning over the
     # pre-interpolated templates on a coarse redshift spacing.
@@ -121,7 +122,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=False):
     sort = np.array([ t.template.full_type for t in templates]).argsort()
     for t in np.array(list(templates))[sort]:
         ft = t.template.full_type
-        if not archetypes is None:
+        if archetypes:
             archetype = archetypes[t.template._rrtype]
         else:
             archetype = None
@@ -250,7 +251,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=False):
             tzfit['deltachi2'] = np.ediff1d(tzfit['chi2'], to_end=0.0)
             tzfit['zwarn'][ (tzfit['npixels']<10*tzfit['ncoeff']) ] |= \
                 ZW.LITTLE_COVERAGE
-            if not archetypes is None:
+            if archetypes:
                 tzfit['zwarn'][ tzfit['coeff'][:,0]<=0. ] |= ZW.NEGATIVE_MODEL
 
             #- set ZW.SMALL_DELTA_CHI2 flag
