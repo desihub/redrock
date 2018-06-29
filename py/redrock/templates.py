@@ -44,7 +44,10 @@ class Template(object):
                     raise IOError('unable to find '+filename)
 
             hdr = fx['BASIS_VECTORS'].header
-            self._version = hdr['VERSION']
+            if 'VERSION' in hdr:
+                self._version = hdr['VERSION']
+            else:
+                self._version = 'unknown'
 
             self.wave = np.asarray(hdr['CRVAL1'] + \
                 hdr['CDELT1']*np.arange(hdr['NAXIS1']), dtype=np.float64)
