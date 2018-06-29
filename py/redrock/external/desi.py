@@ -429,6 +429,9 @@ def rrdesi(options=None, comm=None):
     parser.add_argument("-t", "--templates", type=str, default=None,
         required=False, help="template file or directory")
 
+    parser.add_argument("--archetypes", type=str, default=None,
+        required=False, help="archetype file or directory for final redshift comparison")
+
     parser.add_argument("-o", "--output", type=str, default=None,
         required=False, help="output file")
 
@@ -584,7 +587,7 @@ def rrdesi(options=None, comm=None):
         start = elapsed(None, "", comm=comm)
 
         scandata, zfit = zfind(targets, dtemplates, mpprocs,
-            nminima=args.nminima)
+            nminima=args.nminima, archetypes=args.archetypes)
 
         stop = elapsed(start, "Computing redshifts took", comm=comm)
 

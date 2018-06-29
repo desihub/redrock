@@ -91,12 +91,5 @@ def rebin_template(template, z, dwave):
 
     """
     nbasis = template.flux.shape[0]  #- number of template basis vectors
-    result = dict()
-    for hs, wave in dwave.items():
-        binned = np.zeros((wave.shape[0], nbasis), dtype=np.float64)
-        for b in range(nbasis):
-            t = trapz_rebin((1.0+z)*template.wave, template.flux[b],
-                wave)
-            binned[:,b] = t
-        result[hs] = binned
+    result = { hs:np.array([ trapz_rebin((1.+z)*template.wave, template.flux[b], wave) for b in range(nbasis) ]).transpose() for hs, wave in dwave.items() }
     return result

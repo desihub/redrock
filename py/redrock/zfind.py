@@ -26,6 +26,8 @@ from .targets import Spectrum, Target, DistTargets, distribute_targets
 
 from .templates import Template, DistTemplate
 
+from .archetypes import All_archetypes
+
 from .zscan import calc_zchi2_targets
 
 from .fitz import fitz, get_dv
@@ -33,7 +35,7 @@ from .fitz import fitz, get_dv
 from .zwarning import ZWarningMask as ZW
 
 
-def _mp_fitz(chi2, target_data, t, nminima, qout):
+def _mp_fitz(chi2, target_data, t, nminima, qout, archetype):
     """Wrapper for multiprocessing version of fitz.
     """
     try:
@@ -43,7 +45,7 @@ def _mp_fitz(chi2, target_data, t, nminima, qout):
         results = list()
         for i, tg in enumerate(target_data):
             zfit = fitz(chi2[i], t.template.redshifts, tg.spectra,
-                t.template, nminima=nminima)
+                t.template, nminima=nminima, archetype=archetype)
             npix = 0
             for spc in tg.spectra:
                 npix += (spc.ivar > 0.).sum()
@@ -57,7 +59,7 @@ def _mp_fitz(chi2, target_data, t, nminima, qout):
         sys.stdout.flush()
 
 
-def zfind(targets, templates, mp_procs=1, nminima=3):
+def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None):
     """Compute all redshift fits for the local set of targets and collect.
 
     Given targets and templates distributed across a set of MPI processes,
@@ -73,9 +75,12 @@ def zfind(targets, templates, mp_procs=1, nminima=3):
     Args:
         targets (DistTargets): distributed targets.
         templates (list): list of DistTemplate objects.
-        mp_procs (int): if not using MPI, this is the number of multiprocessing
-            processes to use.
-        nminima (int): number of chi^2 minima to consider.  Passed to fitz().
+        mp_procs (int, optional): if not using MPI, this is the number of
+            multiprocessing processes to use.
+        nminima (int, optional): number of chi^2 minima to consider.
+            Passed to fitz().
+        archetypes (str, optional): file or directory containing archetypes
+            to use for final fitz choice of best chi2 vs. z minimum.
 
     Returns:
         tuple: (allresults, allzfit), where "allresults" is a dictionary of the
@@ -84,6 +89,9 @@ def zfind(targets, templates, mp_procs=1, nminima=3):
             for a limited set of minima.
 
     """
+
+    if archetypes:
+        archetypes = All_archetypes(archetypes_dir=archetypes).archetypes
 
     # Find most likely candidate redshifts by scanning over the
     # pre-interpolated templates on a coarse redshift spacing.
@@ -114,6 +122,10 @@ def zfind(targets, templates, mp_procs=1, nminima=3):
     sort = np.array([ t.template.full_type for t in templates]).argsort()
     for t in np.array(list(templates))[sort]:
         ft = t.template.full_type
+        if archetypes:
+            archetype = archetypes[t.template._rrtype]
+        else:
+            archetype = None
 
         if am_root:
             print("  Finding best fits for template {}"\
@@ -131,7 +143,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3):
                 zfit = fitz(results[tg.id][ft]['zchi2'] \
                     + results[tg.id][ft]['penalty'],
                     t.template.redshifts, tg.spectra,
-                    t.template, nminima=nminima)
+                    t.template, nminima=nminima,archetype=archetype)
                 results[tg.id][ft]['zfit'] = zfit
                 results[tg.id][ft]['zfit']['npixels'] = 0
                 for spectrum in tg.spectra:
@@ -160,7 +172,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3):
                     eff_chi2[i,:] = results[tg.id][ft]['zchi2'] \
                         + results[tg.id][ft]['penalty']
                 p = mp.Process(target=_mp_fitz, args=(eff_chi2,
-                    target_data, t, nminima, qout))
+                    target_data, t, nminima, qout, archetype))
                 procs.append(p)
                 p.start()
 
@@ -207,13 +219,20 @@ def zfind(targets, templates, mp_procs=1, nminima=3):
                 if fulltype == 'meta':
                     continue
                 tmp = allresults[tid][fulltype]['zfit']
+
                 #- TODO: reconsider fragile parsing of fulltype
-                if fulltype.count(':::') > 0:
-                    spectype, subtype = fulltype.split(':::')
+                if archetypes is None:
+                    if fulltype.count(':::') > 0:
+                        spectype, subtype = fulltype.split(':::')
+                    else:
+                        spectype, subtype = (fulltype, '')
                 else:
-                    spectype, subtype = (fulltype, '')
+                    spectype = [ el.split(':::')[0] for el in tmp['fulltype'] ]
+                    subtype = [ el.split(':::')[1] for el in tmp['fulltype'] ]
+                    tmp.remove_column('fulltype')
                 tmp['spectype'] = spectype
                 tmp['subtype'] = subtype
+
                 tmp['ncoeff'] = tmp['coeff'].shape[1]
                 tzfit.append(tmp)
                 del allresults[tid][fulltype]['zfit']
@@ -233,6 +252,8 @@ def zfind(targets, templates, mp_procs=1, nminima=3):
             tzfit['zwarn'][ tzfit['npixels']==0 ] |= ZW.NODATA
             tzfit['zwarn'][ (tzfit['npixels']<10*tzfit['ncoeff']) ] |= \
                 ZW.LITTLE_COVERAGE
+            if archetypes:
+                tzfit['zwarn'][ tzfit['coeff'][:,0]<=0. ] |= ZW.NEGATIVE_MODEL
 
             #- set ZW.SMALL_DELTA_CHI2 flag
             for i in range(len(tzfit)-1):
@@ -240,7 +261,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3):
                 alldeltachi2 = np.absolute(tzfit['chi2'][noti]-tzfit['chi2'][i])
                 alldv = np.absolute(get_dv(z=tzfit['z'][noti],
                     zref=tzfit['z'][i]))
-                zwarn = np.any( (alldeltachi2<9.) & \
+                zwarn = np.any( (alldeltachi2<constants.min_deltachi2) & \
                     (alldv>=constants.max_velo_diff) )
                 if zwarn:
                     tzfit['zwarn'][i] |= ZW.SMALL_DELTA_CHI2
@@ -257,6 +278,9 @@ def zfind(targets, templates, mp_procs=1, nminima=3):
                 #- grouping by spectype could get chi2 out of order; resort
                 tzfit.sort('chi2')
 
+            tzfit['znum'] = np.arange(len(tzfit))
+
+            # Store
             allzfit.append(tzfit)
 
         allzfit = astropy.table.vstack(allzfit)

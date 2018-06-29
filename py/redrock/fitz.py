@@ -10,6 +10,7 @@ from __future__ import absolute_import, division, print_function
 import sys
 import numpy as np
 import scipy.constants
+import scipy.special
 
 from . import constants
 
@@ -109,7 +110,7 @@ def minfit(x, y):
     return (x0, xerr, y0, zwarn)
 
 
-def fitz(zchi2, redshifts, spectra, template, nminima=3):
+def fitz(zchi2, redshifts, spectra, template, nminima=3, archetype=None):
     """Refines redshift measurement around up to nminima minima.
 
     TODO:
@@ -132,10 +133,15 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3):
     nbasis = template.nbasis
 
     # Build dictionary of wavelength grids
-    dwave = dict()
-    for s in spectra:
-        if s.wavehash not in dwave:
-            dwave[s.wavehash] = s.wave
+    dwave = { s.wavehash:s.wave for s in spectra }
+
+    if not archetype is None:
+        # TODO: set this as a parameter
+        deg_legendre = 3
+        wave = np.concatenate([ w for w in dwave.values() ])
+        wave_min = wave.min()
+        wave_max = wave.max()
+        legendre = { hs:np.array([scipy.special.legendre(i)( (w-wave_min)/(wave_max-wave_min)*2.-1. ) for i in range(deg_legendre)]) for hs, w in dwave.items() }
 
     (weights, flux, wflux) = spectral_data(spectra)
 
@@ -215,9 +221,16 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3):
         if np.any(np.abs(dv) < constants.max_velo_diff):
             continue
 
-        results.append(dict(z=zbest, zerr=zerr, zwarn=zwarn,
-            chi2=chi2min, zz=zz, zzchi2=zzchi2,
-            coeff=coeff))
+        if archetype is None:
+            results.append(dict(z=zbest, zerr=zerr, zwarn=zwarn,
+                chi2=chi2min, zz=zz, zzchi2=zzchi2,
+                coeff=coeff))
+        else:
+            chi2min, coeff, fulltype = archetype.get_best_archetype(spectra,weights,flux,wflux,dwave,zbest,legendre)
+
+            results.append(dict(z=zbest, zerr=zerr, zwarn=zwarn,
+                chi2=chi2min, zz=zz, zzchi2=zzchi2,
+                coeff=coeff, fulltype=fulltype))
 
     #- Sort results by chi2min; detailed fits may have changed order
     ii = np.argsort([tmp['chi2'] for tmp in results])

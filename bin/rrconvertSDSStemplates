@@ -2,7 +2,7 @@
 
 import sys
 import re
-import scipy as sp
+import numpy as np
 import optparse
 from astropy.io import fits
 import redrock
@@ -68,9 +68,9 @@ def convert():
 
         ###
         if name_mode:
-            hdus.append(fits.PrimaryHDU(sp.asarray([cat[0].data[s,:]]), header=header))
+            hdus.append(fits.PrimaryHDU(np.asarray([cat[0].data[s,:]]), header=header))
         else:
-            hdus.append(fits.PrimaryHDU(sp.asarray(cat[0].data), header=header))
+            hdus.append(fits.PrimaryHDU(np.asarray(cat[0].data), header=header))
 
         ###
         spectype = spectype.lower()

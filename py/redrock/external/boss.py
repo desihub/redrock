@@ -214,6 +214,9 @@ def read_spectra(spplate_name, targetids=None, use_frames=False,
 
     #- Create a metadata table in case we might want to add other columns
     #- in the future
+    for k in sorted(list(bricknames.keys())):
+        if k not in targetids:
+            del bricknames[k]
     assert len(bricknames.keys()) == len(targets)
 
     metatable = Table()
@@ -249,6 +252,9 @@ def rrboss(options=None, comm=None):
 
     parser.add_argument("-t", "--templates", type=str, default=None,
         required=False, help="template file or directory")
+
+    parser.add_argument("--archetypes", type=str, default=None,
+        required=False, help="archetype file or directory for final redshift comparisons")
 
     parser.add_argument("-o", "--output", type=str, default=None,
         required=False, help="output file")
@@ -403,7 +409,7 @@ def rrboss(options=None, comm=None):
         start = elapsed(None, "", comm=comm)
 
         scandata, zfit = zfind(dtargets, dtemplates, mpprocs,
-            nminima=args.nminima)
+            nminima=args.nminima, archetypes=args.archetypes)
 
         stop = elapsed(start, "Computing redshifts took", comm=comm)
 
