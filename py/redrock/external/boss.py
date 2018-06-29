@@ -50,7 +50,7 @@ def targetid2platemjdfiber(targetid):
     return (plate, mjd, fiber)
 
 
-def write_zbest(outfile, zbest, template_version):
+def write_zbest(outfile, zbest, template_version, archetype_version):
     """Write zbest Table to outfile
 
     Args:
@@ -63,6 +63,10 @@ def write_zbest(outfile, zbest, template_version):
     for i, fulltype in enumerate(template_version.keys()):
         header['TEMNAM'+str(i).zfill(2)] = fulltype
         header['TEMVER'+str(i).zfill(2)] = template_version[fulltype]
+    if not archetype_version is None:
+        for i, fulltype in enumerate(archetype_version.keys()):
+            header['ARCNAM'+str(i).zfill(2)] = fulltype
+            header['ARCVER'+str(i).zfill(2)] = archetype_version[fulltype]
     zbest.meta['EXTNAME'] = 'ZBEST'
 
     hx = fits.HDUList()
@@ -442,7 +446,11 @@ def rrboss(options=None, comm=None):
                         zbest.rename_column(colname, colname.upper())
 
                 template_version = {t._template.full_type:t._template._version for t in dtemplates}
-                write_zbest(args.zbest, zbest, template_version)
+                archetype_version = None
+                if not args.archetypes is None:
+                    archetypes = All_archetypes(archetypes_dir=args.archetypes).archetypes
+                    archetype_version = {a._rrtype:a._version for a in archetypes}
+                write_zbest(args.zbest, zbest, template_version, archetype_version)
 
             stop = elapsed(start, "Writing zbest data took", comm=comm)
 
