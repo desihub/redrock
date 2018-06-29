@@ -38,6 +38,8 @@ from ..zfind import zfind
 
 from .._version import __version__
 
+from ..archetypes import All_archetypes
+
 
 def write_zbest(outfile, zbest, fibermap, template_version, archetype_version):
     """Write zbest and fibermap Tables to outfile
@@ -627,7 +629,7 @@ def rrdesi(options=None, comm=None):
                 archetype_version = None
                 if not args.archetypes is None:
                     archetypes = All_archetypes(archetypes_dir=args.archetypes).archetypes
-                    archetype_version = {a._rrtype:a._version for a in archetypes}
+                    archetype_version = {name:arch._version for name, arch in archetypes.items() }
                 write_zbest(args.zbest, zbest, targets.fibermap, template_version, archetype_version)
 
             stop = elapsed(start, "Writing zbest data took", comm=comm)
