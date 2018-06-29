@@ -29,6 +29,7 @@ parser.add_option("-o", "--outfile", type=str,  help="Output filename")
 parser.add_option("--niter", type=int,  help="Number of EMPCA iterations to run [%default]", default=5)
 parser.add_option("--nvec", type=int,  help="Number of basis vectors to generate [%default]", default=5)
 parser.add_option("--seed", type=int,  help="Seed for desisim.templates.STAR [%default]", default=12345)
+parser.add_option('--version', type=str, help='Template version')
 
 opts, args = parser.parse_args()
 
@@ -87,6 +88,7 @@ for spectype, (mintemp, maxtemp) in typetemp.items():
     header['RRSUBTYP'] = spectype
     # header['RRINPUT'] = opts.infile
     header['RRVER'] = redrock.__version__
+    header['VERSION'] = (opts.version, 'Template version')
     header['INSPEC'] = os.environ['DESI_BASIS_TEMPLATES']
     header['SEED'] = opts.seed
     header['EXTNAME'] = 'BASIS_VECTORS'

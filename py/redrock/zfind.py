@@ -230,6 +230,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3):
             tzfit['targetid'] = tid
             tzfit['znum'] = np.arange(len(tzfit))
             tzfit['deltachi2'] = np.ediff1d(tzfit['chi2'], to_end=0.0)
+            tzfit['zwarn'][ tzfit['npixels']==0 ] |= ZW.NODATA
             tzfit['zwarn'][ (tzfit['npixels']<10*tzfit['ncoeff']) ] |= \
                 ZW.LITTLE_COVERAGE
 

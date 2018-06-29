@@ -19,6 +19,7 @@ from desispec.interpolation import resample_flux
 parser = optparse.OptionParser(usage = "%prog [options]")
 parser.add_option("-i", "--infile", type="string",  help="input BOSS QSO eigenspectra")
 parser.add_option("-o", "--outfile", type="string",  help="output filename")
+parser.add_option('--version', type=str, help='Template version')
 
 opts, args = parser.parse_args()
 
@@ -35,6 +36,7 @@ header['RRTYPE']   = 'QSO'
 header['RRSUBTYP'] = ''
 # header['RRINPUT'] = opts.infile
 header['RRVER'] = redrock.__version__
+header['VERSION'] = (opts.version, 'Template version')
 header['INSPEC'] = os.path.basename(opts.infile)
 header['EXTNAME'] = 'BASIS_VECTORS'
 
