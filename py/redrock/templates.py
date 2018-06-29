@@ -75,7 +75,7 @@ class Template(object):
                     self._redshifts = np.arange(-0.002, 0.00201, 4e-5)
                 elif self._rrtype == 'QSO':
                     self._redshifts = 10**np.arange(np.log10(1+0.05),
-                        np.log10(1+4.0), 5e-4) - 1
+                        np.log10(1+6.0), 5e-4) - 1
                 else:
                     raise ValueError("Unknown redshift range to use for "
                         "template type {}".format(self._rrtype))
