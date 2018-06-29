@@ -167,9 +167,6 @@ def read_spectra(spplate_name, targetids=None, use_frames=False,
             i = (f-1)
             if use_frames:
                 i = i%500
-            if np.all(iv[i]==0):
-                print("DEBUG: skipping plate,fid = {},{} (no data)".format(plate,f))
-                continue
 
             t = platemjdfiber2targetid(plate, mjd, f)
             if t not in dic_spectra:
