@@ -12,6 +12,7 @@ def convert():
     parser = optparse.OptionParser(usage = "%prog [options]")
     parser.add_option("-i", "--infile", type="string", help="input SDSS templates")
     parser.add_option("-o", "--outfolder", type="string", help="output folder")
+    parser.add_option('--version', type=str, help='Template version')
     opts, args = parser.parse_args()
 
     ###
@@ -59,8 +60,8 @@ def convert():
         rx = re.search('\((\d+)\)$', subtype)
         if rx:
             header['INDOUSID'] = (int(rx.groups()[0]), 'Indo-US stellar template ID')
-
         header['RRVER']    = redrock.__version__
+        header['VERSION'] = (opts.version, 'Template version')
         header['INSPEC']   = opts.infile
         header['EXTNAME']  = "BASIS_VECTORS"
         header.add_comment('Converted from SDSS template format')

@@ -174,9 +174,13 @@ class PlotSpec(object):
             self._ax2.plot(spec.wave, medfilt(model, self.smooth), 'k-',
                 alpha=0.8)
 
-            ymin = min(ymin, np.percentile(flux[~isbad], 1))
-            ymax = max(ymax, np.percentile(flux[~isbad], 99),
-                np.max(model)*1.05)
+            if flux[~isbad].size!=0:
+                ymin = min(ymin, np.percentile(flux[~isbad], 1))
+                ymax = max(ymax, np.percentile(flux[~isbad], 99),
+                    np.max(model)*1.05)
+
+        if (ymin==0.) & (ymax==0.):
+             ymax = 1.
 
         #- Label object type and redshift
         label = 'znum {} {} z={:.3f}'.format(self.znum, fulltype, zz['z'])
