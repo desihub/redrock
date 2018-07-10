@@ -15,6 +15,9 @@ parser.add_argument("--datatype", type=str, default='desi',
 parser.add_argument("--specfile", type=str, default=None,
     required=True, help="input spectra or spPlate file")
 
+parser.add_argument("--targetids", type=str, default=None,
+    required=False, help="comma-separated list of target IDs")
+
 parser.add_argument("--rrfile", type=str, default=None,
     required=True, help="redrock details h5 file from rrdesi/rrboss")
 
@@ -36,6 +39,11 @@ for el in templates_path:
     t = redrock.templates.Template(filename=el)
     templates[t.full_type] = t
 
+#- Targetids
+targetids = None
+if args.targetids is not None:
+    targetids = [ int(x) for x in args.targetids.split(",") ]
+
 #- Archetypes
 if args.use_archetype:
     archetypes = redrock.archetypes.All_archetypes(archetypes_dir=args.archetypes)
@@ -45,10 +53,10 @@ else:
 #- Data
 if args.datatype=='desi':
     from redrock.external import desi
-    targets = desi.DistTargetsDESI(args.specfile)._my_data
+    targets = desi.DistTargetsDESI(args.specfile, targetids=targetids)._my_data
 elif args.datatype=='boss':
     from redrock.external import boss
-    targets, targetids = boss.read_spectra(args.specfile)
+    targets, targetids = boss.read_spectra(args.specfile, targetids=targetids)
 
 #- Redrock
 zscan, zfit = redrock.results.read_zscan(args.rrfile)
