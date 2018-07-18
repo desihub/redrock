@@ -2,10 +2,32 @@
 redrock Change Log
 ==================
 
-0.11.1 (unreleased)
+0.12.1 (unreleased)
 -------------------
 
-* No changes yet
+* No changes yet.
+
+0.12.0 (2018-07-18)
+-------------------
+
+* Adds optional archetypes (PR `#119`_).
+* Include blank fibers in output with ZWARN NODATA flag (PR `#123`_).
+* Include template name in output (PR `#124`_).
+* Include template and archetype version numbers in zbest output
+  (PR `#126`_, `#128`_, and `#131`_).
+* Update travis testing to astropy=2 python=3 (PR `#127`_).
+* Increase QSO redshift range to z=6 (PR `#130`_).
+* rrplot option for a subset of targetids (PR `#132`_).
+
+.. _`#119`: https://github.com/desihub/redrock/pull/119
+.. _`#123`: https://github.com/desihub/redrock/pull/123
+.. _`#124`: https://github.com/desihub/redrock/pull/124
+.. _`#126`: https://github.com/desihub/redrock/pull/126
+.. _`#127`: https://github.com/desihub/redrock/pull/127
+.. _`#128`: https://github.com/desihub/redrock/pull/128
+.. _`#130`: https://github.com/desihub/redrock/pull/130
+.. _`#131`: https://github.com/desihub/redrock/pull/131
+.. _`#132`: https://github.com/desihub/redrock/pull/132
 
 0.11.0 (2018-05-10)
 -------------------
