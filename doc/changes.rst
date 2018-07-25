@@ -6,7 +6,9 @@ redrock Change Log
 -------------------
 
 * update DELTACHI2 column definition to match how it is used in ZWARN flag,
-  i.e. excluding other candidates with nearby redshifts.
+  i.e. excluding other candidates with nearby redshifts (PR `#134`_).
+
+.. _`#134`: https://github.com/desihub/redrock/pull/134
 
 0.12.0 (2018-07-18)
 -------------------
