@@ -8,7 +8,7 @@ from ..targets import DistTargetsCopy
 from ..templates import DistTemplate
 from ..rebin import rebin_template
 from ..zscan import calc_zchi2_one, calc_zchi2_targets, spectral_data
-from ..zfind import zfind
+from ..zfind import zfind, calc_deltachi2
 
 from . import util
 
@@ -64,6 +64,15 @@ class TestZScan(unittest.TestCase):
         self.assertLess(zx1['zerr'], 0.002)
         self.assertLess(zx2['zerr'], 0.002)
 
+    def test_calc_deltachi2(self):
+        chi2 = np.array([1.0, 2.0, 4.0, 8.0])
+        z = np.array([3.0, 3.1, 3.2, 3.3])
+        dchi2 = calc_deltachi2(chi2, z)
+        self.assertTrue(np.all(dchi2 == np.array([1, 2, 4, 0.0])), dchi2)
+
+        z = np.array([3.0, 3.0, 4.0, 4.0])
+        dchi2 = calc_deltachi2(chi2, z)
+        self.assertTrue(np.all(dchi2 == np.array([3, 2, 0.0, 0.0])), dchi2)
 
     def test_parallel_zscan(self):
         z1 = 0.2

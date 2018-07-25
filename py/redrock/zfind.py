@@ -58,6 +58,33 @@ def _mp_fitz(chi2, target_data, t, nminima, qout, archetype):
         print("".join(lines))
         sys.stdout.flush()
 
+def calc_deltachi2(chi2, z, dvlimit=None):
+    '''
+    Calculate chi2 differences, excluding candidates with close z
+
+    Args:
+        chi2 : array of chi2 values
+        z : array of redshifts
+
+    Options:
+        dvlimit: exclude candidates that are closer than dvlimit [km/s]
+
+    Note: The final target always has deltachi2=0.0 because we don't know
+        what the next chi2 would have been.  This can also occur for the
+        last N targets if all N of them are within dvlimit of each other.
+    '''
+    if dvlimit is None:
+        dvlimit = constants.max_velo_diff
+
+    deltachi2 = np.zeros(len(chi2))
+    for i in range(len(chi2)-1):
+        dv = get_dv(z[i+1:], z[i])
+        ii = np.abs(dv)>dvlimit
+        if np.any(ii):
+            dchi2 = chi2[i+1:] - chi2[i]
+            deltachi2[i] = np.min(dchi2[ii])
+
+    return deltachi2
 
 def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None):
     """Compute all redshift fits for the local set of targets and collect.
@@ -248,7 +275,6 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None):
             tzfit.sort('chi2')
             tzfit['targetid'] = tid
             tzfit['znum'] = np.arange(len(tzfit))
-            tzfit['deltachi2'] = np.ediff1d(tzfit['chi2'], to_end=0.0)
             tzfit['zwarn'][ tzfit['npixels']==0 ] |= ZW.NODATA
             tzfit['zwarn'][ (tzfit['npixels']<10*tzfit['ncoeff']) ] |= \
                 ZW.LITTLE_COVERAGE
@@ -256,6 +282,10 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None):
                 tzfit['zwarn'][ tzfit['coeff'][:,0]<=0. ] |= ZW.NEGATIVE_MODEL
 
             #- set ZW.SMALL_DELTA_CHI2 flag
+            tzfit['deltachi2'] = calc_deltachi2(tzfit['chi2'], tzfit['z'])
+            ii = (tzfit['deltachi2'] < constants.min_deltachi2)
+            tzfit['zwarn'][ii] |= ZW.SMALL_DELTA_CHI2
+
             for i in range(len(tzfit)-1):
                 noti = (np.arange(len(tzfit))!=i)
                 alldeltachi2 = np.absolute(tzfit['chi2'][noti]-tzfit['chi2'][i])
