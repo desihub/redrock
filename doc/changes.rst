@@ -2,7 +2,12 @@
 redrock Change Log
 ==================
 
-0.12.1 (unreleased)
+0.12.2 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.12.1 (2018-07-26)
 -------------------
 
 * Update DELTACHI2 column definition to match how it is used in ZWARN flag,
