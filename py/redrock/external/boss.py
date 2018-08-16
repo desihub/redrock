@@ -98,10 +98,14 @@ def read_spectra(spplates_name, targetids=None, use_frames=False,
     """
 
     ## read spplates
-    infiles = []
+    useThingid = False
+    if len(spplates_name)>1:
+        print("DEBUG: Reading multiple observations: using THING_ID instead of PLATE*1000000000 + MJD*10000 + FIBERID")
+        useThingid = True
+        fiberid2thingid = {}
     plate = None
     mjd = []
-    fiberid2thingid = {}
+    infiles = []
     for spplate_name in spplates_name:
 
         spplate = fitsio.FITS(spplate_name)
@@ -111,10 +115,8 @@ def read_spectra(spplates_name, targetids=None, use_frames=False,
             assert plate == spplate[0].read_header()["PLATEID"]
         mjd += [spplate[0].read_header()["MJD"]]
 
-        if len(spplates_name)>1:
+        if useThingid:
             photoPlate = fitsio.FITS(spplate_name.replace('spPlate','photoPlate'))
-            fiberid2thingid[spplate_name] = photoPlate[1]['THING_ID'][:]
-            photoPlate.close()
 
         if use_frames:
             path = os.path.dirname(spplate_name)
@@ -132,15 +134,22 @@ def read_spectra(spplates_name, targetids=None, use_frames=False,
                     expid = str(nexp_tot).zfill(2)
                     exp = path+"/spCFrame-"+spplate[0].read_header()["EXPID"+expid][:11]+".fits"
                     infiles.append(exp)
-        spplate.close()
+                    if useThingid:
+                        fiberid2thingid[exp] = photoPlate[1]['THING_ID'][:]
+        else:
+            infiles.append(spplate_name)
+            if useThingid:
+                fiberid2thingid[spplate_name] = photoPlate[1]['THING_ID'][:]
 
-    if not use_frames:
-        infiles = spplates_name
+        spplate.close()
+        if useThingid:
+            photoPlate.close()
+
     if len(spplates_name)==1:
         mjd = mjd[0]
     else:
         mjd = 0
-        print("DEBUG: Reading multiple observations: using THING_ID instead of PLATE-MJD-FIBERID")
+
 
     bricknames={}
     dic_spectra = {}
@@ -193,10 +202,10 @@ def read_spectra(spplates_name, targetids=None, use_frames=False,
             if use_frames:
                 i = i%500
 
-            if len(spplates_name)==1:
-                t = platemjdfiber2targetid(plate, mjd, f)
+            if useThingid:
+                t = fiberid2thingid[infile][f-1]
             else:
-                t = fiberid2thingid[infile][i]
+                t = platemjdfiber2targetid(plate, mjd, f)
 
             if t not in dic_spectra:
                 dic_spectra[t]=[]
