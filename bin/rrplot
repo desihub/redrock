@@ -13,7 +13,7 @@ parser.add_argument("--datatype", type=str, default='desi',
     required=False, help="input data type: desi or boss")
 
 parser.add_argument("--specfile", type=str, default=None,
-    required=True, help="input spectra or spPlate file")
+    required=True, help="input spectra or spPlate files", nargs='*')
 
 parser.add_argument("--targetids", type=str, default=None,
     required=False, help="comma-separated list of target IDs")
@@ -53,7 +53,7 @@ else:
 #- Data
 if args.datatype=='desi':
     from redrock.external import desi
-    targets = desi.DistTargetsDESI(args.specfile, targetids=targetids)._my_data
+    targets = desi.DistTargetsDESI(args.specfile[0], targetids=targetids)._my_data
 elif args.datatype=='boss':
     from redrock.external import boss
     targets, targetids = boss.read_spectra(args.specfile, targetids=targetids)
