@@ -243,6 +243,8 @@ def read_spectra(spplates_name, targetids=None, use_frames=False,
 
     if targetids == None:
         targetids = sorted(list(dic_spectra.keys()))
+    else:
+        targetids = sorted(targetids)
 
     targets = []
     for targetid in targetids:

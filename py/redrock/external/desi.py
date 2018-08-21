@@ -153,9 +153,10 @@ class DistTargetsDESI(DistTargets):
             # Now every process has the fibermap and number of HDUs.  Build the
             # mapping between spectral rows and target IDs.
 
-            keep_targetids = targetids
             if targetids is None:
-                keep_targetids = fmap["TARGETID"]
+                keep_targetids = sorted(fmap["TARGETID"])
+            else:
+                keep_targetids = sorted(targetids)
 
             # Select a subset of the target range from each file if desired.
 
