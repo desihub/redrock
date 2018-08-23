@@ -326,27 +326,18 @@ def calc_zchi2_targets(targets, templates, mp_procs=1):
                 if len(mpdist[i]) == 0:
                     continue
                 res = qout.get()
-                zchi2[res[0]] = res[1]
-                zcoeff[res[0]] = res[2]
-                penalty[res[0]] = res[3]
-
-            # Concatenate the results, so that we end up with data for all
-            # redshifts for all targets.
-
-            zchi2 = np.concatenate([ zchi2[p] for p in sorted(zchi2.keys()) ],
-                axis=0)
-            zcoeff = np.concatenate([ zcoeff[p] for p in \
-                sorted(zcoeff.keys()) ], axis=0)
-            penalty = np.concatenate([ penalty[p] for p in \
-                sorted(penalty.keys()) ], axis=0)
+                for j in range(len(mpdist[i])):
+                    zchi2[mpdist[res[0]][j]] = res[1][j]
+                    zcoeff[mpdist[res[0]][j]] = res[2][j]
+                    penalty[mpdist[res[0]][j]] = res[3][j]
 
         stop = elapsed(start, "    Finished in", comm=t.comm)
 
-        for i, tg in enumerate(targets.local()):
-            results[tg.id][ft] = dict()
-            results[tg.id][ft]['redshifts'] = t.template.redshifts
-            results[tg.id][ft]['zchi2'] = zchi2[i]
-            results[tg.id][ft]['penalty'] = penalty[i]
-            results[tg.id][ft]['zcoeff'] = zcoeff[i]
+        for tid in sorted(zchi2.keys()):
+            results[tid][ft] = dict()
+            results[tid][ft]['redshifts'] = t.template.redshifts
+            results[tid][ft]['zchi2'] = zchi2[tid]
+            results[tid][ft]['penalty'] = penalty[tid]
+            results[tid][ft]['zcoeff'] = zcoeff[tid]
 
     return results
