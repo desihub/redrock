@@ -245,8 +245,7 @@ def calc_zchi2_targets(targets, templates, mp_procs=1):
                 tzchi2, tzcoeff, tpenalty = \
                     calc_zchi2(targets.local_target_ids(), targets.local(), t)
 
-                # Save the results into a dict keyed on the redshift chunk index
-                # for easy sorting at the end.
+                # Save the results into a dict keyed on targetid
                 for i in range(len(targets.local_target_ids())):
                     zchi2[targets.local_target_ids()[i]] = tzchi2[i]
                     zcoeff[targets.local_target_ids()[i]] = tzcoeff[i]
