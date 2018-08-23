@@ -247,9 +247,10 @@ def calc_zchi2_targets(targets, templates, mp_procs=1):
 
                 # Save the results into a dict keyed on the redshift chunk index
                 # for easy sorting at the end.
-                zchi2[t.local.index] = tzchi2
-                zcoeff[t.local.index] = tzcoeff
-                penalty[t.local.index] = tpenalty
+                for i in range(len(targets.local_target_ids())):
+                    zchi2[targets.local_target_ids()[i]] = tzchi2[i]
+                    zcoeff[targets.local_target_ids()[i]] = tzcoeff[i]
+                    penalty[targets.local_target_ids()[i]] = tpenalty[i]
 
                 prg = int(100.0 * prog * mpi_prog_frac)
                 if prg >= proglast + prog_chunk:
@@ -262,16 +263,6 @@ def calc_zchi2_targets(targets, templates, mp_procs=1):
 
                 # Cycle through the redshift slices
                 done = t.cycle()
-
-            # Concatenate the results, so that we end up with data for all
-            # redshifts for our local targets.
-
-            zchi2 = np.concatenate([ zchi2[p] for p in sorted(zchi2.keys()) ],
-                axis=1)
-            zcoeff = np.concatenate([ zcoeff[p] for p in sorted(zcoeff.keys()) ],
-                axis=1)
-            penalty = np.concatenate([ penalty[p] for p in \
-                sorted(penalty.keys()) ], axis=1)
 
         else:
             # Multiprocessing case.
