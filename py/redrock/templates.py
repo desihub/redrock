@@ -74,7 +74,7 @@ class Template(object):
                 if self._rrtype == 'GALAXY':
                     # redshifts = 10**np.arange(np.log10(1+0.005),
                     # np.log10(1+2.0), 1.5e-4) - 1
-                    self._redshifts = 10**np.arange(np.log10(1+0.005),
+                    self._redshifts = 10**np.arange(np.log10(1-0.005),
                         np.log10(1+1.7), 3e-4) - 1
                 elif self._rrtype == 'STAR':
                     self._redshifts = np.arange(-0.002, 0.00201, 4e-5)
