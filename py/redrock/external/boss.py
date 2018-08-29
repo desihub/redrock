@@ -116,7 +116,7 @@ def read_spectra(spplates_name, targetids=None, use_frames=False,
         mjd += [spplate[0].read_header()["MJD"]]
 
         if useThingid:
-            photoPlate = fitsio.FITS(spplate_name.replace('spPlate','photoPlate'))
+            photoPlate = fitsio.FITS(spplate_name.replace('spPlate','photoPosPlate'))
 
         if use_frames:
             path = os.path.dirname(spplate_name)
