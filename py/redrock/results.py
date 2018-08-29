@@ -99,7 +99,7 @@ def read_zscan(filename):
     """
     import h5py
     # zbest = Table.read(filename, format='hdf5', path='zbest')
-    with h5py.File(filename, mode='r') as fx:
+    with h5py.File(os.path.expandvars(filename), mode='r') as fx:
         targetids = fx['targetids'].value
         spectypes = list(fx['zscan'].keys())
 
