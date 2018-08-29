@@ -245,11 +245,11 @@ def calc_zchi2_targets(targets, templates, mp_procs=1):
                 tzchi2, tzcoeff, tpenalty = \
                     calc_zchi2(targets.local_target_ids(), targets.local(), t)
 
-                # Save the results into a dict keyed on the redshift chunk index
-                # for easy sorting at the end.
-                zchi2[t.local.index] = tzchi2
-                zcoeff[t.local.index] = tzcoeff
-                penalty[t.local.index] = tpenalty
+                # Save the results into a dict keyed on targetid
+                for i in range(len(targets.local_target_ids())):
+                    zchi2[targets.local_target_ids()[i]] = tzchi2[i]
+                    zcoeff[targets.local_target_ids()[i]] = tzcoeff[i]
+                    penalty[targets.local_target_ids()[i]] = tpenalty[i]
 
                 prg = int(100.0 * prog * mpi_prog_frac)
                 if prg >= proglast + prog_chunk:
@@ -262,16 +262,6 @@ def calc_zchi2_targets(targets, templates, mp_procs=1):
 
                 # Cycle through the redshift slices
                 done = t.cycle()
-
-            # Concatenate the results, so that we end up with data for all
-            # redshifts for our local targets.
-
-            zchi2 = np.concatenate([ zchi2[p] for p in sorted(zchi2.keys()) ],
-                axis=1)
-            zcoeff = np.concatenate([ zcoeff[p] for p in sorted(zcoeff.keys()) ],
-                axis=1)
-            penalty = np.concatenate([ penalty[p] for p in \
-                sorted(penalty.keys()) ], axis=1)
 
         else:
             # Multiprocessing case.
@@ -326,27 +316,18 @@ def calc_zchi2_targets(targets, templates, mp_procs=1):
                 if len(mpdist[i]) == 0:
                     continue
                 res = qout.get()
-                zchi2[res[0]] = res[1]
-                zcoeff[res[0]] = res[2]
-                penalty[res[0]] = res[3]
-
-            # Concatenate the results, so that we end up with data for all
-            # redshifts for all targets.
-
-            zchi2 = np.concatenate([ zchi2[p] for p in sorted(zchi2.keys()) ],
-                axis=0)
-            zcoeff = np.concatenate([ zcoeff[p] for p in \
-                sorted(zcoeff.keys()) ], axis=0)
-            penalty = np.concatenate([ penalty[p] for p in \
-                sorted(penalty.keys()) ], axis=0)
+                for j in range(len(mpdist[i])):
+                    zchi2[mpdist[res[0]][j]] = res[1][j]
+                    zcoeff[mpdist[res[0]][j]] = res[2][j]
+                    penalty[mpdist[res[0]][j]] = res[3][j]
 
         stop = elapsed(start, "    Finished in", comm=t.comm)
 
-        for i, tg in enumerate(targets.local()):
-            results[tg.id][ft] = dict()
-            results[tg.id][ft]['redshifts'] = t.template.redshifts
-            results[tg.id][ft]['zchi2'] = zchi2[i]
-            results[tg.id][ft]['penalty'] = penalty[i]
-            results[tg.id][ft]['zcoeff'] = zcoeff[i]
+        for tid in sorted(zchi2.keys()):
+            results[tid][ft] = dict()
+            results[tid][ft]['redshifts'] = t.template.redshifts
+            results[tid][ft]['zchi2'] = zchi2[tid]
+            results[tid][ft]['penalty'] = penalty[tid]
+            results[tid][ft]['zcoeff'] = zcoeff[tid]
 
     return results
