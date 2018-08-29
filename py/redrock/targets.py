@@ -31,8 +31,7 @@ class Spectrum(object):
     # @profile
     def __init__(self, wave, flux, ivar, R, Rcsr=None):
         if R is not None:
-            # w = np.asarray(R.sum(axis=1))[:,0]<constants.min_resolution_integral
-            w = np.asarray(R.data.sum(axis=0))<constants.min_resolution_integral
+            w = np.asarray(R.sum(axis=1))[:,0]<constants.min_resolution_integral
             ivar[w] = 0.
         self.nwave = wave.size
         self.wave = wave
