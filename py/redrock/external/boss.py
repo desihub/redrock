@@ -78,12 +78,12 @@ def write_zbest(outfile, zbest, template_version, archetype_version):
     return
 
 ### @profile
-def read_spectra(spplate_name, targetids=None, use_frames=False,
+def read_spectra(spplates_name, targetids=None, use_frames=False,
     fiberid=None, coadd=False, cache_Rcsr=False):
     """Read targets from a list of spectra files
 
     Args:
-        spplate_name (str): input spPlate file
+        spplates_name (list): input spPlate files
         targetids (list): restrict targets to this subset.
         use_frames (bool): if True, use frames.
         fiberid (int): Use this fiber ID.
@@ -96,33 +96,61 @@ def read_spectra(spplate_name, targetids=None, use_frames=False,
         meta is a Table of metadata (currently only BRICKNAME).
 
     """
-    ## read spplate
-    spplate = fitsio.FITS(spplate_name)
-    plate = spplate[0].read_header()["PLATEID"]
-    mjd = spplate[0].read_header()["MJD"]
-    if not use_frames:
-        infiles = [spplate_name]
-    if use_frames:
-        path = os.path.dirname(spplate_name)
-        cameras = ['b1','r1','b2','r2']
 
-        infiles = []
-        nexp_tot=0
-        for c in cameras:
-            try:
-                nexp = spplate[0].read_header()["NEXP_{}".format(c.upper())]
-            except ValueError:
-                print("DEBUG: spplate {} has no exposures in camera {} ".format(spplate_name,c))
-                continue
-            for i in range(1,nexp+1):
-                nexp_tot += 1
-                expid = str(nexp_tot)
-                if nexp_tot<10:
-                    expid = '0'+expid
-                exp = path+"/spCFrame-"+spplate[0].read_header()["EXPID"+expid][:11]+".fits"
-                infiles.append(exp)
+    ## read spplates
+    useThingid = False
+    if len(spplates_name)>1:
+        print("DEBUG: Reading multiple observations: using THING_ID instead of PLATE*1000000000 + MJD*10000 + FIBERID")
+        useThingid = True
+        fiberid2thingid = {}
+    plate = None
+    mjd = []
+    infiles = []
+    for spplate_name in spplates_name:
 
-    spplate.close()
+        spplate = fitsio.FITS(spplate_name)
+        if plate is None:
+            plate = spplate[0].read_header()["PLATEID"]
+        else:
+            assert plate == spplate[0].read_header()["PLATEID"]
+        mjd += [spplate[0].read_header()["MJD"]]
+
+        if useThingid:
+            photoPlate = fitsio.FITS(spplate_name.replace('spPlate','photoPlate'))
+
+        if use_frames:
+            path = os.path.dirname(spplate_name)
+            cameras = ['b1','r1','b2','r2']
+
+            nexp_tot=0
+            for c in cameras:
+                try:
+                    nexp = spplate[0].read_header()["NEXP_{}".format(c.upper())]
+                except ValueError:
+                    print("DEBUG: spplate {} has no exposures in camera {} ".format(spplate_name,c))
+                    continue
+                for i in range(1,nexp+1):
+                    nexp_tot += 1
+                    expid = str(nexp_tot).zfill(2)
+                    exp = path+"/spCFrame-"+spplate[0].read_header()["EXPID"+expid][:11]+".fits"
+                    infiles.append(exp)
+                    if useThingid:
+                        fiberid2thingid[exp] = photoPlate[1]['THING_ID'][:]
+        else:
+            infiles.append(spplate_name)
+            if useThingid:
+                fiberid2thingid[spplate_name] = photoPlate[1]['THING_ID'][:]
+
+        spplate.close()
+        if useThingid:
+            photoPlate.close()
+
+    if len(spplates_name)==1:
+        mjd = mjd[0]
+    else:
+        mjd = 0
+
+
     bricknames={}
     dic_spectra = {}
 
@@ -174,7 +202,11 @@ def read_spectra(spplate_name, targetids=None, use_frames=False,
             if use_frames:
                 i = i%500
 
-            t = platemjdfiber2targetid(plate, mjd, f)
+            if useThingid:
+                t = fiberid2thingid[infile][f-1]
+            else:
+                t = platemjdfiber2targetid(plate, mjd, f)
+
             if t not in dic_spectra:
                 dic_spectra[t]=[]
                 brickname = '{}-{}'.format(plate,mjd)
@@ -261,7 +293,7 @@ def rrboss(options=None, comm=None):
         " BOSS target spectra.")
 
     parser.add_argument("--spplate", type=str, default=None,
-        required=True, help="input plate directory")
+        required=True, help="input plate files", nargs='*')
 
     parser.add_argument("-t", "--templates", type=str, default=None,
         required=False, help="template file or directory")
