@@ -333,6 +333,9 @@ def run_redrock(args, comm=None):
         if args.mp is not None:
             cmd += ' --mp {}'.format(args.mp)
 
+        if args.archetypes is not None:
+            cmd += ' --archetypes {}'.format(args.archetypes)
+
         print('Rank {} RUNNING {}'.format(rank, cmd))
         print('LOGGING to {}'.format(logfile))
         sys.stdout.flush()
@@ -387,6 +390,7 @@ def main():
     parser = argparse.ArgumentParser(usage = "wrap-redrock [options]")
     parser.add_argument("--reduxdir", type=str, required=True, help="input redux base directory")
     parser.add_argument("--outdir", type=str,  help="output directory")
+    parser.add_argument("--archetypes", type=str,  help="archetypes directory")
     parser.add_argument("--mp", type=int,  help="number of multiprocessing processes per MPI rank")
     parser.add_argument("--nompi", action="store_true", help="Do not use MPI parallelism")
     parser.add_argument("--dryrun", action="store_true", help="Generate but don't run commands")
