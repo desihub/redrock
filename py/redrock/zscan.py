@@ -247,8 +247,7 @@ def calc_zchi2_targets(targets, templates, mp_procs=1):
 
                 # Save the results into a dict keyed on targetid
                 tids = targets.local_target_ids()
-                for i in range(len(tids)):
-                    tid = tids[i]
+                for i, tid in enumerate(tids):
                     if tid not in zchi2:
                         zchi2[tid] = {}
                         zcoeff[tid] = {}
@@ -324,8 +323,7 @@ def calc_zchi2_targets(targets, templates, mp_procs=1):
             for _ in range(len(procs)):
                 res = qout.get()
                 tids = mpdist[res[0]]
-                for j in range(len(tids)):
-                    tid = tids[j]
+                for j,tid in enumerate(tids):
                     zchi2[tid] = res[1][j]
                     zcoeff[tid] = res[2][j]
                     penalty[tid] = res[3][j]
