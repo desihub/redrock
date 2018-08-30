@@ -316,7 +316,7 @@ def calc_zchi2_targets(targets, templates, mp_procs=1):
                 if len(mpdist[i]) == 0:
                     continue
                 res = qout.get()
-                for j in range(len(mpdist[i])):
+                for j in range(len(mpdist[res[0]])):
                     zchi2[mpdist[res[0]][j]] = res[1][j]
                     zcoeff[mpdist[res[0]][j]] = res[2][j]
                     penalty[mpdist[res[0]][j]] = res[3][j]
