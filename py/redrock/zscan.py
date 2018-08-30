@@ -246,10 +246,16 @@ def calc_zchi2_targets(targets, templates, mp_procs=1):
                     calc_zchi2(targets.local_target_ids(), targets.local(), t)
 
                 # Save the results into a dict keyed on targetid
-                for i in range(len(targets.local_target_ids())):
-                    zchi2[targets.local_target_ids()[i]] = tzchi2[i]
-                    zcoeff[targets.local_target_ids()[i]] = tzcoeff[i]
-                    penalty[targets.local_target_ids()[i]] = tpenalty[i]
+                tids = targets.local_target_ids()
+                for i in range(len(tids)):
+                    tid = tids[i]
+                    if tid not in zchi2:
+                        zchi2[tid] = {}
+                        zcoeff[tid] = {}
+                        penalty[tid] = {}
+                    zchi2[tid][t.local.index] = tzchi2[i]
+                    zcoeff[tid][t.local.index] = tzcoeff[i]
+                    penalty[tid][t.local.index] = tpenalty[i]
 
                 prg = int(100.0 * prog * mpi_prog_frac)
                 if prg >= proglast + prog_chunk:
@@ -263,6 +269,10 @@ def calc_zchi2_targets(targets, templates, mp_procs=1):
                 # Cycle through the redshift slices
                 done = t.cycle()
 
+            for tid in zchi2.keys():
+                zchi2[tid] = np.concatenate([ zchi2[tid][p] for p in sorted(zchi2[tid].keys()) ])
+                zcoeff[tid] = np.concatenate([ zcoeff[tid][p] for p in sorted(zcoeff[tid].keys()) ])
+                penalty[tid] = np.concatenate([ penalty[tid][p] for p in sorted(penalty[tid].keys()) ])
         else:
             # Multiprocessing case.
             import multiprocessing as mp
@@ -313,10 +323,12 @@ def calc_zchi2_targets(targets, templates, mp_procs=1):
             penalty = dict()
             for _ in range(len(procs)):
                 res = qout.get()
-                for j in range(len(mpdist[res[0]])):
-                    zchi2[mpdist[res[0]][j]] = res[1][j]
-                    zcoeff[mpdist[res[0]][j]] = res[2][j]
-                    penalty[mpdist[res[0]][j]] = res[3][j]
+                tids = mpdist[res[0]]
+                for j in range(len(tids)):
+                    tid = tids[j]
+                    zchi2[tid] = res[1][j]
+                    zcoeff[tid] = res[2][j]
+                    penalty[tid] = res[3][j]
 
         stop = elapsed(start, "    Finished in", comm=t.comm)
 
