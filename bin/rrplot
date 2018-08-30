@@ -21,6 +21,9 @@ parser.add_argument("--targetids", type=str, default=None,
 parser.add_argument("--rrfile", type=str, default=None,
     required=True, help="redrock details h5 file from rrdesi/rrboss")
 
+parser.add_argument("--allspec", default=False, action="store_true",
+    required=False, help="use individual spectra instead of coadd")
+
 parser.add_argument("-t", "--templates", type=str, default=None,
     required=False, help="template directory")
 
@@ -53,10 +56,10 @@ else:
 #- Data
 if args.datatype=='desi':
     from redrock.external import desi
-    targets = desi.DistTargetsDESI(args.specfile[0], targetids=targetids)._my_data
+    targets = desi.DistTargetsDESI(args.specfile[0], targetids=targetids, coadd=(not args.allspec))._my_data
 elif args.datatype=='boss':
     from redrock.external import boss
-    targets, targetids = boss.read_spectra(args.specfile, targetids=targetids)
+    targets, targetids = boss.read_spectra(args.specfile, targetids=targetids, coadd=(not args.allspec))
 
 #- Redrock
 zscan, zfit = redrock.results.read_zscan(args.rrfile)
