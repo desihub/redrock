@@ -584,6 +584,13 @@ def rrdesi(options=None, comm=None):
             targetids=targetids, first_target=first_target, n_target=n_target,
             comm=comm, cache_Rcsr=True)
 
+        #- Mask some problematic sky lines
+        for t in targets.local():
+            for s in t.spectra:
+                ii = (5572. <= s.wave) & (s.wave <= 5582.)
+                ii |= (9792. <= s.wave) & (s.wave <= 9795.)
+                s.ivar[ii] = 0.0
+
         # Get the dictionary of wavelength grids
         dwave = targets.wavegrids()
 
