@@ -413,6 +413,14 @@ def main():
     if args.plan:
         plan(args, comm=comm)
     else:
+        #- Create output directory if needed
+        if (args.outdir is not None) and ((comm is None) or (comm.rank == 0)):
+            os.makedirs(args.outdir, exist_ok=True)
+
+        #- All ranks wait for directory to be created
+        if comm is not None:
+            comm.barrier()
+
         run_redrock(args, comm=comm)
 
 if __name__ == '__main__':

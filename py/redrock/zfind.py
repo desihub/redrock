@@ -167,6 +167,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None):
         if targets.comm is not None:
             # MPI case.  Every process just works with its local targets.
             for tg in targets.local():
+                print('----', t.template.redshifts.shape, results[tg.id][ft]['zchi2'].shape)
                 zfit = fitz(results[tg.id][ft]['zchi2'] \
                     + results[tg.id][ft]['penalty'],
                     t.template.redshifts, tg.spectra,
