@@ -208,6 +208,8 @@ def read_spectra(spplates_name, targetids=None, use_frames=False,
                 t = fiberid2thingid[infile][f-1]
             else:
                 t = platemjdfiber2targetid(plate, mjd, f)
+            if not targetids is None and not t in targetids:
+                continue
 
             if t not in dic_spectra:
                 dic_spectra[t]=[]
