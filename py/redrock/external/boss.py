@@ -103,16 +103,13 @@ def read_spectra(spplates_name, targetids=None, use_frames=False,
         print("DEBUG: Reading multiple observations: using THING_ID instead of PLATE*1000000000 + MJD*10000 + FIBERID")
         useThingid = True
         fiberid2thingid = {}
-    plate = None
+    plate = []
     mjd = []
     infiles = []
     for spplate_name in spplates_name:
 
         spplate = fitsio.FITS(spplate_name)
-        if plate is None:
-            plate = spplate[0].read_header()["PLATEID"]
-        else:
-            assert plate == spplate[0].read_header()["PLATEID"]
+        plate += [spplate[0].read_header()["PLATEID"]]
         mjd += [spplate[0].read_header()["MJD"]]
 
         if useThingid:
@@ -145,7 +142,11 @@ def read_spectra(spplates_name, targetids=None, use_frames=False,
         if useThingid:
             photoPlate.close()
 
-    if len(spplates_name)==1:
+    if len(set(plate))==1:
+        plate = plate[0]
+    else:
+        plate = 0
+    if len(set(mjd))==1:
         mjd = mjd[0]
     else:
         mjd = 0
@@ -156,7 +157,8 @@ def read_spectra(spplates_name, targetids=None, use_frames=False,
 
     for infile in infiles:
         h = fitsio.FITS(infile)
-        assert plate == h[0].read_header()["PLATEID"]
+        if not useThingid:
+            assert plate == h[0].read_header()["PLATEID"]
         fs = h[5]["FIBERID"][:]
         if fiberid is not None:
             w = np.in1d(fs,fiberid)
