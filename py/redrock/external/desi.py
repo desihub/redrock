@@ -475,6 +475,9 @@ def rrdesi(options=None, comm=None):
         required=False, help="if not using MPI, the number of multiprocessing"
             " processes to use (defaults to half of the hardware threads)")
 
+    parser.add_argument("--no-skymask", default=False, action="store_true",
+        required=False, help="Do not do extra masking of sky lines")
+
     parser.add_argument("--debug", default=False, action="store_true",
         required=False, help="debug with ipython (only if communicator has a "
         "single process)")
@@ -583,6 +586,14 @@ def rrdesi(options=None, comm=None):
         targets = DistTargetsDESI(args.infiles, coadd=(not args.allspec),
             targetids=targetids, first_target=first_target, n_target=n_target,
             comm=comm, cache_Rcsr=True)
+
+        #- Mask some problematic sky lines
+        if not args.no_skymask:
+            for t in targets.local():
+                for s in t.spectra:
+                    ii = (5572. <= s.wave) & (s.wave <= 5582.)
+                    ii |= (9792. <= s.wave) & (s.wave <= 9795.)
+                    s.ivar[ii] = 0.0
 
         # Get the dictionary of wavelength grids
         dwave = targets.wavegrids()
