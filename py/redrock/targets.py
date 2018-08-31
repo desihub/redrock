@@ -40,7 +40,10 @@ class Spectrum(object):
         self.R = R
         self._Rcsr = Rcsr
         self._mpshared = False
-        self.wavehash = hash((len(wave), wave[0], wave[1], wave[-2], wave[-1]))
+        if hasattr(R,'data'):
+            self.wavehash = hash((len(wave), wave[0], wave[1], wave[-2], wave[-1], R.data.shape[0]))
+        else:
+            self.wavehash = hash((len(wave), wave[0], wave[1], wave[-2], wave[-1]))
 
     @property
     def Rcsr(self):
