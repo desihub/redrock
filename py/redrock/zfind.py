@@ -364,4 +364,15 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None):
         for tid in targets.all_target_ids:
             del allresults[tid]['meta']
 
+        # Standardize column sizes
+        if allzfit['subtype'].dtype != '<U20':
+            allzfit.replace_column('subtype', allzfit['subtype'].astype('<U20'))
+
+        maxcoeff = np.max([t.template.nbasis for t in templates])
+        ntarg, ncoeff = allzfit['coeff'].shape
+        if ncoeff != maxcoeff:
+            coeff = np.zeros((ntarg, maxcoeff), dtype=allzfit['coeff'].dtype)
+            coeff[:,0:ncoeff] = allzfit['coeff']
+            allzfit.replace_column('coeff', coeff)
+
     return allresults, allzfit
