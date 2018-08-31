@@ -368,6 +368,9 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None):
         if allzfit['subtype'].dtype != '<U20':
             allzfit.replace_column('subtype', allzfit['subtype'].astype('<U20'))
 
+        if allzfit['spectype'].dtype != '<U6':
+            allzfit.replace_column('spectype',allzfit['spectype'].astype('<U6'))
+
         maxcoeff = np.max([t.template.nbasis for t in templates])
         ntarg, ncoeff = allzfit['coeff'].shape
         if ncoeff != maxcoeff:
