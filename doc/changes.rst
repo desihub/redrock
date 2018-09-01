@@ -2,10 +2,33 @@
 redrock Change Log
 ==================
 
-0.12.2 (unreleased)
+0.13.1 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.13.0 (2018-08-31)
+-------------------
+
+* Lower galaxy z_min from +0.005 to -0.005 (PR `#136`_).
+* Support for simutaneous fits of multiple e/BOSS spPlates (PR `#137`_,
+  `#141`_, `#147`_).
+* Bug fix when using subset of targetids (PR `#139`_).
+* Small interface useability updates (PR `#142`_, `#143`_).
+* Fix R normalization cut bug impacting tags 0.12.0 and 0.12.1 (PR `#144`_).
+* Mask sky lines 5577 and 9793.5 (PR `#146`_).
+* Standarize ZBEST output format for easier concatenating tables (PR `#149`_).
+
+.. _`#136`: https://github.com/desihub/redrock/pull/136
+.. _`#137`: https://github.com/desihub/redrock/pull/137
+.. _`#139`: https://github.com/desihub/redrock/pull/139
+.. _`#141`: https://github.com/desihub/redrock/pull/141
+.. _`#142`: https://github.com/desihub/redrock/pull/142
+.. _`#143`: https://github.com/desihub/redrock/pull/143
+.. _`#144`: https://github.com/desihub/redrock/pull/144
+.. _`#146`: https://github.com/desihub/redrock/pull/146
+.. _`#147`: https://github.com/desihub/redrock/pull/147
+.. _`#149`: https://github.com/desihub/redrock/pull/149
 
 0.12.1 (2018-07-26)
 -------------------
