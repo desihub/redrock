@@ -449,7 +449,7 @@ def rrdesi(options=None, comm=None):
     parser.add_argument("-o", "--output", type=str, default=None,
         required=False, help="output file")
 
-    parser.add_argument("--zbest", type=str, default=None,
+    parser.add_argument("-z", "--zbest", type=str, default=None,
         required=False, help="output zbest FITS file")
 
     parser.add_argument("--targetids", type=str, default=None,
