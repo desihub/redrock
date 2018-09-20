@@ -319,6 +319,9 @@ def rrboss(options=None, comm=None):
     parser.add_argument("--mintarget", type=int, default=None,
         required=False, help="first target to process")
 
+    parser.add_argument("--priors", type=str, default=None,
+        required=False, help="optional redshift prior file")
+
     parser.add_argument("-n", "--ntargets", type=int,
         required=False, help="the number of targets to process")
 
@@ -460,7 +463,7 @@ def rrboss(options=None, comm=None):
         start = elapsed(None, "", comm=comm)
 
         scandata, zfit = zfind(dtargets, dtemplates, mpprocs,
-            nminima=args.nminima, archetypes=args.archetypes)
+            nminima=args.nminima, archetypes=args.archetypes, priors=args.priors)
 
         stop = elapsed(start, "Computing redshifts took", comm=comm)
 
