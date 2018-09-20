@@ -136,3 +136,33 @@ def read_zscan(filename):
         zfit.replace_column('subtype', encode_column(zfit['subtype']))
 
     return zscan, zfit
+def read_zscan_redrock(filename):
+    """Read redrock.zfind results from a file to be reused by redrock itself.
+
+    Returns:
+        dict: dictionary of results for each local target ID.
+            dic.keys() are TARGETID
+            dic[tg].keys() are TEMPLATE
+            dic[tg][ft].keys() are ['penalty', 'zcoeff', 'zchi2', 'redshifts']
+
+    """
+    import h5py
+
+    with h5py.File(os.path.expandvars(filename), mode='r') as fx:
+        targetids = fx['targetids'].value
+        spectypes = list(fx['zscan'].keys())
+
+        tmp_results = { ft:
+            {'redshifts':fx['/zscan/{}/redshifts'.format(ft)].value,
+            'zchi2':fx['/zscan/{}/zchi2'.format(ft)].value,
+            'penalty':fx['/zscan/{}/penalty'.format(ft)].value,
+            'zcoeff':fx['/zscan/{}/zcoeff'.format(ft)].value}
+            for ft in spectypes}
+        results = { tg:{ ft:
+            {'redshifts':tmp_results[ft]['redshifts'],
+            'zchi2':tmp_results[ft]['zchi2'][i],
+            'penalty':tmp_results[ft]['penalty'][i],
+            'zcoeff':tmp_results[ft]['zcoeff'][i]}
+            for ft in spectypes } for i, tg in enumerate(targetids) }
+
+    return results

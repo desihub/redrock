@@ -30,6 +30,8 @@ from .archetypes import All_archetypes
 
 from .priors import Priors
 
+from .results import read_zscan_redrock
+
 from .zscan import calc_zchi2_targets
 
 from .fitz import fitz, get_dv
@@ -88,7 +90,7 @@ def calc_deltachi2(chi2, z, dvlimit=None):
 
     return deltachi2
 
-def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=None):
+def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=None, chi2_scan=None):
     """Compute all redshift fits for the local set of targets and collect.
 
     Given targets and templates distributed across a set of MPI processes,
@@ -110,6 +112,8 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             Passed to fitz().
         archetypes (str, optional): file or directory containing archetypes
             to use for final fitz choice of best chi2 vs. z minimum.
+        priors (str, optional): file containing redshift priors
+        chi2_scan (str, optional): file containing already computed chi2 scan
 
     Returns:
         tuple: (allresults, allzfit), where "allresults" is a dictionary of the
@@ -145,8 +149,10 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
         mpdist = distribute_targets(targets.local(), mp_procs)
 
     # Compute the coarse-binned chi2 for all local targets.
-
-    results = calc_zchi2_targets(targets, templates, mp_procs=mp_procs)
+    if chi2_scan is None:
+        results = calc_zchi2_targets(targets, templates, mp_procs=mp_procs)
+    else:
+        results = read_zscan_redrock(chi2_scan)
 
     # Apply redshift prior
     if not priors is None:
