@@ -31,5 +31,4 @@ class Priors():
     def eval(self, targetid, z):
         z0 = self._priors[targetid]['Z']
         s0 = self._priors[targetid]['SIGMA']
-        print(z0, s0)
         return ((z-z0)/s0)**2
