@@ -29,6 +29,10 @@ class Priors():
 
         return
     def eval(self, targetid, z):
-        z0 = self._priors[targetid]['Z']
-        s0 = self._priors[targetid]['SIGMA']
-        return ((z-z0)/s0)**2
+        try:
+            z0 = self._priors[targetid]['Z']
+            s0 = self._priors[targetid]['SIGMA']
+            return ((z-z0)/s0)**2
+        except KeyError:
+            print('DEBUG: targetid {} not in priors'.format(targetid))
+            return 0.

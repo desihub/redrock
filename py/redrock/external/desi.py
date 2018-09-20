@@ -66,7 +66,7 @@ def write_zbest(outfile, zbest, fibermap, template_version, archetype_version):
     hx.append(fits.PrimaryHDU(header=header))
     hx.append(fits.convenience.table_to_hdu(zbest))
     hx.append(fits.convenience.table_to_hdu(fibermap))
-    hx.writeto(outfile, overwrite=True)
+    hx.writeto(os.path.expandvars(outfile), overwrite=True)
     return
 
 

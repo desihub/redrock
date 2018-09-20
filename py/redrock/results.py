@@ -36,6 +36,7 @@ def write_zscan(filename, zscan, zfit, clobber=False):
 
     """
     import h5py
+    filename = os.path.expandvars(filename)
     if clobber and os.path.exists(filename):
         os.remove(filename)
 
