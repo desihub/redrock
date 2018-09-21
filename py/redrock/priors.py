@@ -40,7 +40,9 @@ class Priors():
             print('DEBUG: targetid {} not in priors'.format(targetid))
             return 0.
 
-    def gaussian(self,z,z0,s0):
+    @staticmethod
+    def gaussian(z,z0,s0):
         return ((z-z0)/s0)**2
-    def lorentzien(self,z,z0,s0):
+    @staticmethod
+    def lorentzien(z,z0,s0):
         return -np.log(1.+((z-z0)/s0)**2)
