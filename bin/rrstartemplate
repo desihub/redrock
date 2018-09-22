@@ -44,7 +44,7 @@ dw = 0.1
 wave = np.arange(3000, 11000+dw/2, dw)
 nstar = 10000
 tflux, twave, meta, tobjmeta = STAR().make_templates(nstar, restframe=True,seed=opts.seed)
-flux = np.zeros((nstar, len(wave)))
+flux = np.zeros((nstar, wave.size))
 for i in range(nstar):
     flux[i] = resample_flux(wave, twave, tflux[i])
 
@@ -100,4 +100,3 @@ for spectype, (mintemp, maxtemp) in typetemp.items():
     outfile = outbase + '-' + spectype + outext
     hdus.writeto(outfile, overwrite=True)
     print('RR: Wrote '+outfile)
-
