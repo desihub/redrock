@@ -46,12 +46,12 @@ dw = 0.1
 wave = np.arange(3500/(1+1.85), 11000+dw/2, dw)
 nelg = 1000
 nlrg = 500
-tflux, twave, tmeta = ELG().make_templates(nelg, restframe=True, nocolorcuts=True,seed=opts.seed)
+tflux, twave, tmeta, tobjmeta = ELG().make_templates(nelg, restframe=True, nocolorcuts=True,seed=opts.seed)
 elgflux = np.zeros((nelg, len(wave)))
 for i in range(nelg):
     elgflux[i] = resample_flux(wave, twave, tflux[i])
 
-tflux, twave, tmeta = LRG().make_templates(nlrg, restframe=True, nocolorcuts=True,seed=opts.seed+nelg)
+tflux, twave, tmeta, tobjmeta = LRG().make_templates(nlrg, restframe=True, nocolorcuts=True,seed=opts.seed+nelg)
 lrgflux = np.zeros((nlrg, len(wave)))
 for i in range(nlrg):
     lrgflux[i] = resample_flux(wave, twave, tflux[i])

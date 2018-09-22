@@ -45,12 +45,12 @@ wave = np.arange(3000, 11000+dw/2, dw)
 nstar_DA = 10000
 nstar_DB = 10000
 
-tflux, twave, meta = WD(subtype='DA').make_templates(nstar_DA, restframe=True,seed=opts.seed)
+tflux, twave, meta, tobjmeta = WD(subtype='DA').make_templates(nstar_DA, restframe=True,seed=opts.seed)
 flux_DA = np.zeros((nstar_DA, len(wave)))
 for i in range(nstar_DA):
     flux_DA[i] = resample_flux(wave, twave, tflux[i])
 
-tflux, twave, meta = WD(subtype='DB').make_templates(nstar_DB, restframe=True,seed=opts.seed+nstar_DA)
+tflux, twave, meta, tobjmeta = WD(subtype='DB').make_templates(nstar_DB, restframe=True,seed=opts.seed+nstar_DA)
 flux_DB = np.zeros((nstar_DB, len(wave)))
 for i in range(nstar_DB):
     flux_DB[i] = resample_flux(wave, twave, tflux[i])

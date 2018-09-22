@@ -43,7 +43,7 @@ if opts.outfile is None:
 dw = 0.1
 wave = np.arange(3000, 11000+dw/2, dw)
 nstar = 10000
-tflux, twave, meta = STAR().make_templates(nstar, restframe=True,seed=opts.seed)
+tflux, twave, meta, tobjmeta = STAR().make_templates(nstar, restframe=True,seed=opts.seed)
 flux = np.zeros((nstar, len(wave)))
 for i in range(nstar):
     flux[i] = resample_flux(wave, twave, tflux[i])
@@ -66,7 +66,7 @@ typetemp = dict(
 outbase, outext = os.path.splitext(opts.outfile)
 mx = dict()
 for spectype, (mintemp, maxtemp) in typetemp.items():
-    ii = (mintemp <= meta['TEFF']) & (meta['TEFF'] <= maxtemp)
+    ii = (mintemp <= tobjmeta['TEFF']) & (tobjmeta['TEFF'] <= maxtemp)
     print('RR: Using {} spectra to get the templates'.format(ii.sum()))
 
     #- EMPCA fit
