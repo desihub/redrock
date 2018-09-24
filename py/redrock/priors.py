@@ -10,7 +10,12 @@ class Priors():
     """Class to store all different redshift priors.
 
     Args:
-        filename (str): the path to the redshift prior file
+        filename (str): the path to the redshift prior file.
+        The file should have at least one HDU with
+        EXTNAME='PRIORS', composed of:
+            TARGETID: the id of the object
+            Z: the mean of the prior
+            SIGMA: the sigma (in dz) for the prior
 
     """
     def __init__(self, filename):
@@ -32,6 +37,13 @@ class Priors():
 
         return
     def eval(self, targetid, z):
+        """Return prior contribution to the chi2 for the given TARGETID and redshift grid
+        Args:
+            targetid : TARGETID of the object
+            z : redshift at which to evaluate template flux
+        Returns:
+            prior values on the redshift grid
+        """
         try:
             z0 = self._param[targetid]['Z']
             s0 = self._param[targetid]['SIGMA']
@@ -42,7 +54,23 @@ class Priors():
 
     @staticmethod
     def gaussian(z,z0,s0):
+        """Return a Gaussian prior of mean z0 and sigma s0 on the grid z
+        Args:
+            z : redshift grid
+            z0 : mean
+            s0 : sigma
+        Returns:
+            prior values on the redshift grid
+        """
         return ((z-z0)/s0)**2
     @staticmethod
     def lorentzien(z,z0,s0):
+        """Return a Lorentzien prior of mean z0 and sigma s0 on the grid z
+        Args:
+            z : redshift grid
+            z0 : mean
+            s0 : sigma
+        Returns:
+            prior values on the redshift grid
+        """
         return -np.log(1.+((z-z0)/s0)**2)
