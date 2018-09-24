@@ -1,6 +1,10 @@
 import unittest
 import numpy as np
 import scipy.sparse
+import tempfile
+import os
+import shutil
+import fitsio
 
 import numpy.testing as nt
 
@@ -30,8 +34,14 @@ def getR(n, sigma):
 
 class TestZScan(unittest.TestCase):
 
-    def setUp(self):
-        pass
+    @classmethod
+    def setUpClass(cls):
+        cls._branchFiles = tempfile.mkdtemp()+"/"
+
+    @classmethod
+    def tearDownClass(cls):
+        if os.path.isdir(cls._branchFiles):
+            shutil.rmtree(cls._branchFiles, ignore_errors=True)
 
     def test_zfind(self):
         z1 = 0.2
@@ -61,6 +71,26 @@ class TestZScan(unittest.TestCase):
         #self.assertLess(np.abs(zx1['z'] - z1)/zx1['zerr'], 5)
         #self.assertLess(np.abs(zx2['z'] - z2)/zx2['zerr'], 5)
 
+        self.assertLess(zx1['zerr'], 0.002)
+        self.assertLess(zx2['zerr'], 0.002)
+
+        # Create a prior file and test it
+        priorName = self._branchFiles+'/priors.fits'
+        out = fitsio.FITS(priorName,'rw',clobber=True)
+        data = np.zeros(2, dtype=[('TARGETID',int),('Z',float),('SIGMA',float)])
+        data['TARGETID'] = [t1.id,t2.id]
+        data['Z'] = [z1,z2]
+        data['SIGMA'] = [0.01,0.01]
+        extname = 'PRIORS'
+        out.write(data,extname=extname)
+        out.close()
+
+        zscan, zfit = zfind(dtarg, [ dtemp ], priors=priorName)
+        zx1 = zfit[zfit['targetid'] == 111][0]
+        zx2 = zfit[zfit['targetid'] == 222][0]
+
+        self.assertLess(np.abs(zx1['z'] - z1)/zx1['zerr'], 5)
+        self.assertLess(np.abs(zx2['z'] - z2)/zx2['zerr'], 5)
         self.assertLess(zx1['zerr'], 0.002)
         self.assertLess(zx2['zerr'], 0.002)
 
