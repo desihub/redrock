@@ -190,6 +190,8 @@ def find_templates(template_dir=None):
 
     if template_dir is None:
         raise IOError("ERROR: can't find template_dir, $RR_TEMPLATE_DIR, or {rrcode}/templates/")
+    else:
+        print('DEBUG: Read templates from {}'.format(template_dir) )
 
     return sorted(glob(os.path.join(template_dir, 'rrtemplate-*.fits')))
 
