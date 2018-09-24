@@ -21,7 +21,7 @@ from astropy.io import fits
 from empca import empca
 import redrock
 
-from desisim.templates import ELG, LRG
+from desisim.templates import ELG, LRG, BGS
 from desispec.interpolation import resample_flux
 
 parser = optparse.OptionParser(usage = "%prog [options]")
@@ -44,27 +44,31 @@ if opts.outfile is None:
 #- avoiding Lyman-alpha to focus PCA variations on other lines
 dw = 0.1
 wave = np.arange(3500/(1+1.85), 11000+dw/2, dw)
-nelg = 1000
-nlrg = 500
-tflux, twave, tmeta = ELG().make_templates(nelg, restframe=True, nocolorcuts=True,seed=opts.seed)
-elgflux = np.zeros((nelg, len(wave)))
+nelg = 10000
+nlrg = 5000
+nbgs = 5000
+tflux, twave, tmeta, tobjmeta = ELG().make_templates(nelg, restframe=True, nocolorcuts=True,seed=opts.seed)
+elgflux = np.zeros((nelg, wave.size))
 for i in range(nelg):
     elgflux[i] = resample_flux(wave, twave, tflux[i])
 
-tflux, twave, tmeta = LRG().make_templates(nlrg, restframe=True, nocolorcuts=True,seed=opts.seed+nelg)
-lrgflux = np.zeros((nlrg, len(wave)))
+tflux, twave, tmeta, tobjmeta = LRG().make_templates(nlrg, restframe=True, nocolorcuts=True,seed=opts.seed+nelg)
+lrgflux = np.zeros((nlrg, wave.size))
 for i in range(nlrg):
     lrgflux[i] = resample_flux(wave, twave, tflux[i])
-    
-flux = np.vstack([elgflux, lrgflux])
 
-#- fix a resampling bug that causes end-point outliers
-flux[:, -1] = flux[:, -2]
+tflux, twave, tmeta, tobjmeta = BGS().make_templates(nbgs, restframe=True, nocolorcuts=True,seed=opts.seed+nelg+nbgs)
+bgsflux = np.zeros((nbgs, wave.size))
+for i in range(nbgs):
+    bgsflux[i] = resample_flux(wave, twave, tflux[i])
+
+flux = np.vstack([elgflux, lrgflux])
+flux = np.vstack([flux, bgsflux])
 
 #- Normalize spectra so that PCA captures variance rather than normalization
 for i in range(flux.shape[0]):
     flux[i] /= np.median(flux[i])
-    
+
 #- EMPCA fit
 print('RR: Fitting for basis vectors')
 model = empca(flux, niter=opts.niter, nvec=opts.nvec)
@@ -74,7 +78,7 @@ print('RR: Normalizing coefficients for all inputs')
 # model.set_data(data, weights=np.ones_like(data))
 for i in range(model.coeff.shape[0]):
     model.coeff[i] /= np.linalg.norm(model.coeff[i])
-    
+
 #- Write output
 #- TODO: move to redrock.io.write_template
 header = fits.Header()
@@ -95,4 +99,3 @@ hdus.append(fits.ImageHDU(model.coeff, name='ARCHETYPE_COEFF'))
 
 hdus.writeto(opts.outfile, overwrite=True)
 print('RR: Wrote '+opts.outfile)
-
