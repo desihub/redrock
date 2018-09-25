@@ -113,7 +113,7 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None):
         # Loop over redshifts, solving for template fit
         # coefficients.  We use the pre-interpolated templates for each
         # unique wavelength range.
-        for i, z in enumerate(dtemplate.local.redshifts):
+        for i, _ in enumerate(dtemplate.local.redshifts):
             zchi2[j,i], zcoeff[j,i] = calc_zchi2_one(target_data[j].spectra,
                 weights, flux, wflux, dtemplate.local.data[i])
 
@@ -323,7 +323,7 @@ def calc_zchi2_targets(targets, templates, mp_procs=1):
                     zcoeff[tid] = res[2][j]
                     penalty[tid] = res[3][j]
 
-        stop = elapsed(start, "    Finished in", comm=t.comm)
+        elapsed(start, "    Finished in", comm=t.comm)
 
         for tid in sorted(zchi2.keys()):
             results[tid][ft] = dict()

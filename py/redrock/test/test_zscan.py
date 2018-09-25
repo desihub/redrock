@@ -94,7 +94,7 @@ class TestZScan(unittest.TestCase):
         results_a = calc_zchi2_targets(dtarg, [ dtemp ], mp_procs=1)
         results_b = calc_zchi2_targets(dtarg, [ dtemp ], mp_procs=2)
 
-        for i, tg in enumerate(dtarg.local()):
+        for tg in dtarg.local():
             resa = results_a[tg.id][template.full_type]
             resb = results_b[tg.id][template.full_type]
             self.assertEqual(resa['zchi2'].shape, resb['zchi2'].shape)

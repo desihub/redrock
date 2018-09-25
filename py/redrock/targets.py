@@ -52,7 +52,6 @@ class Spectrum(object):
         """
         if not self._mpshared:
             # Store data in multiprocessing shared memory
-            import multiprocessing as mp
             self.wave = mp_array(self.wave)
             self.flux = mp_array(self.flux)
             self.ivar = mp_array(self.ivar)

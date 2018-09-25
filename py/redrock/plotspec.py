@@ -90,7 +90,6 @@ class PlotSpec(object):
 
         #- Isolate imports of optional dependencies
         from scipy.signal import medfilt
-        import matplotlib.pyplot as plt
 
         target = self.targets[self.itarget]
         zfit = self.zfit[self.zfit['targetid'] == target.id]

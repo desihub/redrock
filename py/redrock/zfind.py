@@ -209,7 +209,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None):
                     results[rs[0]][ft]['zfit'] = rs[1]
                     results[rs[0]][ft]['zfit']['npixels'] = rs[2]
 
-        stop = elapsed(start, "    Finished in", comm=t.comm)
+        elapsed(start, "    Finished in", comm=t.comm)
 
     # Add the target metadata to the results
 

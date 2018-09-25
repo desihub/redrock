@@ -225,7 +225,6 @@ class DistTemplatePiece(object):
 def _mp_rebin_template(template, dwave, zlist, qout):
     """Function for multiprocessing version of rebinning.
     """
-    import multiprocessing as mp
     try:
         results = dict()
         for z in zlist:
@@ -421,7 +420,6 @@ def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1):
 
     if (comm is None) or (comm.rank == 0):
         # Only one process needs to do this
-        template_dir = None
         if templates is not None:
             if os.path.isfile(templates):
                 # we are using just a single file
