@@ -64,7 +64,7 @@ class Template(object):
             try:
                 redshifts = native_endian(fx['REDSHIFTS'].data)
                 old_style_templates = False
-            except:
+            except KeyError:
                 pass
 
             fx.close()
