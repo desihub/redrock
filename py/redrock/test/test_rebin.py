@@ -10,7 +10,6 @@ class TestRebin(unittest.TestCase):
         #- Supposed to turn off numba.jit of _trapz_rebin, but coverage
         #- still doesn't see the function.  Leaving this here anyway.
         os.environ['NUMBA_DISABLE_JIT'] = '1'
-        pass
 
     def tearDown(self):
         del os.environ['NUMBA_DISABLE_JIT']
