@@ -230,7 +230,6 @@ class DistTargets(object):
     def _local_target_ids(self):
         raise NotImplementedError("You should not instantiate a DistTargets "
             "object directly")
-        return None
 
 
     def local_target_ids(self):
@@ -242,7 +241,6 @@ class DistTargets(object):
     def _local_data(self):
         raise NotImplementedError("You should not instantiate a DistTargets "
             "object directly")
-        return None
 
 
     def local(self):
