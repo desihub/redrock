@@ -4,7 +4,7 @@ import scipy.sparse
 import tempfile
 import os
 import shutil
-import fitsio
+from astropy.io import fits
 
 import numpy.testing as nt
 
@@ -76,14 +76,11 @@ class TestZScan(unittest.TestCase):
 
         # Create a prior file and test it
         priorName = self._branchFiles+'/priors.fits'
-        out = fitsio.FITS(priorName,'rw',clobber=True)
-        data = np.zeros(2, dtype=[('TARGETID',int),('Z',float),('SIGMA',float)])
-        data['TARGETID'] = [t1.id,t2.id]
-        data['Z'] = [z1,z2]
-        data['SIGMA'] = [0.01,0.01]
-        extname = 'PRIORS'
-        out.write(data,extname=extname)
-        out.close()
+        c1 = fits.Column(name='TARGETID', array=np.array([t1.id,t2.id]), format='K')
+        c2 = fits.Column(name='Z',        array=np.array([z1,z2]),       format='D')
+        c3 = fits.Column(name='SIGMA',    array=np.array([0.01,0.01]),   format='D')
+        t = fits.BinTableHDU.from_columns([c1, c2, c3],name='PRIORS')
+        t.writeto(priorName)
 
         zscan, zfit = zfind(dtarg, [ dtemp ], priors=priorName)
         zx1 = zfit[zfit['targetid'] == 111][0]
