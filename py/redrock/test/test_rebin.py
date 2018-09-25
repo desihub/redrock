@@ -34,7 +34,7 @@ class TestRebin(unittest.TestCase):
             self.assertTrue(np.all(yy == 1.0), msg=str(yy))
 
         #- edges starting/stopping in the interior
-        sum = rebin.trapz_rebin(x, y, edges=[0.5, 8.3])[0]
+        summ = rebin.trapz_rebin(x, y, edges=[0.5, 8.3])[0]
         for nedge in range(3, 3*nx):
             edges = np.linspace(0.5, 8.3, nedge)
             yy = rebin.trapz_rebin(x, y, edges=edges)
