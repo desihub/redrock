@@ -4,12 +4,8 @@ Functions for reading and writing full redrock results to HDF5.
 
 from __future__ import absolute_import, division, print_function
 
-import sys
-from glob import glob
 import os.path
-
 import numpy as np
-from astropy.io import fits
 from astropy.table import Table
 
 from .utils import encode_column

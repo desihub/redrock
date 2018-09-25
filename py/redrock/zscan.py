@@ -7,20 +7,15 @@ Algorithms for scanning redshifts.
 
 from __future__ import division, print_function
 
-import os
 import sys
 import traceback
-
 import numpy as np
-import scipy.sparse
-
-from . import rebin
 
 from .utils import elapsed
 
-from .targets import Spectrum, Target, DistTargets, distribute_targets
+from .targets import Target, DistTargets, distribute_targets
 
-from .templates import Template, DistTemplate
+from .templates import DistTemplate
 
 from ._zscan import _zchi2_one
 

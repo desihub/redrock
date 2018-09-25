@@ -5,7 +5,6 @@ redrock.plotspec
 Visualization tools for plotting spectra.
 """
 
-import time
 import numpy as np
 
 from . import zwarning

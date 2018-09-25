@@ -7,12 +7,9 @@ Redshift finding algorithms.
 
 from __future__ import division, print_function
 
-import os
 import re
 import sys
 import traceback
-
-import time
 
 import numpy as np
 
@@ -22,9 +19,9 @@ from . import constants
 
 from .utils import elapsed
 
-from .targets import Spectrum, Target, DistTargets, distribute_targets
+from .targets import Target, DistTargets, distribute_targets
 
-from .templates import Template, DistTemplate
+from .templates import DistTemplate
 
 from .archetypes import All_archetypes
 

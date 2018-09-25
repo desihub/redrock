@@ -4,13 +4,9 @@ Classes and functions for targets and their spectra.
 
 from __future__ import absolute_import, division, print_function
 
-import sys
 
 import numpy as np
 import scipy.sparse
-from collections import OrderedDict
-
-from astropy.table import Table
 
 from .utils import mp_array, distribute_work
 

@@ -4,7 +4,6 @@ Low-level optimized functions for rebinning templates.
 
 from __future__ import absolute_import, division, print_function
 
-import numpy as np
 import numba
 
 # This code is purposely written in a very "C-like" way.  The logic

@@ -6,8 +6,7 @@ import numpy.testing as nt
 
 from ..targets import DistTargetsCopy
 from ..templates import DistTemplate
-from ..rebin import rebin_template
-from ..zscan import calc_zchi2_one, calc_zchi2_targets, spectral_data
+from ..zscan import calc_zchi2_targets, spectral_data
 from ..zfind import zfind, calc_deltachi2
 
 from . import util
