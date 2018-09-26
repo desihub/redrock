@@ -13,7 +13,7 @@ import numpy as np
 
 from .utils import elapsed
 
-from .targets import DistTargets, distribute_targets
+from .targets import distribute_targets
 
 from ._zscan import _zchi2_one
 

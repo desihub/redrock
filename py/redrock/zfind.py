@@ -19,7 +19,7 @@ from . import constants
 
 from .utils import elapsed
 
-from .targets import DistTargets, distribute_targets
+from .targets import distribute_targets
 
 from .archetypes import All_archetypes
 
