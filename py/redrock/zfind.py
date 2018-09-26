@@ -19,9 +19,7 @@ from . import constants
 
 from .utils import elapsed
 
-from .targets import Target, DistTargets, distribute_targets
-
-from .templates import DistTemplate
+from .targets import DistTargets, distribute_targets
 
 from .archetypes import All_archetypes
 
