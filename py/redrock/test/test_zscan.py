@@ -6,8 +6,7 @@ import numpy.testing as nt
 
 from ..targets import DistTargetsCopy
 from ..templates import DistTemplate
-from ..rebin import rebin_template
-from ..zscan import calc_zchi2_one, calc_zchi2_targets, spectral_data
+from ..zscan import calc_zchi2_targets
 from ..zfind import zfind, calc_deltachi2
 
 from . import util
@@ -95,7 +94,7 @@ class TestZScan(unittest.TestCase):
         results_a = calc_zchi2_targets(dtarg, [ dtemp ], mp_procs=1)
         results_b = calc_zchi2_targets(dtarg, [ dtemp ], mp_procs=2)
 
-        for i, tg in enumerate(dtarg.local()):
+        for tg in dtarg.local():
             resa = results_a[tg.id][template.full_type]
             resb = results_b[tg.id][template.full_type]
             self.assertEqual(resa['zchi2'].shape, resb['zchi2'].shape)

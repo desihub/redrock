@@ -7,12 +7,9 @@ Redshift finding algorithms.
 
 from __future__ import division, print_function
 
-import os
 import re
 import sys
 import traceback
-
-import time
 
 import numpy as np
 
@@ -22,9 +19,7 @@ from . import constants
 
 from .utils import elapsed
 
-from .targets import Spectrum, Target, DistTargets, distribute_targets
-
-from .templates import Template, DistTemplate
+from .targets import distribute_targets
 
 from .archetypes import All_archetypes
 
@@ -212,7 +207,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None):
                     results[rs[0]][ft]['zfit'] = rs[1]
                     results[rs[0]][ft]['zfit']['npixels'] = rs[2]
 
-        stop = elapsed(start, "    Finished in", comm=t.comm)
+        elapsed(start, "    Finished in", comm=t.comm)
 
     # Add the target metadata to the results
 

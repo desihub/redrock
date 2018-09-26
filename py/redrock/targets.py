@@ -4,13 +4,9 @@ Classes and functions for targets and their spectra.
 
 from __future__ import absolute_import, division, print_function
 
-import sys
 
 import numpy as np
 import scipy.sparse
-from collections import OrderedDict
-
-from astropy.table import Table
 
 from .utils import mp_array, distribute_work
 
@@ -56,7 +52,6 @@ class Spectrum(object):
         """
         if not self._mpshared:
             # Store data in multiprocessing shared memory
-            import multiprocessing as mp
             self.wave = mp_array(self.wave)
             self.flux = mp_array(self.flux)
             self.ivar = mp_array(self.ivar)
@@ -234,7 +229,6 @@ class DistTargets(object):
     def _local_target_ids(self):
         raise NotImplementedError("You should not instantiate a DistTargets "
             "object directly")
-        return None
 
 
     def local_target_ids(self):
@@ -246,7 +240,6 @@ class DistTargets(object):
     def _local_data(self):
         raise NotImplementedError("You should not instantiate a DistTargets "
             "object directly")
-        return None
 
 
     def local(self):
