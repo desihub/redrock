@@ -11,8 +11,6 @@ import numpy as np
 
 from ._rebin import _trapz_rebin
 
-from .utils import mp_array
-
 
 def centers2edges(centers):
     """Convert bin centers to bin edges, guessing at what you probably meant

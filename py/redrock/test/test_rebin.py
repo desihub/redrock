@@ -10,7 +10,6 @@ class TestRebin(unittest.TestCase):
         #- Supposed to turn off numba.jit of _trapz_rebin, but coverage
         #- still doesn't see the function.  Leaving this here anyway.
         os.environ['NUMBA_DISABLE_JIT'] = '1'
-        pass
 
     def tearDown(self):
         del os.environ['NUMBA_DISABLE_JIT']
@@ -34,7 +33,7 @@ class TestRebin(unittest.TestCase):
             self.assertTrue(np.all(yy == 1.0), msg=str(yy))
 
         #- edges starting/stopping in the interior
-        sum = rebin.trapz_rebin(x, y, edges=[0.5, 8.3])[0]
+        summ = rebin.trapz_rebin(x, y, edges=[0.5, 8.3])[0]
         for nedge in range(3, 3*nx):
             edges = np.linspace(0.5, 8.3, nedge)
             yy = rebin.trapz_rebin(x, y, edges=edges)

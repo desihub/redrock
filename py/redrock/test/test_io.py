@@ -7,7 +7,6 @@ import numpy as np
 
 from .. import utils as rrutils
 from ..results import read_zscan, write_zscan
-from ..targets import DistTargetsCopy
 from ..templates import DistTemplate, find_templates, load_dist_templates
 from ..zfind import zfind
 

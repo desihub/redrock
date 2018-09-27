@@ -1,13 +1,14 @@
 # Compiled files
-*.py[co]
+*.py[cod]
+__pycache__
 
 # Other generated files
 htmlcov
 .coverage
 
 # Sphinx
-docs/api
-docs/_build
+doc/api
+doc/_build
 
 # Latex documentation
 doc/latex/*.aux
@@ -15,7 +16,7 @@ doc/latex/*.pdf
 doc/latex/*.log
 
 # iPython
-docs/nb/.ipynb_checkpoints
+doc/nb/.ipynb_checkpoints
 
 # Packages/installer info
 *.egg
@@ -23,12 +24,14 @@ docs/nb/.ipynb_checkpoints
 dist
 build
 eggs
+.eggs
 parts
 var
 sdist
 develop-eggs
 .installed.cfg
 distribute-*.tar.gz
+MANIFEST
 
 # Other
 .*.swp

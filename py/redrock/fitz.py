@@ -7,14 +7,11 @@ Functions for fitting minima of chi^2 results.
 
 from __future__ import absolute_import, division, print_function
 
-import sys
 import numpy as np
 import scipy.constants
 import scipy.special
 
 from . import constants
-
-from . import zscan
 
 from .rebin import rebin_template
 

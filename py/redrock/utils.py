@@ -53,7 +53,7 @@ def encode_column(c):
 def getch():
     """Return a single character from stdin.
     """
-    import sys, tty, termios
+    import tty, termios
     fd = sys.stdin.fileno()
     old_settings = termios.tcgetattr(fd)
     try:
