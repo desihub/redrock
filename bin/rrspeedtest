@@ -11,7 +11,7 @@ def timeit(message):
     global t0
     print("{:10s} {:.3f}".format(message, time() - t0))
     t0 = time()
-    
+
 import sys, os
 from glob import glob
 import multiprocessing as mp
@@ -105,7 +105,7 @@ n = 2500
 t0 = time()
 cholesky(n)
 timeit('chol0')
-    
+
 for ncpu in (1, 2, 4, 8):
     args = [[n,] for i in range(ncpu)]
     pool = mp.Pool(ncpu)

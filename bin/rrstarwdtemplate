@@ -62,7 +62,7 @@ for i in range(flux.shape[0]):
     flux[i] /= np.median(flux[i])
 
 outbase, outext = os.path.splitext(opts.outfile)
-    
+
 #- EMPCA fit
 print('RR: Fitting basis vectors')
 mx = model = empca(flux, niter=opts.niter, nvec=opts.nvec)
