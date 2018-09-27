@@ -241,14 +241,14 @@ def distribute_work(nproc, ids, weights=None):
 
     off = 0
     curweight = 0.0
-    for cur in range(0, len(wts)):
-        if curweight + wts[cur] > max_per_proc:
+    for cur,elwts in enumerate(wts):
+        if curweight + elwts > max_per_proc:
             ranges.append( (off, cur-off) )
             over = curweight - goal
-            curweight = wts[cur] + over
+            curweight = elwts + over
             off = cur
         else:
-            curweight += wts[cur]
+            curweight += elwts
 
     # Now distribute the remaining items uniformly among the remaining
     # processes.  In the case of good load balance, there should only be
