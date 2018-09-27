@@ -11,9 +11,8 @@ import traceback
 
 import numpy as np
 from astropy.io import fits
-from astropy.table import Table
 
-from .utils import native_endian, elapsed, get_mp, mp_array, transmission_Lyman
+from .utils import native_endian, elapsed, transmission_Lyman
 
 from .rebin import rebin_template, trapz_rebin
 
