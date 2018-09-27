@@ -2,10 +2,14 @@
 redrock Change Log
 ==================
 
-0.13.1 (unreleased)
+0.13.1 (2018-09-26)
 -------------------
 
-* No changes yet.
+* Fixed problem with new format of ``make_templates`` (PR `#153`_).
+* Update code based on codacy recommendations (PR `#154`_).
+
+.. _`#153`: https://github.com/desihub/redrock/pull/153
+.. _`#154`: https://github.com/desihub/redrock/pull/154
 
 0.13.0 (2018-08-31)
 -------------------
