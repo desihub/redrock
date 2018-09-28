@@ -331,7 +331,7 @@ class DistTargetsDESI(DistTargets):
                 if comm is not None:
                     hdata = comm.bcast(hdata, root=0)
                     badflux = comm.bcast(badflux, root=0)
-                    
+
                 toff = 0
                 for t in self._my_targets:
                     if t in self._target_specs[sfile]:
@@ -348,7 +348,7 @@ class DistTargetsDESI(DistTargets):
                     # check for NaN and Inf here (should never happen of course)
                     bad = np.isnan(hdata) | np.isinf(hdata) | np.isneginf(hdata)
                     hdata[bad] = 0.0
-                    hdata[badflux] = 0.0 # also set ivar=0 to bad flux                    
+                    hdata[badflux] = 0.0 # also set ivar=0 to bad flux
                 if comm is not None:
                     hdata = comm.bcast(hdata, root=0)
 
@@ -360,7 +360,7 @@ class DistTargetsDESI(DistTargets):
                                 hdata[trow].astype(np.float64).copy()
                             tspec_ivar[t] += 1
                     toff += 1
-                
+
                 extname = "{}_{}".format(b.upper(), "MASK")
                 hdata = None
                 if comm_rank == 0:
