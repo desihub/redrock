@@ -66,7 +66,7 @@ def write_zbest(outfile, zbest, fibermap, template_version, archetype_version):
     hx.append(fits.PrimaryHDU(header=header))
     hx.append(fits.convenience.table_to_hdu(zbest))
     hx.append(fits.convenience.table_to_hdu(fibermap))
-    hx.writeto(outfile, overwrite=True)
+    hx.writeto(os.path.expandvars(outfile), overwrite=True)
     return
 
 
@@ -458,6 +458,12 @@ def rrdesi(options=None, comm=None):
     parser.add_argument("--mintarget", type=int, default=None,
         required=False, help="first target to process in each file")
 
+    parser.add_argument("--priors", type=str, default=None,
+        required=False, help="optional redshift prior file")
+
+    parser.add_argument("--chi2-scan", type=str, default=None,
+        required=False, help="Load the chi2-scan from the input file")
+
     parser.add_argument("-n", "--ntargets", type=int,
         required=False, help="the number of targets to process in each file")
 
@@ -612,7 +618,8 @@ def rrdesi(options=None, comm=None):
         start = elapsed(None, "", comm=comm)
 
         scandata, zfit = zfind(targets, dtemplates, mpprocs,
-            nminima=args.nminima, archetypes=args.archetypes)
+            nminima=args.nminima, archetypes=args.archetypes,
+            priors=args.priors, chi2_scan=args.chi2_scan)
 
         stop = elapsed(start, "Computing redshifts took", comm=comm)
 

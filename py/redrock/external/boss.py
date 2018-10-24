@@ -74,7 +74,7 @@ def write_zbest(outfile, zbest, template_version, archetype_version):
     hx = fits.HDUList()
     hx.append(fits.PrimaryHDU(header=header))
     hx.append(fits.convenience.table_to_hdu(zbest))
-    hx.writeto(outfile, overwrite=True)
+    hx.writeto(os.path.expandvars(outfile), overwrite=True)
     return
 
 ### @profile
@@ -319,6 +319,12 @@ def rrboss(options=None, comm=None):
     parser.add_argument("--mintarget", type=int, default=None,
         required=False, help="first target to process")
 
+    parser.add_argument("--priors", type=str, default=None,
+        required=False, help="optional redshift prior file")
+
+    parser.add_argument("--chi2-scan", type=str, default=None,
+        required=False, help="Load the chi2-scan from the input file")
+
     parser.add_argument("-n", "--ntargets", type=int,
         required=False, help="the number of targets to process")
 
@@ -460,7 +466,8 @@ def rrboss(options=None, comm=None):
         start = elapsed(None, "", comm=comm)
 
         scandata, zfit = zfind(dtargets, dtemplates, mpprocs,
-            nminima=args.nminima, archetypes=args.archetypes)
+            nminima=args.nminima, archetypes=args.archetypes,
+            priors=args.priors, chi2_scan=args.chi2_scan)
 
         stop = elapsed(start, "Computing redshifts took", comm=comm)
 

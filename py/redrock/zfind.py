@@ -23,6 +23,10 @@ from .targets import distribute_targets
 
 from .archetypes import All_archetypes
 
+from .priors import Priors
+
+from .results import read_zscan_redrock
+
 from .zscan import calc_zchi2_targets
 
 from .fitz import fitz, get_dv
@@ -81,7 +85,7 @@ def calc_deltachi2(chi2, z, dvlimit=None):
 
     return deltachi2
 
-def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None):
+def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=None, chi2_scan=None):
     """Compute all redshift fits for the local set of targets and collect.
 
     Given targets and templates distributed across a set of MPI processes,
@@ -103,6 +107,8 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None):
             Passed to fitz().
         archetypes (str, optional): file or directory containing archetypes
             to use for final fitz choice of best chi2 vs. z minimum.
+        priors (str, optional): file containing redshift priors
+        chi2_scan (str, optional): file containing already computed chi2 scan
 
     Returns:
         tuple: (allresults, allzfit), where "allresults" is a dictionary of the
@@ -114,6 +120,9 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None):
 
     if archetypes:
         archetypes = All_archetypes(archetypes_dir=archetypes).archetypes
+
+    if not priors is None:
+        priors = Priors(priors)
 
     # Find most likely candidate redshifts by scanning over the
     # pre-interpolated templates on a coarse redshift spacing.
@@ -135,8 +144,16 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None):
         mpdist = distribute_targets(targets.local(), mp_procs)
 
     # Compute the coarse-binned chi2 for all local targets.
+    if chi2_scan is None:
+        results = calc_zchi2_targets(targets, templates, mp_procs=mp_procs)
+    else:
+        results = read_zscan_redrock(chi2_scan)
 
-    results = calc_zchi2_targets(targets, templates, mp_procs=mp_procs)
+    # Apply redshift prior
+    if not priors is None:
+        for tg in results.keys():
+            for ft in results[tg].keys():
+                results[tg][ft]['zchi2'] += priors.eval(tg, results[tg][ft]['redshifts'])
 
     # For each of our local targets, refine the redshift fit close to the
     # minima in the coarse fit.
