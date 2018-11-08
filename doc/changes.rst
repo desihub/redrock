@@ -2,10 +2,19 @@
 redrock Change Log
 ==================
 
-0.13.2 (unreleased)
+0.13.3 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.13.2 (2018-11-07)
+-------------------
+
+* Codacy style recommendations (PR `#155`_).
+* Optional redshift prior (PR `#152`_).
+
+.. _`#152`: https://github.com/desihub/redrock/pull/152
+.. _`#155`: https://github.com/desihub/redrock/pull/155
 
 0.13.1 (2018-09-26)
 -------------------
