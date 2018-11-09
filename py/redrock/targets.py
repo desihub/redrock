@@ -131,7 +131,8 @@ class Target(object):
         Args:
             cache_Rcsr: pre-calculate and cache sparse CSR format of
                 resolution matrix R
-             cosmics_nsig (float): number of sigma for cosmic rejection
+            cosmics_nsig (float): number of sigma for cosmic rejection.
+        
         This method REPLACES the list of individual spectra with coadds.
         """
         coadd = list()
