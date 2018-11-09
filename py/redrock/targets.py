@@ -113,24 +113,25 @@ class Target(object):
         coadd (bool): compute and store the coadd at construction time.
             The coadd can always be recomputed with the compute_coadd()
             method.
+        cosmics_nsig (float): cosmic rejection threshold in compute_coadd
         meta (dict): optional metadata dictionary for this Target.
 
     """
-    def __init__(self, targetid, spectra, coadd=False, meta=dict()):
+    def __init__(self, targetid, spectra, coadd=False, cosmics_nsig=0., meta=dict()):
         self.id = targetid
         self.spectra = spectra
         self.meta = meta
         if coadd:
-            self.compute_coadd()
+            self.compute_coadd(cache_Rcsr=False, cosmics_nsig=cosmics_nsig)
 
     ### @profile
-    def compute_coadd(self, cache_Rcsr=False):
+    def compute_coadd(self, cache_Rcsr=False, cosmics_nsig=0.):
         """Compute the coadd from the current spectra list.
 
         Args:
             cache_Rcsr: pre-calculate and cache sparse CSR format of
                 resolution matrix R
-
+             cosmics_nsig (float): number of sigma for cosmic rejection
         This method REPLACES the list of individual spectra with coadds.
         """
         coadd = list()
@@ -142,32 +143,76 @@ class Target(object):
             Rdiags = None
             offsets = None
             nspec = 0
+            flux=[] # references
+            ivar=[] # references
+            grad=[] # gradients, copy
+            gradvar=[]
             for s in self.spectra:
                 if s.wavehash != key: continue
                 nspec += 1
-                if weightedflux is None:
+                if wave is None :
                     wave = s.wave
-                    unweightedflux = np.copy(s.flux)
-                    weightedflux = s.flux * s.ivar
-                    weights = np.copy(s.ivar)
                     Rdiags = s.R.data * s.ivar
                     offsets = s.R.offsets
-                else:
-                    assert len(s.ivar) == len(weightedflux)
-                    unweightedflux += s.flux
-                    weightedflux += s.flux * s.ivar
-                    weights += s.ivar
+                else :
+                    assert len(s.wave) == len(wave)
                     Rdiags += s.R.data * s.ivar
+                flux.append(s.flux)
+                ivar.append(s.ivar)
 
+                if cosmics_nsig > 0 :
+                    # interpolate over bad measurements
+                    # to be able to compute gradient next 
+                    # to a bad pixel and identify oulier
+                    # many cosmics residuals are on edge
+                    # of cosmic ray trace, and so can be
+                    # next to a masked flux bin
+                    good = (s.ivar>0)
+                    bad  = (s.ivar==0)
+                    tflux = s.flux.copy()
+                    tivar = s.ivar.copy()
+                    tflux[bad] = np.interp(wave[bad],wave[good],s.flux[good])
+                    tivar[bad] = np.interp(wave[bad],wave[good],s.ivar[good])
+                    bad  = (tivar<=0)
+                    tivar[bad]=np.min(tivar[tivar>0])
+
+                    # compute a simple gradient
+                    tvar = 1/tivar
+                    tflux[1:] = tflux[1:]-tflux[:-1]
+                    tvar[1:]  = tvar[1:]+tvar[:-1]
+                    tflux[0]  = 0
+                    grad.append(tflux)
+                    gradvar.append(tvar)
+            
+            flux=np.array(flux)
+            ivar=np.array(ivar)
+            
+            if len(grad)>1 and cosmics_nsig > 0 :
+                # detect outliers by comparing spectra
+                grad=np.array(grad)
+                gradivar=1/np.array(gradvar)
+                nspec=grad.shape[0]
+                meangrad=np.sum(gradivar*grad,axis=0)/np.sum(gradivar)
+                deltagrad=grad-meangrad
+                chi2=np.sum(gradivar*deltagrad**2,axis=0)/(nspec-1)
+
+                jj=np.where(chi2>cosmics_nsig**2)[0]
+                for j in jj :
+                    k=np.argmax(gradivar[:,j]*deltagrad[:,j]**2)
+                    #k=np.argmax(flux[:,j])
+                    #print("masking spec",k,"wave=",wave[j],"flux=",flux[k,j])
+                    ivar[k][j]=0.
+
+            unweightedflux = np.sum(flux,axis=0)
+            weights        = np.sum(ivar,axis=0)
+            weightedflux   = np.sum(ivar*flux,axis=0)
             isbad = (weights == 0)
             flux = weightedflux / (weights + isbad)
             flux[isbad] = unweightedflux[isbad] / nspec
-
             Rdiags /= (weights + isbad)
             nwave = Rdiags.shape[1]
             R = scipy.sparse.dia_matrix((Rdiags, offsets),
                                             shape=(nwave, nwave))
-
             if cache_Rcsr:
                 Rcsr = R.tocsr()
             else:
