@@ -95,11 +95,12 @@ class DistTargetsDESI(DistTargets):
         comm (mpi4py.MPI.Comm): (optional) the MPI communicator.
         cache_Rcsr: pre-calculate and cache sparse CSR format of resolution
             matrix R
+        cosmics_nsig (float): cosmic rejection threshold used in coaddition
     """
 
     ### @profile
     def __init__(self, spectrafiles, coadd=True, targetids=None,
-        first_target=None, n_target=None, comm=None, cache_Rcsr=False):
+                 first_target=None, n_target=None, comm=None, cache_Rcsr=False, cosmics_nsig=0):
 
         comm_size = 1
         comm_rank = 0
@@ -115,6 +116,8 @@ class DistTargetsDESI(DistTargets):
         assert len(spectrafiles) > 0
 
         self._spectrafiles = spectrafiles
+
+        self.cosmics_nsig = cosmics_nsig
 
         # This is the mapping between specs to targets for each file
 
@@ -141,7 +144,7 @@ class DistTargetsDESI(DistTargets):
             nhdu = None
             fmap = None
             if comm_rank == 0:
-                hdus = fits.open(sfile, memmap=True)
+                hdus = fits.open(sfile, memmap=False)
                 nhdu = len(hdus)
                 fmap = encode_table(Table(hdus["FIBERMAP"].data,
                     copy=True).as_array())
@@ -317,7 +320,7 @@ class DistTargetsDESI(DistTargets):
 
             hdus = None
             if comm_rank == 0:
-                hdus = fits.open(sfile, memmap=True)
+                hdus = fits.open(sfile, memmap=False)
 
             for b in self._bands[sfile]:
                 extname = "{}_{}".format(b.upper(), "FLUX")
@@ -408,7 +411,7 @@ class DistTargetsDESI(DistTargets):
 
         if coadd:
             for t in self._my_data:
-                t.compute_coadd(cache_Rcsr)
+                t.compute_coadd(cache_Rcsr,cosmics_nsig=self.cosmics_nsig)
 
         self.fibermap = Table(np.hstack([ self._fmaps[x] \
             for x in self._spectrafiles ]))
@@ -487,7 +490,10 @@ def rrdesi(options=None, comm=None):
     parser.add_argument("--debug", default=False, action="store_true",
         required=False, help="debug with ipython (only if communicator has a "
         "single process)")
-
+    
+    parser.add_argument("--cosmics-nsig", type=float, default=0,
+        required=False, help="n sigma cosmic ray threshold in coaddition")
+    
     parser.add_argument("infiles", nargs='*')
 
     args = None
@@ -590,8 +596,8 @@ def rrdesi(options=None, comm=None):
         # Load the targets.  If comm is None, then the target data will be
         # stored in shared memory.
         targets = DistTargetsDESI(args.infiles, coadd=(not args.allspec),
-            targetids=targetids, first_target=first_target, n_target=n_target,
-            comm=comm, cache_Rcsr=True)
+                                  targetids=targetids, first_target=first_target, n_target=n_target,
+                                  comm=comm, cache_Rcsr=True, cosmics_nsig=args.cosmics_nsig)
 
         #- Mask some problematic sky lines
         if not args.no_skymask:
