@@ -117,10 +117,14 @@ class Target(object):
         meta (dict): optional metadata dictionary for this Target.
 
     """
-    def __init__(self, targetid, spectra, coadd=False, cosmics_nsig=0., meta=dict()):
+    def __init__(self, targetid, spectra, coadd=False, cosmics_nsig=0., meta=None):
         self.id = targetid
         self.spectra = spectra
-        self.meta = meta
+        if meta is None:
+            self.meta = dict()
+        else:
+            self.meta = meta
+
         if coadd:
             self.compute_coadd(cache_Rcsr=False, cosmics_nsig=cosmics_nsig)
 
@@ -132,7 +136,7 @@ class Target(object):
             cache_Rcsr: pre-calculate and cache sparse CSR format of
                 resolution matrix R
             cosmics_nsig (float): number of sigma for cosmic rejection.
-        
+
         This method REPLACES the list of individual spectra with coadds.
         """
         coadd = list()
@@ -163,7 +167,7 @@ class Target(object):
 
                 if cosmics_nsig > 0 :
                     # interpolate over bad measurements
-                    # to be able to compute gradient next 
+                    # to be able to compute gradient next
                     # to a bad pixel and identify oulier
                     # many cosmics residuals are on edge
                     # of cosmic ray trace, and so can be
