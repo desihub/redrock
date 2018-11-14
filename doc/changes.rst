@@ -5,10 +5,14 @@ redrock Change Log
 0.13.3 (unreleased)
 -------------------
 
-* No changes yet.
+* Adds optional cosmic ray rejection during coadds (PR `#156`_).
+
+.. _`#156`: https://github.com/desihub/redrock/pull/156
 
 0.13.2 (2018-11-07)
 -------------------
+
+Version used for 18.11 software release.
 
 * Codacy style recommendations (PR `#155`_).
 * Optional redshift prior (PR `#152`_).
