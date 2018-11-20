@@ -276,7 +276,6 @@ class DistTargetsDESI(DistTargets):
             speclist = list()
             tileids = set()
             exps = set()
-            bname = None
             for sfile in spectrafiles:
                 hastileid = ("TILEID" in self._fmaps[sfile].colnames)
                 for b in self._bands[sfile]:
@@ -285,8 +284,6 @@ class DistTargetsDESI(DistTargets):
                         for s in range(nspec):
                             sindx = self._target_specs[sfile][t][s]
                             frow = self._fmaps[sfile][sindx]
-                            if bname is None:
-                                bname = frow["BRICKNAME"]
                             exps.add(frow["EXPID"])
                             if hastileid:
                                 tileids.add(frow["TILEID"])
@@ -299,8 +296,6 @@ class DistTargetsDESI(DistTargets):
             tmeta["NUMEXP_datatype"] = "i4"
             tmeta["NUMTILE"] = len(tileids)
             tmeta["NUMTILE_datatype"] = "i4"
-            tmeta["BRICKNAME"] = bname
-            tmeta["BRICKNAME_datatype"] = "S8"
             self._my_data.append(Target(t, speclist, coadd=False, meta=tmeta))
 
         # Iterate over the data and broadcast.  Every process selects the rows
