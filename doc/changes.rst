@@ -2,12 +2,14 @@
 redrock Change Log
 ==================
 
-0.13.3 (unreleased)
+0.14.0 (unreleased)
 -------------------
 
 * Adds optional cosmic ray rejection during coadds (PR `#156`_).
+* No longer requires BRICKNAME (PR `#157`_).
 
 .. _`#156`: https://github.com/desihub/redrock/pull/156
+.. _`#157`: https://github.com/desihub/redrock/pull/157
 
 0.13.2 (2018-11-07)
 -------------------
