@@ -2,14 +2,21 @@
 redrock Change Log
 ==================
 
-0.14.0 (unreleased)
+0.14.1 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.14.0 (2018-12-16)
 -------------------
 
 * Adds optional cosmic ray rejection during coadds (PR `#156`_).
 * No longer requires BRICKNAME (PR `#157`_).
+* Fix interactive plotspec window disappearing (PR `#161`_).
 
 .. _`#156`: https://github.com/desihub/redrock/pull/156
 .. _`#157`: https://github.com/desihub/redrock/pull/157
+.. _`#161`: https://github.com/desihub/redrock/pull/161
 
 0.13.2 (2018-11-07)
 -------------------
