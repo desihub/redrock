@@ -485,10 +485,10 @@ def rrdesi(options=None, comm=None):
     parser.add_argument("--debug", default=False, action="store_true",
         required=False, help="debug with ipython (only if communicator has a "
         "single process)")
-    
+
     parser.add_argument("--cosmics-nsig", type=float, default=0,
         required=False, help="n sigma cosmic ray threshold in coaddition")
-    
+
     parser.add_argument("infiles", nargs='*')
 
     args = None
