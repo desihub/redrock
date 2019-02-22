@@ -15,8 +15,26 @@ from .utils import elapsed
 
 from .targets import distribute_targets
 
-from ._zscan import _zchi2_one
+def _zchi2_one(Tb, weights, flux, wflux, zcoeff):
+    """Calculate a single chi2.
 
+    For one redshift and a set of spectral data, compute the chi2 for template
+    data that is already on the correct grid.
+    """
+
+    M = Tb.T.dot(np.multiply(weights[:,None], Tb))
+    y = Tb.T.dot(wflux)
+
+    try:
+        zcoeff[:] = np.linalg.solve(M, y)
+    except np.linalg.LinAlgError:
+        return 9e99
+
+    model = Tb.dot(zcoeff)
+
+    zchi2 = np.dot( (flux - model)**2, weights )
+
+    return zchi2
 
 def spectral_data(spectra):
     """Compute concatenated spectral data products.
