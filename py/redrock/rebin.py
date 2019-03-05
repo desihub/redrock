@@ -45,7 +45,6 @@ def _trapz_rebin(x, y, edges, results):
     `results` is pre-allocated array of length len(edges)-1 to keep results
     '''
     nbin = len(edges) - 1
-    nx = len(x)
     i = 0  #- index counter for output
     j = 0  #- index counter for inputs
     yedge = 0.0
