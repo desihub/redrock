@@ -79,7 +79,7 @@ def write_zbest(outfile, zbest, template_version, archetype_version):
 
 ### @profile
 def read_spectra(spplates_name, targetids=None, use_frames=False,
-    fiberid=None, coadd=False, cache_Rcsr=False):
+    fiberid=None, coadd=False, cache_Rcsr=False, use_andmask=False):
     """Read targets from a list of spectra files
 
     Args:
@@ -90,6 +90,7 @@ def read_spectra(spplates_name, targetids=None, use_frames=False,
         coadd (bool): if True, compute and use the coadds.
         cache_Rcsr (bool): pre-calculate and cache sparse CSR format of
             resolution matrix R
+        use_andmask (bool): sets ivar = 0 to pixels with and_mask != 0
 
     Returns:
         tuple: (targets, meta) where targets is a list of Target objects and
@@ -165,7 +166,9 @@ def read_spectra(spplates_name, targetids=None, use_frames=False,
             fs = fs[w]
 
         fl = h[0].read()
-        iv = h[1].read()*(h[2].read()==0)
+        iv = h[1].read()
+        if use_andmask:
+            iv *= 1.*(h[2].read()==0) 
         wd = h[4].read()
 
         ## crop to lmin, lmax
@@ -342,6 +345,9 @@ def rrboss(options=None, comm=None):
         required=False, help="use individual spcframes instead of spplate "
         "(the spCFrame files are expected to be in the same directory as "
         "the spPlate")
+    
+    parser.add_argument("--use-andmask", default=False, action="store_true",
+        required=False, help="uses and_mask values to set masked pixel's ivar to zero")
 
     parser.add_argument("--debug", default=False, action="store_true",
         required=False, help="debug with ipython (only if communicator has a "
@@ -434,7 +440,7 @@ def rrboss(options=None, comm=None):
         # table though.
         targets, meta = read_spectra(args.spplate, targetids=targetids,
             use_frames=args.use_frames, coadd=(not args.allspec),
-            cache_Rcsr=True)
+            cache_Rcsr=True, use_andmask=args.use_andmask)
 
         if args.ntargets is not None:
             targets = targets[first_target:first_target+n_targets]
