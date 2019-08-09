@@ -2,10 +2,20 @@
 redrock Change Log
 ==================
 
-0.14.1 (unreleased)
+0.14.2 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.14.1 (2019-08-09)
+-------------------
+
+* Minor code cleanup (PRs `#162`_, `#164`_).
+* Add `and_mask` option for BOSS (PR `#165`_).
+
+.. _`#162`: https://github.com/desihub/redrock/pull/162
+.. _`#164`: https://github.com/desihub/redrock/pull/164
+.. _`#165`: https://github.com/desihub/redrock/pull/165
 
 0.14.0 (2018-12-16)
 -------------------
