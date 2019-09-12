@@ -18,7 +18,14 @@ class PlotSpec(object):
         #- Isolate imports of optional dependencies
         import matplotlib.pyplot as plt
 
-        self.targets = targets
+        #- Only keep targets with fits
+        keeptargets = list()
+        keepids = set(zfit['targetid'])
+        for t in targets:
+            if t.id in keepids:
+                keeptargets.append(t)
+
+        self.targets = keeptargets
         self.templates = templates
         self.archetypes = archetypes
         self.zscan = zscan
@@ -94,6 +101,7 @@ class PlotSpec(object):
         target = self.targets[self.itarget]
         zfit = self.zfit[self.zfit['targetid'] == target.id]
         self.nznum = len(zfit)
+        
         zz = zfit[zfit['znum'] == self.znum][0]
         coeff = zz['coeff']
 
