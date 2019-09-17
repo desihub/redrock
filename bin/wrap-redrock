@@ -199,11 +199,13 @@ def plan(args, comm=None):
         rank, size = comm.rank, comm.size
 
     if rank == 0:
-        if args.datatype == 'desi':
-            specfiles = find_specfiles(args.reduxdir, args.outdir, prefix='spectra')
-        elif args.datatype == 'boss':
+        if args.datatype == 'boss':
             avoiddir = os.path.abspath(os.path.join(args.reduxdir, 'spectra'))
-            specfiles = find_specfiles(args.reduxdir, args.outdir, prefix='spPlate', avoiddir=avoiddir)
+        else:
+            avoiddir = None
+
+        specfiles = find_specfiles(args.reduxdir, args.outdir,
+                prefix=args.prefix, avoiddir=avoiddir)
     else:
         specfiles = None
 
@@ -313,8 +315,8 @@ def run_redrock(args, comm=None):
     assert len(np.concatenate(groups)) == len(specfiles)
 
     pixels = np.array([int(os.path.basename(os.path.dirname(x))) for x in specfiles])
-    zbfiles = spectra2outfiles(specfiles, 'spectra', 'zbest', outdir=args.outdir)
-    rrfiles = spectra2outfiles(specfiles, 'spectra', 'redrock', outdir=args.outdir, ext='h5')
+    zbfiles = spectra2outfiles(specfiles, args.prefix, 'zbest', outdir=args.outdir)
+    rrfiles = spectra2outfiles(specfiles, args.prefix, 'redrock', outdir=args.outdir, ext='h5')
 
     for i in groups[rank]:
         print('---- rank {} pix {} {}'.format(rank, pixels[i], time.asctime()))
@@ -399,7 +401,17 @@ def main():
     parser.add_argument("--plan", action="store_true", help="plan how many nodes to use and pixel distribution")
     parser.add_argument("--datatype", type=str, default='desi',
         help="desi (default) or boss", choices=['desi', 'boss'])
+    parser.add_argument("--prefix", type=str,  help="spectra file name prefix")
     args = parser.parse_args()
+
+    if args.prefix is None:
+        if args.datatype == 'desi':
+            args.prefix = 'spectra'
+        elif args.datatype == 'boss':
+            args.prefix = 'spPlate'
+        else:
+            print('ERROR: unknown input prefix for datatype {}; use --prefix'.format(args.datatype))
+            sys.exit(1)
 
     if args.nompi or nersc_login_node():
         comm = None

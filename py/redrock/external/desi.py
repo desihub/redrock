@@ -171,13 +171,18 @@ class DistTargetsDESI(DistTargets):
                     format(first_target))
 
             if n_target is None:
-                n_target = len(keep_targetids)
-            if first_target + n_target > len(keep_targetids):
-                raise RuntimeError("Requested first_target / n_target "
-                    " range is larger than the number of selected targets "
-                    " in the file")
+                nkeep = len(keep_targetids)
+            else:
+                nkeep = n_target
 
-            keep_targetids = keep_targetids[first_target:first_target+n_target]
+            if first_target + nkeep > len(keep_targetids):
+                msg = "Requested first_target ({}) + nkeep ({})".format(
+                        first_target, nkeep)
+                msg += " is larger than number of selected targets ({})".format(
+                        len(keep_targetids))
+                raise RuntimeError(msg)
+
+            keep_targetids = keep_targetids[first_target:first_target+nkeep]
 
             self._alltargetids.update(keep_targetids)
 
