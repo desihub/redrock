@@ -18,7 +18,14 @@ class PlotSpec(object):
         #- Isolate imports of optional dependencies
         import matplotlib.pyplot as plt
 
-        self.targets = targets
+        #- Only keep targets that are in the zfit table
+        keeptargets = list()
+        keepids = set(zfit['targetid'])
+        for t in targets:
+            if t.id in keepids:
+                keeptargets.append(t)
+
+        self.targets = keeptargets
         self.templates = templates
         self.archetypes = archetypes
         self.zscan = zscan
