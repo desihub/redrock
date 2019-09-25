@@ -349,6 +349,9 @@ def rrboss(options=None, comm=None):
     parser.add_argument("--use-andmask", default=False, action="store_true",
         required=False, help="uses and_mask values to set masked pixel's ivar to zero")
 
+    parser.add_argument("--no-mpi-abort", default=False, action="store_true",
+        required=False, help="Do not call MPI Abort upon failure of a single rank")
+
     parser.add_argument("--debug", default=False, action="store_true",
         required=False, help="debug with ipython (only if communicator has a "
         "single process)")
@@ -507,13 +510,16 @@ def rrboss(options=None, comm=None):
 
             stop = elapsed(start, "Writing zbest data took", comm=comm)
 
-    except:
+    except Exception as err:
         exc_type, exc_value, exc_traceback = sys.exc_info()
         lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
         lines = [ "Proc {}: {}".format(comm_rank, x) for x in lines ]
+        print("--- Process {} raised an exception ---".format(comm_rank))
         print("".join(lines))
         sys.stdout.flush()
-        if comm is not None:
+        if comm is None or args.no_mpi_abort:
+            raise err
+        else:
             comm.Abort()
 
     global_stop = elapsed(global_start, "Total run time", comm=comm)
