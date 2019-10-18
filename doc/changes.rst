@@ -2,10 +2,21 @@
 redrock Change Log
 ==================
 
-0.14.2 (unreleased)
+0.14.3 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.14.2 (2019-10-17)
+-------------------
+
+* Bug fix for specfiles of different sizes (PR `#167`_).
+* Fix plotting subset of input spectra (PR `#168`_).
+* Add `--no-mpi-abort` option (PR `#170`_)
+
+.. _`#167`: https://github.com/desihub/redrock/pull/167
+.. _`#168`: https://github.com/desihub/redrock/pull/168
+.. _`#170`: https://github.com/desihub/redrock/pull/170
 
 0.14.1 (2019-08-09)
 -------------------
