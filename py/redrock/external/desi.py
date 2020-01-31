@@ -4,8 +4,6 @@ redrock.external.desi
 
 redrock wrapper tools for DESI
 """
-from __future__ import absolute_import, division, print_function
-
 import os
 import sys
 import re
@@ -13,9 +11,6 @@ import warnings
 import traceback
 
 import argparse
-
-if sys.version_info[0] > 2:
-    basestring = str
 
 import numpy as np
 
@@ -109,7 +104,7 @@ class DistTargetsDESI(DistTargets):
             comm_rank = comm.rank
 
         # check the file list
-        if isinstance(spectrafiles, basestring):
+        if isinstance(spectrafiles, str):
             import glob
             spectrafiles = glob.glob(spectrafiles)
 
