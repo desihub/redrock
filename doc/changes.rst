@@ -6,9 +6,9 @@ redrock Change Log
 -------------------
 
 * Allow :func:`redrock.external.boss.read_spectra` to receive a
-  string as well as a list of files (PR `#169`_).
+  string as well as a list of files (PR `#173`_).
 
-.. _`#169`: https://github.com/desihub/redrock/pull/169
+.. _`#173`: https://github.com/desihub/redrock/pull/173
 
 
 0.14.2 (2019-10-17)
