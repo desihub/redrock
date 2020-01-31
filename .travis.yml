@@ -54,9 +54,9 @@ env:
         # to repeat them for all configurations.
         # - NUMPY_VERSION=1.10
         # - SCIPY_VERSION=0.16
-        - ASTROPY_VERSION=2.0.7
+        - ASTROPY_VERSION=2.0.16
         # - SPHINX_VERSION=1.6.6
-        - DESIUTIL_VERSION=1.9.9
+        - DESIUTIL_VERSION=2.0.1
         # - SPECLITE_VERSION=0.7
         # - SPECTER_VERSION=0.8.1
         # - DESIMODEL_VERSION=0.7.0
@@ -67,8 +67,9 @@ env:
         # - SPECEX_VERSION=0.3.9
         # - REDROCK_VERSION=master
         # - NUMBA_VERSION=0.28
+        - PIP_VERSION=19.3.1
         - MAIN_CMD='python setup.py'
-        - RR_TEMPLATE_VER=0.2
+        - RR_TEMPLATE_VER=0.7.1
         # Additional conda channels to use.
         # - CONDA_CHANNELS="openastronomy"
         # These packages will always be installed.
@@ -87,8 +88,8 @@ env:
     matrix:
         # - PYTHON_VERSION=2.7 SETUP_CMD='egg_info'
         # - PYTHON_VERSION=2.7 SETUP_CMD='bdist_egg'
-        - PYTHON_VERSION=3.5 SETUP_CMD='egg_info'
-        - PYTHON_VERSION=3.5 SETUP_CMD='bdist_egg'
+        # - PYTHON_VERSION=3.5 SETUP_CMD='egg_info'
+        # - PYTHON_VERSION=3.5 SETUP_CMD='bdist_egg'
         - PYTHON_VERSION=3.6 SETUP_CMD='egg_info'
         - PYTHON_VERSION=3.6 SETUP_CMD='bdist_egg'
 
@@ -101,7 +102,7 @@ matrix:
         - os: osx
         - os: linux
           env: PYTHON_VERSION=3.6 SETUP_CMD='test'
-               ASTROPY_VERSION=3.0
+               ASTROPY_VERSION=stable NUMPY_VERSION=stable
                CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
                PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
 
@@ -111,7 +112,7 @@ matrix:
         # Note: this test is not a perfectly realistic test of ReadTheDocs
         # builds, which operate in a much more bare-bones environment
         - os: linux
-          env: PYTHON_VERSION=3.5 SETUP_CMD='build_sphinx --warning-is-error'
+          env: PYTHON_VERSION=3.6 SETUP_CMD='build_sphinx --warning-is-error'
                CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
                PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
 
@@ -119,7 +120,7 @@ matrix:
         # change the set of packages installed by conda, so we do
         # separate 'test' and 'test --coverage'.
         - os: linux
-          env: PYTHON_VERSION=3.5 SETUP_CMD='test --coverage'
+          env: PYTHON_VERSION=3.6 SETUP_CMD='test --coverage'
                CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
                PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
 
@@ -142,7 +143,7 @@ matrix:
 
         - os: linux
           env: PYTHON_VERSION=3.6 SETUP_CMD='test'
-               ASTROPY_VERSION=3.0
+               ASTROPY_VERSION=stable NUMPY_VERSION=stable
                CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
                PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
 
