@@ -7,6 +7,7 @@ redrock Change Log
 
 * Allow :func:`redrock.external.boss.read_spectra` to receive a
   string as well as a list of files (PR `#173`_).
+* Support coadds that don't have EXPID in fibermap (master update).
 
 .. _`#173`: https://github.com/desihub/redrock/pull/173
 
