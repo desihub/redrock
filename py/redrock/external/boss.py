@@ -4,9 +4,6 @@ redrock.external.boss
 
 redrock wrapper tools for BOSS
 """
-
-from __future__ import absolute_import, division, print_function
-
 import os
 import sys
 import re
@@ -83,7 +80,7 @@ def read_spectra(spplates_name, targetids=None, use_frames=False,
     """Read targets from a list of spectra files
 
     Args:
-        spplates_name (list): input spPlate files
+        spplates_name (list or str): input spPlate files or pattern to match files.
         targetids (list): restrict targets to this subset.
         use_frames (bool): if True, use frames.
         fiberid (int): Use this fiber ID.
@@ -97,6 +94,10 @@ def read_spectra(spplates_name, targetids=None, use_frames=False,
         meta is a Table of metadata (currently only BRICKNAME).
 
     """
+    # check the file list
+    if isinstance(spplates_name, str):
+        import glob
+        spplates_name = glob.glob(spplates_name)
 
     ## read spplates
     useThingid = False
@@ -168,7 +169,7 @@ def read_spectra(spplates_name, targetids=None, use_frames=False,
         fl = h[0].read()
         iv = h[1].read()
         if use_andmask:
-            iv *= 1.*(h[2].read()==0) 
+            iv *= 1.*(h[2].read()==0)
         wd = h[4].read()
 
         ## crop to lmin, lmax
@@ -345,7 +346,7 @@ def rrboss(options=None, comm=None):
         required=False, help="use individual spcframes instead of spplate "
         "(the spCFrame files are expected to be in the same directory as "
         "the spPlate")
-    
+
     parser.add_argument("--use-andmask", default=False, action="store_true",
         required=False, help="uses and_mask values to set masked pixel's ivar to zero")
 

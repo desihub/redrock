@@ -5,7 +5,11 @@ redrock Change Log
 0.14.3 (unreleased)
 -------------------
 
-* No changes yet.
+* Allow :func:`redrock.external.boss.read_spectra` to receive a
+  string as well as a list of files (PR `#173`_).
+
+.. _`#173`: https://github.com/desihub/redrock/pull/173
+
 
 0.14.2 (2019-10-17)
 -------------------
