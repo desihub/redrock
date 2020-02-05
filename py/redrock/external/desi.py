@@ -284,7 +284,8 @@ class DistTargetsDESI(DistTargets):
                         for s in range(nspec):
                             sindx = self._target_specs[sfile][t][s]
                             frow = self._fmaps[sfile][sindx]
-                            exps.add(frow["EXPID"])
+                            if "EXPID" in frow:
+                                exps.add(frow["EXPID"])
                             if hastileid:
                                 tileids.add(frow["TILEID"])
                             speclist.append(Spectrum(self._wave[sfile][b],
