@@ -2,7 +2,12 @@
 redrock Change Log
 ==================
 
-0.14.3 (unreleased)
+0.14.4 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.14.3 (2020-04-07)
 -------------------
 
 * Allow :func:`redrock.external.boss.read_spectra` to receive a
