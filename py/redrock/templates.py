@@ -61,7 +61,7 @@ class Template(object):
             ## find out if redshift info is present in the file
             old_style_templates = True
             try:
-                redshifts = native_endian(fx['REDSHIFTS'].data)
+                self._redshifts = native_endian(fx['REDSHIFTS'].data)
                 old_style_templates = False
             except KeyError:
                 pass

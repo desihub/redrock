@@ -5,7 +5,8 @@ redrock Change Log
 0.14.4 (unreleased)
 -------------------
 
-* No changes yet.
+* Re-enable ability for templates to specify their redshift range
+  (one line update to master).
 
 0.14.3 (2020-04-07)
 -------------------
