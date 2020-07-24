@@ -50,7 +50,7 @@ def write_zscan(filename, zscan, zfit, clobber=False):
     targetids = np.asarray(zbest['targetid'])
     spectypes = list(zscan[targetids[0]].keys())
 
-    fx = h5py.File(filename, mode='w-')
+    fx = h5py.File(filename, mode='w')
     fx['targetids'] = targetids
 
     for spectype in spectypes:

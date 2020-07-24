@@ -27,7 +27,9 @@ class TestIO(unittest.TestCase):
             os.remove(cls.testfile)
 
     def setUp(self):
-        pass
+        #- remove testfile if leftover from a previous test
+        if os.path.exists(self.testfile):
+            os.remove(self.testfile)
 
     def test_endian(self):
         x1 = np.arange(5, dtype='>f')
