@@ -2,7 +2,12 @@
 redrock Change Log
 ==================
 
-0.14.4 (unreleased)
+0.14.5 (unreleased)
+-------------------
+
+* No changes yet
+
+0.14.4 (2020-08-03)
 -------------------
 
 * Re-enable ability for templates to specify their redshift range
