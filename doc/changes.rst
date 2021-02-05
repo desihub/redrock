@@ -5,7 +5,8 @@ redrock Change Log
 0.14.5 (unreleased)
 -------------------
 
-* No changes yet
+* Use temporary files + rename to avoid partially written files with the
+  final name in case of timeout.
 
 0.14.4 (2020-08-03)
 -------------------
