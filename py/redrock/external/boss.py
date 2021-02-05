@@ -71,7 +71,10 @@ def write_zbest(outfile, zbest, template_version, archetype_version):
     hx = fits.HDUList()
     hx.append(fits.PrimaryHDU(header=header))
     hx.append(fits.convenience.table_to_hdu(zbest))
-    hx.writeto(os.path.expandvars(outfile), overwrite=True)
+    outfile = os.path.expandvars(outfile)
+    tempfile = outfile + '.tmp'
+    hx.writeto(tempfile, overwrite=True)
+    os.rename(tempfile, outfile)
     return
 
 ### @profile

@@ -4,6 +4,7 @@ Functions for reading and writing full redrock results to HDF5.
 
 from __future__ import absolute_import, division, print_function
 
+import os
 import os.path
 import numpy as np
 from astropy.table import Table
@@ -50,7 +51,8 @@ def write_zscan(filename, zscan, zfit, clobber=False):
     targetids = np.asarray(zbest['targetid'])
     spectypes = list(zscan[targetids[0]].keys())
 
-    fx = h5py.File(filename, mode='w')
+    tempfile = filename + '.tmp'
+    fx = h5py.File(tempfile, mode='w')
     fx['targetids'] = targetids
 
     for spectype in spectypes:
@@ -74,6 +76,7 @@ def write_zscan(filename, zscan, zfit, clobber=False):
         #- TODO: fx['zfit/{}/model']
 
     fx.close()
+    os.rename(tempfile, filename)
 
 
 def read_zscan(filename):
