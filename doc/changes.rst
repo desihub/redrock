@@ -2,7 +2,12 @@
 redrock Change Log
 ==================
 
-0.14.5 (unreleased)
+0.14.6 (unreleased)
+-------------------
+
+* No changes yet
+
+0.14.5 (2021-02-15)
 -------------------
 
 * Use temporary files + rename to avoid partially written files with the
