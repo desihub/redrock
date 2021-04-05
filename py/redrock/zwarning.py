@@ -24,6 +24,17 @@ class ZWarningMask(object):
     NODATA            = 2**9  #- No data for this fiber, e.g. because spectrograph was broken during this exposure (ivar=0 for all pixels)
     BAD_MINFIT        = 2**10 #- Bad parabola fit to the chi2 minimum
 
+    #- The following bits are reserved for experiment-specific post-redrock
+    #- afterburner updates to ZWARN; redrock commits to *not* setting these bits
+    RESERVED16        = 2**16
+    RESERVED17        = 2**17
+    RESERVED18        = 2**18
+    RESERVED19        = 2**19
+    RESERVED20        = 2**20
+    RESERVED21        = 2**21
+    RESERVED22        = 2**22
+    RESERVED23        = 2**23
+
     @classmethod
     def flags(cls):
         flagmask = list()

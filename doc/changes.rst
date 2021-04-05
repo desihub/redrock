@@ -5,7 +5,7 @@ redrock Change Log
 0.14.6 (unreleased)
 -------------------
 
-* No changes yet
+* reserve ZWARN bits 16-23 for end-user; redrock will not set these.
 
 0.14.5 (2021-02-15)
 -------------------
