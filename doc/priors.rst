@@ -30,7 +30,7 @@ Prior file
 
 * I (Edmond) give here a minimal function to write in a correct way the prior file:
 
-.. code-block:: python
+.. code:: python
     import numpy as np
     import fitsio
 
