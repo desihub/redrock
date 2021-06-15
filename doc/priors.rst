@@ -28,9 +28,9 @@ Use prior in RR
 Prior file
 ----------
 
-* I (Edmond) give here a minimal function to write in a correct way the prior file:
+* I (Edmond) give here a minimal function to write in a correct way the prior file (see raw file --> problem of render with github...):
 
-.. code:: python
+.. code_block:: python
     import numpy as np
     import fitsio
 
