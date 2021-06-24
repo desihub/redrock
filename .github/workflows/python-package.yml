@@ -44,39 +44,41 @@ jobs:
             - name: Run the test
               run: DESIMODEL=$(pwd) pytest
 
-              #    coverage:
-              #        name: Test coverage
-              #        runs-on: ${{ matrix.os }}
-              #        strategy:
-              #            fail-fast: true
-              #            matrix:
-              #                os: [ubuntu-latest]
-              #                python-version: [3.8]
-              #        env:
-              #            DESIUTIL_VERSION: 3.2.1
-              #
-              #        steps:
-              #            - name: Checkout code
-              #              uses: actions/checkout@v2
-              #              with:
-              #                fetch-depth: 0
-              #            - name: Set up Python ${{ matrix.python-version }}
-              #              uses: actions/setup-python@v2
-              #              with:
-              #                python-version: ${{ matrix.python-version }}
-              #            - name: Install Python dependencies
-              #              run: |
-              #                python -m pip install --upgrade pip wheel
-              #                python -m pip install pytest pytest-cov coveralls
-              #                python -m pip install git+https://github.com/desihub/desiutil.git@${DESIUTIL_VERSION}#egg=desiutil
-              #                python -m pip install -r requirements.txt
-              #            - name: Run the test with coverage
-              #              run: DESIMODEL=$(pwd) pytest --cov
-              #            - name: Coveralls
-              #              env:
-              #                COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
-              #                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              #              run: coveralls
+    coverage:
+        name: Test coverage
+        runs-on: ${{ matrix.os }}
+        strategy:
+            fail-fast: true
+            matrix:
+                os: [ubuntu-latest]
+                python-version: [3.8]
+        env:
+            DESIUTIL_VERSION: 3.2.1
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v2
+              with:
+                fetch-depth: 0
+            - name: Set up Python ${{ matrix.python-version }}
+              uses: actions/setup-python@v2
+              with:
+                python-version: ${{ matrix.python-version }}
+            - name: Install Python dependencies
+              run: |
+                python -m pip install --upgrade pip wheel
+                python -m pip install pytest pytest-cov coveralls
+                python -m pip install git+https://github.com/desihub/desiutil.git@${DESIUTIL_VERSION}#egg=desiutil
+                python -m pip install -r requirements.txt
+                curl -L https://github.com/desihub/redrock-templates/archive/${RR_TEMPLATE_VER}.tar.gz | tar -x -z -v -C py/redrock
+                /bin/mv py/redrock/redrock-templates-${RR_TEMPLATE_VER} py/redrock/templates
+            - name: Run the test with coverage
+              run: DESIMODEL=$(pwd) pytest --cov
+            - name: Coveralls
+              env:
+                COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
+                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: coveralls
 
     docs:
         name: Doc test
