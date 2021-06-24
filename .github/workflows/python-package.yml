@@ -54,6 +54,7 @@ jobs:
                 python-version: [3.8]
         env:
             DESIUTIL_VERSION: 3.2.1
+            RR_TEMPLATE_VER: 0.7.1
 
         steps:
             - name: Checkout code
