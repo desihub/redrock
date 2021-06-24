@@ -100,7 +100,7 @@ def read_zscan(filename):
     import h5py
     # zbest = Table.read(filename, format='hdf5', path='zbest')
     with h5py.File(os.path.expandvars(filename), mode='r') as fx:
-        targetids = fx['targetids'].value
+        targetids = fx['targetids'][()]  # .value
         spectypes = list(fx['zscan'].keys())
 
         zscan = dict()
@@ -110,16 +110,17 @@ def read_zscan(filename):
                 zscan[targetid][spectype] = dict()
 
         for spectype in spectypes:
-            zchi2 = fx['/zscan/{}/zchi2'.format(spectype)].value
-            penalty = fx['/zscan/{}/penalty'.format(spectype)].value
-            zcoeff = fx['/zscan/{}/zcoeff'.format(spectype)].value
-            redshifts = fx['/zscan/{}/redshifts'.format(spectype)].value
+            # blat[()] is obtuse syntax for what used to be clear blat.value
+            zchi2 = fx['/zscan/{}/zchi2'.format(spectype)][()]
+            penalty = fx['/zscan/{}/penalty'.format(spectype)][()]
+            zcoeff = fx['/zscan/{}/zcoeff'.format(spectype)][()]
+            redshifts = fx['/zscan/{}/redshifts'.format(spectype)][()]
             for i, targetid in enumerate(targetids):
                 zscan[targetid][spectype]['redshifts'] = redshifts
                 zscan[targetid][spectype]['zchi2'] = zchi2[i]
                 zscan[targetid][spectype]['penalty'] = penalty[i]
                 zscan[targetid][spectype]['zcoeff'] = zcoeff[i]
-                thiszfit = fx['/zfit/{}/zfit'.format(targetid)].value
+                thiszfit = fx['/zfit/{}/zfit'.format(targetid)][()]
                 ii = (thiszfit['spectype'].astype('U') == spectype)
                 thiszfit = Table(thiszfit[ii])
                 thiszfit.remove_columns(['targetid', 'znum', 'deltachi2'])
@@ -129,7 +130,7 @@ def read_zscan(filename):
                     encode_column(thiszfit['subtype']))
                 zscan[targetid][spectype]['zfit'] = thiszfit
 
-        zfit = [fx['zfit/{}/zfit'.format(tid)].value for tid in targetids]
+        zfit = [fx['zfit/{}/zfit'.format(tid)][()] for tid in targetids]
         zfit = Table(np.hstack(zfit))
         zfit.replace_column('spectype', encode_column(zfit['spectype']))
         zfit.replace_column('subtype', encode_column(zfit['subtype']))
@@ -148,14 +149,14 @@ def read_zscan_redrock(filename):
     import h5py
 
     with h5py.File(os.path.expandvars(filename), mode='r') as fx:
-        targetids = fx['targetids'].value
+        targetids = fx['targetids'][()]
         spectypes = list(fx['zscan'].keys())
 
         tmp_results = { ft:
-            {'redshifts':fx['/zscan/{}/redshifts'.format(ft)].value,
-            'zchi2':fx['/zscan/{}/zchi2'.format(ft)].value,
-            'penalty':fx['/zscan/{}/penalty'.format(ft)].value,
-            'zcoeff':fx['/zscan/{}/zcoeff'.format(ft)].value}
+            {'redshifts':fx[f'/zscan/{ft}/redshifts'][()],
+            'zchi2':fx[f'/zscan/{ft}/zchi2'][()],
+            'penalty':fx[f'/zscan/{ft}/penalty'][()],
+            'zcoeff':fx[f'/zscan/{ft}/zcoeff'][()]}
             for ft in spectypes}
         results = { tg:{ ft:
             {'redshifts':tmp_results[ft]['redshifts'],

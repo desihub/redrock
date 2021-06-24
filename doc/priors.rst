@@ -30,7 +30,8 @@ Prior file
 
 * I (Edmond) give here a minimal function to write in a correct way the prior file (see raw file --> problem of render with github...):
 
-.. code_block:: python
+.. code-block:: python
+
     import numpy as np
     import fitsio
 
