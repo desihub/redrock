@@ -9,6 +9,7 @@ Contents
     :maxdepth: 1
 
     changes.rst
+    priors.rst
     api.rst
 
 
