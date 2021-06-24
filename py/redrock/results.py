@@ -153,10 +153,10 @@ def read_zscan_redrock(filename):
         spectypes = list(fx['zscan'].keys())
 
         tmp_results = { ft:
-            {'redshifts':fx['/zscan/{}/redshifts'.format(ft)][()]
-            'zchi2':fx['/zscan/{}/zchi2'.format(ft)][()]
-            'penalty':fx['/zscan/{}/penalty'.format(ft)][()]
-            'zcoeff':fx['/zscan/{}/zcoeff'.format(ft)][()]}
+            {'redshifts':fx[f'/zscan/{ft}/redshifts'][()],
+            'zchi2':fx[f'/zscan/{ft}/zchi2'][()],
+            'penalty':fx[f'/zscan/{ft}/penalty'][()],
+            'zcoeff':fx[f'/zscan/{ft}/zcoeff'][()]}
             for ft in spectypes}
         results = { tg:{ ft:
             {'redshifts':tmp_results[ft]['redshifts'],
