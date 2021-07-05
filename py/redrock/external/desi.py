@@ -77,9 +77,8 @@ class DistTargetsDESI(DistTargets):
     """Distributed targets for DESI.
 
     DESI spectral data is grouped by sky location, but is just a random
-    collection of spectra for all targets.  Reading this into memory with
-    spectra grouped by target ID involves not just loading the data, but
-    also sorting it by target.
+    collection of spectra for all targets.  Read this into memory while
+    grouping by target ID, preserving order in which each target first appears.
 
     We pass through the spectra files once to compute all the book-keeping
     associated with regrouping the spectra by target.  Then we pass through
@@ -181,9 +180,9 @@ class DistTargetsDESI(DistTargets):
             # mapping between spectral rows and target IDs.
 
             if targetids is None:
-                keep_targetids = sorted(coadd_fmap["TARGETID"])
+                keep_targetids = coadd_fmap["TARGETID"]
             else:
-                keep_targetids = sorted(targetids)
+                keep_targetids = targetids
 
             # Select a subset of the target range from each file if desired.
 
@@ -278,7 +277,7 @@ class DistTargetsDESI(DistTargets):
             if comm_rank == 0:
                 hdus.close()
 
-        self._keep_targets = list(sorted(self._alltargetids))
+        self._keep_targets = self._alltargetids.copy()
 
         # Now we have the metadata for all targets in all files.  Distribute
         # the targets among process weighted by the amount of work to do for
@@ -353,6 +352,7 @@ class DistTargetsDESI(DistTargets):
                     badflux = comm.bcast(badflux, root=0)
 
                 toff = 0
+                import IPython; IPython.embed()
                 for t in self._my_targets:
                     if t in self._target_specs[sfile]:
                         for trow in self._target_specs[sfile][t]:
