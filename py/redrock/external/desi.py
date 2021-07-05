@@ -135,7 +135,7 @@ class DistTargetsDESI(DistTargets):
 
         # The full list of targets from all files
 
-        self._alltargetids = set()
+        self._alltargetids = list()
 
         # The fibermaps from all files
 
@@ -207,7 +207,7 @@ class DistTargetsDESI(DistTargets):
 
             keep_targetids = keep_targetids[first_target:first_target+nkeep]
 
-            self._alltargetids.update(keep_targetids)
+            self._alltargetids.extend(keep_targetids)
 
             # This is the spectral row to target mapping using the original
             # global indices (before slicing).
@@ -231,10 +231,15 @@ class DistTargetsDESI(DistTargets):
                 enumerate(self._spec_keep[sfile]) }
 
             # Slice the fibermap to keep just the requested targets
-            keep = np.isin(coadd_fmap['TARGETID'], keep_targetids)
-            self._coadd_fmaps[sfile] = coadd_fmap[keep]
-            keep = np.isin(exp_fmap['TARGETID'], keep_targetids)
-            self._exp_fmaps[sfile] = exp_fmap[keep]
+            keep_coadd = np.isin(coadd_fmap['TARGETID'], keep_targetids)
+            self._coadd_fmaps[sfile] = coadd_fmap[keep_coadd]
+            keep_exp = np.isin(exp_fmap['TARGETID'], keep_targetids)
+            self._exp_fmaps[sfile] = exp_fmap[keep_exp]
+
+            if input_coadded:
+                input_targetids = input_targetids[keep_coadd]
+            else:
+                input_targetids = input_targetids[keep_exp]
 
             # For each target, store the sliced row index of all spectra,
             # so that we can do a fast lookup later.
@@ -277,7 +282,14 @@ class DistTargetsDESI(DistTargets):
             if comm_rank == 0:
                 hdus.close()
 
-        self._keep_targets = self._alltargetids.copy()
+        # _alltargetids can have repeats from multiple files.  Trim to
+        # unique set while retaining order in which they appeared
+
+        sortedidx = np.unique(self._alltargetids, return_index=True)[1]
+        ii = np.argsort(sortedidx)
+        unique_targetids = np.asarray(self._alltargetids)[sortedidx[ii]]
+        self._alltargetids = unique_targetids
+        self._keep_targets = unique_targetids.copy()
 
         # Now we have the metadata for all targets in all files.  Distribute
         # the targets among process weighted by the amount of work to do for
@@ -352,7 +364,6 @@ class DistTargetsDESI(DistTargets):
                     badflux = comm.bcast(badflux, root=0)
 
                 toff = 0
-                import IPython; IPython.embed()
                 for t in self._my_targets:
                     if t in self._target_specs[sfile]:
                         for trow in self._target_specs[sfile][t]:
