@@ -2,10 +2,20 @@
 redrock Change Log
 ==================
 
-0.14.6 (unreleased)
+0.14.7 (unreleased)
+-------------------
+
+* No changes yet
+
+0.14.6 (2021-07-06)
 -------------------
 
 * reserve ZWARN bits 16-23 for end-user; redrock will not set these.
+* Add tophap prior option (PR `#194`_).
+* Switch to github actions for testing (PR `#195`_).
+
+.. _`#194`: https://github.com/desihub/redrock/pull/194
+.. _`#195`: https://github.com/desihub/redrock/pull/195
 
 0.14.5 (2021-02-15)
 -------------------
