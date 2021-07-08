@@ -37,15 +37,15 @@ from .._version import __version__
 from ..archetypes import All_archetypes
 
 
-def write_zbest(outfile, zbest, coadd_fibermap, exp_fibermap,
+def write_zbest(outfile, zbest, fibermap, exp_fibermap,
         template_version, archetype_version):
     """Write zbest and fibermap Tables to outfile
 
     Args:
         outfile (str): output path.
         zbest (Table): best fit table.
-        coadd_fibermap (Table): the coadded fibermap from the original inputs.
-        coadd_fibermap (Table): the per-exposure fibermap from the orig inputs.
+        fibermap (Table): the coadded fibermap from the original inputs.
+        exp_fibermap (Table): the per-exposure fibermap from the orig inputs.
 
     """
     header = fits.Header()
@@ -58,13 +58,13 @@ def write_zbest(outfile, zbest, coadd_fibermap, exp_fibermap,
             header['ARCNAM'+str(i).zfill(2)] = fulltype
             header['ARCVER'+str(i).zfill(2)] = archetype_version[fulltype]
     zbest.meta['EXTNAME'] = 'ZBEST'
-    coadd_fibermap.meta['EXTNAME'] = 'COADD_FIBERMAP'
+    fibermap.meta['EXTNAME'] = 'FIBERMAP'
     exp_fibermap.meta['EXTNAME'] = 'EXP_FIBERMAP'
 
     hx = fits.HDUList()
     hx.append(fits.PrimaryHDU(header=header))
     hx.append(fits.convenience.table_to_hdu(zbest))
-    hx.append(fits.convenience.table_to_hdu(coadd_fibermap))
+    hx.append(fits.convenience.table_to_hdu(fibermap))
     hx.append(fits.convenience.table_to_hdu(exp_fibermap))
     outfile = os.path.expandvars(outfile)
     tempfile = outfile + '.tmp'
@@ -151,24 +151,23 @@ class DistTargetsDESI(DistTargets):
             if comm_rank == 0:
                 hdus = fits.open(sfile, memmap=False)
                 nhdu = len(hdus)
-                if 'FIBERMAP' in hdus:
+
+                if 'EXP_FIBERMAP' in hdus:
+                    input_coadded = True
+                    coadd_fmap = encode_table(Table(hdus["FIBERMAP"].data,
+                        copy=True).as_array())
+                    exp_fmap = encode_table(Table(hdus["EXP_FIBERMAP"].data,
+                        copy=True).as_array())
+                else:
                     input_coadded = False
                     tmpfmap = encode_table(Table(hdus["FIBERMAP"].data,
                         copy=True).as_array())
+                    assert 'COADD_NUMEXP' not in tmpfmap.dtype.names
                     coadd_fmap, exp_fmap = coadd_fibermap(tmpfmap)
 
                     #- we later rely upon exp_fmap having same order as the
                     #- uncoadded input fmap, so check that now
                     assert np.all(exp_fmap['TARGETID'] == tmpfmap['TARGETID'])
-
-                elif 'COADD_FIBERMAP' in hdus:
-                    input_coadded = True
-                    coadd_fmap = encode_table(Table(hdus["COADD_FIBERMAP"].data,
-                        copy=True).as_array())
-                    exp_fmap = encode_table(Table(hdus["EXP_FIBERMAP"].data,
-                        copy=True).as_array())
-                else:
-                    raise ValueError(f'{sfile} missing (COADD_)FIBERMAP')
 
             if comm is not None:
                 nhdu = comm.bcast(nhdu, root=0)
@@ -441,7 +440,7 @@ class DistTargetsDESI(DistTargets):
             for t in self._my_data:
                 t.compute_coadd(cache_Rcsr,cosmics_nsig=self.cosmics_nsig)
 
-        self.coadd_fibermap = Table(np.hstack([ self._coadd_fmaps[x] \
+        self.fibermap = Table(np.hstack([ self._coadd_fmaps[x] \
             for x in self._spectrafiles ]))
 
         self.exp_fibermap = Table(np.hstack([ self._exp_fmaps[x] \
@@ -690,7 +689,7 @@ def rrdesi(options=None, comm=None):
                     archetypes = All_archetypes(archetypes_dir=args.archetypes).archetypes
                     archetype_version = {name:arch._version for name, arch in archetypes.items() }
                 write_zbest(args.zbest, zbest,
-                        targets.coadd_fibermap, targets.exp_fibermap,
+                        targets.fibermap, targets.exp_fibermap,
                         template_version, archetype_version)
 
             stop = elapsed(start, "Writing zbest data took", comm=comm)
