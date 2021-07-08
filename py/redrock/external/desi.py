@@ -38,7 +38,7 @@ from .._version import __version__
 from ..archetypes import All_archetypes
 
 
-def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr,
+def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
         template_version, archetype_version):
     """Write zbest and fibermap Tables to outfile
 
@@ -46,7 +46,7 @@ def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr,
         outfile (str): output path.
         zbest (Table): best fit table.
         fibermap (Table): the coadded fibermap from the original inputs.
-        tsnr (Table): table of input coadded TSNR2 values
+        tsnr2 (Table): table of input coadded TSNR2 values
         exp_fibermap (Table): the per-exposure fibermap from the orig inputs.
         template_version (str): template version used
         archetype_version (str): archetype version used
@@ -65,14 +65,14 @@ def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr,
     zbest.meta['EXTNAME'] = 'ZBEST'
     fibermap.meta['EXTNAME'] = 'FIBERMAP'
     exp_fibermap.meta['EXTNAME'] = 'EXP_FIBERMAP'
-    tsnr.meta['EXTNAME'] = 'TSNR'
+    tsnr2.meta['EXTNAME'] = 'TSNR2'
 
     hx = fits.HDUList()
     hx.append(fits.PrimaryHDU(header=header))
     hx.append(fits.convenience.table_to_hdu(zbest))
     hx.append(fits.convenience.table_to_hdu(fibermap))
     hx.append(fits.convenience.table_to_hdu(exp_fibermap))
-    hx.append(fits.convenience.table_to_hdu(tsnr))
+    hx.append(fits.convenience.table_to_hdu(tsnr2))
 
     outfile = os.path.expandvars(outfile)
     tempfile = outfile + '.tmp'
@@ -150,7 +150,7 @@ class DistTargetsDESI(DistTargets):
 
         self._coadd_fmaps = {}
         self._exp_fmaps = {}
-        self._tsnr = {}         #- template signal-to-noise from SCORES
+        self._tsnr2 = {}         #- template signal-to-noise from SCORES
 
         for sfile in spectrafiles:
             hdus = None
@@ -158,7 +158,7 @@ class DistTargetsDESI(DistTargets):
             input_coadded = 'unknown'
             coadd_fmap = None
             exp_fmap = None
-            tsnr = None
+            tsnr2 = None
             if comm_rank == 0:
                 hdus = fits.open(sfile, memmap=False)
                 nhdu = len(hdus)
@@ -169,13 +169,13 @@ class DistTargetsDESI(DistTargets):
                         copy=True).as_array())
                     exp_fmap = encode_table(Table(hdus["EXP_FIBERMAP"].data,
                         copy=True).as_array())
-                    tsnr = encode_table(Table(hdus["SCORES"].data,
+                    tsnr2 = encode_table(Table(hdus["SCORES"].data,
                         copy=True).as_array())
-                    for col in tsnr.colnames.copy():
+                    for col in tsnr2.colnames.copy():
                         if col == 'TARGETID' or col.startswith('TSNR2_'):
                             continue
                         else:
-                            tsnr.remove_column(col)
+                            tsnr2.remove_column(col)
                 else:
                     input_coadded = False
                     tmpfmap = encode_table(Table(hdus["FIBERMAP"].data,
@@ -185,7 +185,7 @@ class DistTargetsDESI(DistTargets):
 
                     scores = encode_table(Table(hdus["SCORES"].data,
                         copy=True).as_array())
-                    tsnr = Table(compute_coadd_tsnr_scores(scores)[0])
+                    tsnr2 = Table(compute_coadd_tsnr_scores(scores)[0])
 
                     #- we later rely upon exp_fmap having same order as the
                     #- uncoadded input fmap, so check that now
@@ -196,7 +196,7 @@ class DistTargetsDESI(DistTargets):
                 input_coadded = comm.bcast(input_coadded, root=0)
                 coadd_fmap = comm.bcast(coadd_fmap, root=0)
                 exp_fmap = comm.bcast(exp_fmap, root=0)
-                tsnr = comm.bcast(tsnr, root=0)
+                tsnr2 = comm.bcast(tsnr2, root=0)
 
             # Now every process has the fibermap and number of HDUs.  Build the
             # mapping between spectral rows and target IDs.
@@ -255,7 +255,7 @@ class DistTargetsDESI(DistTargets):
             # Slice the fibermap to keep just the requested targets
             keep_coadd = np.isin(coadd_fmap['TARGETID'], keep_targetids)
             self._coadd_fmaps[sfile] = coadd_fmap[keep_coadd]
-            self._tsnr[sfile] = tsnr[keep_coadd]
+            self._tsnr2[sfile] = tsnr2[keep_coadd]
 
             keep_exp = np.isin(exp_fmap['TARGETID'], keep_targetids)
             self._exp_fmaps[sfile] = exp_fmap[keep_exp]
@@ -471,7 +471,7 @@ class DistTargetsDESI(DistTargets):
         self.exp_fibermap = Table(np.hstack([ self._exp_fmaps[x] \
             for x in self._spectrafiles ]))
 
-        self.tsnr = Table(np.hstack([ self._tsnr[x] \
+        self.tsnr2 = Table(np.hstack([ self._tsnr2[x] \
             for x in self._spectrafiles ]))
 
         super(DistTargetsDESI, self).__init__(self._keep_targets, comm=comm)
@@ -718,7 +718,7 @@ def rrdesi(options=None, comm=None):
                     archetype_version = {name:arch._version for name, arch in archetypes.items() }
                 write_zbest(args.zbest, zbest,
                         targets.fibermap, targets.exp_fibermap,
-                        targets.tsnr,
+                        targets.tsnr2,
                         template_version, archetype_version)
 
             stop = elapsed(start, "Writing zbest data took", comm=comm)
