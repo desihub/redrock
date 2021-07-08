@@ -22,6 +22,7 @@ from desiutil.io import encode_table
 from desispec.resolution import Resolution
 from desispec.coaddition import coadd_fibermap
 from desispec.specscore import compute_coadd_tsnr_scores
+from desispec.maskbits import fibermask
 
 from ..utils import elapsed, get_mp, distribute_work
 
@@ -32,6 +33,8 @@ from ..templates import load_dist_templates
 from ..results import write_zscan
 
 from ..zfind import zfind
+
+from ..zwarning import ZWarningMask
 
 from .._version import __version__
 
@@ -689,6 +692,27 @@ def rrdesi(options=None, comm=None):
             priors=args.priors, chi2_scan=args.chi2_scan)
 
         stop = elapsed(start, "Computing redshifts took", comm=comm)
+
+        # Set some DESI-specific ZWARN bits from input fibermap
+        fiberstatus = targets.fibermap['COADD_FIBERSTATUS']
+        poorpos = (fiberstatus & fibermask.POORPOSITION) != 0
+        badpos = (fiberstatus & fibermask.BADPOSITION) != 0
+        broken = (fiberstatus & fibermask.BROKENFIBER) != 0
+        sky = targets.fibermap['OBJTYPE'] == 'SKY'
+
+        targetids = targets.fibermap['TARGETID']
+
+        ii = np.isin(zfit['targetid'], targetids[poorpos])
+        zfit['zwarn'][ii] |= ZWarningMask.POORDATA
+
+        ii = np.isin(zfit['targetid'], targetids[badpos | broken])
+        zfit['zwarn'][ii] |= ZWarningMask.NODATA
+
+        ii = np.isin(zfit['targetid'], targetids[broken])
+        zfit['zwarn'][ii] |= ZWarningMask.UNPLUGGED
+
+        ii = np.isin(zfit['targetid'], targetids[sky])
+        zfit['zwarn'][ii] |= ZWarningMask.SKY
 
         # Write the outputs
 
