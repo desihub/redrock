@@ -694,25 +694,26 @@ def rrdesi(options=None, comm=None):
         stop = elapsed(start, "Computing redshifts took", comm=comm)
 
         # Set some DESI-specific ZWARN bits from input fibermap
-        fiberstatus = targets.fibermap['COADD_FIBERSTATUS']
-        poorpos = (fiberstatus & fibermask.POORPOSITION) != 0
-        badpos = (fiberstatus & fibermask.BADPOSITION) != 0
-        broken = (fiberstatus & fibermask.BROKENFIBER) != 0
-        sky = targets.fibermap['OBJTYPE'] == 'SKY'
+        if comm_rank == 0:
+            fiberstatus = targets.fibermap['COADD_FIBERSTATUS']
+            poorpos = (fiberstatus & fibermask.POORPOSITION) != 0
+            badpos = (fiberstatus & fibermask.BADPOSITION) != 0
+            broken = (fiberstatus & fibermask.BROKENFIBER) != 0
+            sky = targets.fibermap['OBJTYPE'] == 'SKY'
 
-        targetids = targets.fibermap['TARGETID']
+            targetids = targets.fibermap['TARGETID']
 
-        ii = np.isin(zfit['targetid'], targetids[poorpos])
-        zfit['zwarn'][ii] |= ZWarningMask.POORDATA
+            ii = np.isin(zfit['targetid'], targetids[poorpos])
+            zfit['zwarn'][ii] |= ZWarningMask.POORDATA
 
-        ii = np.isin(zfit['targetid'], targetids[badpos | broken])
-        zfit['zwarn'][ii] |= ZWarningMask.NODATA
+            ii = np.isin(zfit['targetid'], targetids[badpos | broken])
+            zfit['zwarn'][ii] |= ZWarningMask.NODATA
 
-        ii = np.isin(zfit['targetid'], targetids[broken])
-        zfit['zwarn'][ii] |= ZWarningMask.UNPLUGGED
+            ii = np.isin(zfit['targetid'], targetids[broken])
+            zfit['zwarn'][ii] |= ZWarningMask.UNPLUGGED
 
-        ii = np.isin(zfit['targetid'], targetids[sky])
-        zfit['zwarn'][ii] |= ZWarningMask.SKY
+            ii = np.isin(zfit['targetid'], targetids[sky])
+            zfit['zwarn'][ii] |= ZWarningMask.SKY
 
         # Write the outputs
 
