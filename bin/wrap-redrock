@@ -48,7 +48,7 @@ def spectra2outfiles(specfiles, inprefix, outprefix, ext=None, outdir=None):
     Args:
         specfiles: list of spectra filepaths
         inprefix: input file prefix, e.g. 'spectra' or 'spPlate'
-        outprefix: output file prefix, e.g. 'zbest' or 'redrock'
+        outprefix: output file prefix, e.g. 'redrock'
 
     Options:
         ext: output extension, e.g. 'h5' (default same as input extension)
@@ -92,7 +92,7 @@ def find_specfiles(reduxdir, outdir=None, prefix='spectra', avoiddir=None):
 
     Notes:
         Recursively walks directories under `reduxdir` looking for files
-        matching prefix*.fits.  Looks for redrock*.h5 and zbest*.fits in the
+        matching prefix*.fits.  Looks for redrock*.h5 and redrock*.fits in the
         same directory as each spectra file, or in outdir if specified.
     '''
     # print("looking for spectra files under {}".format(reduxdir))
@@ -118,17 +118,13 @@ def find_specfiles(reduxdir, outdir=None, prefix='spectra', avoiddir=None):
     # else:
     #     print('Found {} spectra files'.format(len(specfiles)))
 
-    zbfiles = spectra2outfiles(specfiles, prefix, 'zbest', outdir=outdir)
-    rrfiles = spectra2outfiles(specfiles, prefix, 'redrock', outdir=outdir, ext='h5')
-
-    #- Default redrock hdf5 filename changed; look for old name too
-    if len(rrfiles) == 0 and len(zbfiles) > 0:
-        rrfiles = spectra2outfiles(specfiles, prefix, 'rr', outdir=outdir, ext='h5')
+    rrfiles = spectra2outfiles(specfiles, prefix, 'redrock', outdir=outdir)
+    detailsfiles = spectra2outfiles(specfiles, prefix, 'rrdetails', outdir=outdir, ext='h5')
 
     npix = len(specfiles)
     todo = np.ones(npix, dtype=bool)
     for i in range(npix):
-        if os.path.exists(zbfiles[i]) and os.path.exists(rrfiles[i]):
+        if os.path.exists(rrfiles[i]) and os.path.exists(detailsfiles[i]):
             todo[i] = False
 
     return np.array(specfiles)[todo]
@@ -315,8 +311,8 @@ def run_redrock(args, comm=None):
     assert len(np.concatenate(groups)) == len(specfiles)
 
     pixels = np.array([int(os.path.basename(os.path.dirname(x))) for x in specfiles])
-    zbfiles = spectra2outfiles(specfiles, args.prefix, 'zbest', outdir=args.outdir)
-    rrfiles = spectra2outfiles(specfiles, args.prefix, 'redrock', outdir=args.outdir, ext='h5')
+    rrfiles = spectra2outfiles(specfiles, args.prefix, 'redrock', outdir=args.outdir)
+    detailsfiles = spectra2outfiles(specfiles, args.prefix, 'rrdetails', outdir=args.outdir, ext='h5')
 
     for i in groups[rank]:
         print('---- rank {} pix {} {}'.format(rank, pixels[i], time.asctime()))
@@ -328,8 +324,8 @@ def run_redrock(args, comm=None):
             cmd = 'rrboss --spplate {}'.format(specfiles[i])
 
         cmd += ' --nminima {}'.format(args.nminima)
-        cmd += ' -o {} --zbest {}'.format(rrfiles[i], zbfiles[i])
-        logfile = rrfiles[i].replace('.h5', '.log')
+        cmd += ' --outfile {} --details {}'.format(rrfiles[i], detailsfiles[i])
+        logfile = rrfiles[i].replace('.fits', '.log')
         assert logfile != rrfiles[i]
 
         if args.mp is not None:
@@ -358,7 +354,7 @@ def run_redrock(args, comm=None):
                 dt1 = time.time() - t1
                 if err == 0:
                     print('FINISHED pix {} rank {} try {} in {:.1f} sec'.format(pixels[i], rank, retry, dt1))
-                    for outfile in [rrfiles[i], zbfiles[i]]:
+                    for outfile in [rrfiles[i], detailsfiles[i]]:
                         if not os.path.exists(outfile):
                             print('ERROR pix {} missing {}'.format(outfile, rrfiles[i]))
                     break  #- don't need to retry
@@ -381,7 +377,7 @@ def run_redrock(args, comm=None):
         comm.barrier()
 
     if rank == 0 and not args.dryrun:
-        for outfile in zbfiles:
+        for outfile in rrfiles:
             if not os.path.exists(outfile):
                 print('ERROR missing {}'.format(outfile))
 
