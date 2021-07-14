@@ -65,7 +65,7 @@ def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
         for i, fulltype in enumerate(archetype_version.keys()):
             header['ARCNAM'+str(i).zfill(2)] = fulltype
             header['ARCVER'+str(i).zfill(2)] = archetype_version[fulltype]
-    zbest.meta['EXTNAME'] = 'ZBEST'
+    zbest.meta['EXTNAME'] = 'REDSHIFTS'
     fibermap.meta['EXTNAME'] = 'FIBERMAP'
     exp_fibermap.meta['EXTNAME'] = 'EXP_FIBERMAP'
     tsnr2.meta['EXTNAME'] = 'TSNR2'
@@ -508,13 +508,14 @@ def rrdesi(options=None, comm=None):
         required=False, help="template file or directory")
 
     parser.add_argument("--archetypes", type=str, default=None,
-        required=False, help="archetype file or directory for final redshift comparison")
+        required=False,
+        help="archetype file or directory for final redshift comparison")
 
-    parser.add_argument("-o", "--output", type=str, default=None,
-        required=False, help="output file")
+    parser.add_argument("-d", "--details", type=str, default=None,
+        required=False, help="output file for full redrock fit details")
 
-    parser.add_argument("-z", "--zbest", type=str, default=None,
-        required=False, help="output zbest FITS file")
+    parser.add_argument("-o", "--outfile", type=str, default=None,
+        required=False, help="output FITS file with best redshift per target")
 
     parser.add_argument("--targetids", type=str, default=None,
         required=False, help="comma-separated list of target IDs")
@@ -558,7 +559,8 @@ def rrdesi(options=None, comm=None):
     parser.add_argument("--cosmics-nsig", type=float, default=0,
         required=False, help="n sigma cosmic ray threshold in coaddition")
 
-    parser.add_argument("infiles", nargs='*')
+    parser.add_argument("-i", "--infiles", nargs='+', required=True,
+            help="Input spectra, coadd, or cframe files")
 
     args = None
     if options is None:
@@ -587,9 +589,9 @@ def rrdesi(options=None, comm=None):
             if comm is not None:
                 comm.Abort()
 
-        if (args.output is None) and (args.zbest is None):
+        if (args.details is None) and (args.outfile is None):
             parser.print_help()
-            print("ERROR: --output or --zbest required")
+            print("ERROR: --details or --outfile required")
             sys.stdout.flush()
             if comm is not None:
                 comm.Abort()
@@ -717,13 +719,13 @@ def rrdesi(options=None, comm=None):
 
         # Write the outputs
 
-        if args.output is not None:
+        if args.details is not None:
             start = elapsed(None, "", comm=comm)
             if comm_rank == 0:
-                write_zscan(args.output, scandata, zfit, clobber=True)
+                write_zscan(args.details, scandata, zfit, clobber=True)
             stop = elapsed(start, "Writing zscan data took", comm=comm)
 
-        if args.zbest:
+        if args.outfile:
             start = elapsed(None, "", comm=comm)
             if comm_rank == 0:
                 zbest = zfit[zfit['znum'] == 0]
@@ -741,12 +743,12 @@ def rrdesi(options=None, comm=None):
                 if not args.archetypes is None:
                     archetypes = All_archetypes(archetypes_dir=args.archetypes).archetypes
                     archetype_version = {name:arch._version for name, arch in archetypes.items() }
-                write_zbest(args.zbest, zbest,
+                write_zbest(args.outfile, zbest,
                         targets.fibermap, targets.exp_fibermap,
                         targets.tsnr2,
                         template_version, archetype_version)
 
-            stop = elapsed(start, "Writing zbest data took", comm=comm)
+            stop = elapsed(start, f"Writing {args.outfile} took", comm=comm)
 
     except Exception as err:
         exc_type, exc_value, exc_traceback = sys.exc_info()
