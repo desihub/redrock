@@ -184,7 +184,13 @@ class DistTargetsDESI(DistTargets):
                     tmpfmap = encode_table(Table(hdus["FIBERMAP"].data,
                         copy=True).as_array())
                     assert 'COADD_NUMEXP' not in tmpfmap.dtype.names
-                    coadd_fmap, exp_fmap = coadd_fibermap(tmpfmap)
+
+                    if np.all(tmpfmap['TILEID'] == tmpfmap['TILEID'][0]):
+                        onetile = True
+                    else:
+                        onetile = False
+
+                    coadd_fmap, exp_fmap = coadd_fibermap(tmpfmap, onetile=onetile)
 
                     scores = encode_table(Table(hdus["SCORES"].data,
                         copy=True).as_array())
@@ -701,6 +707,8 @@ def rrdesi(options=None, comm=None):
             poorpos = (fiberstatus & fibermask.POORPOSITION) != 0
             badpos = (fiberstatus & fibermask.BADPOSITION) != 0
             broken = (fiberstatus & fibermask.BROKENFIBER) != 0
+            unassigned = (fiberstatus & fibermask.UNASSIGNED) != 0
+            bad = targets.fibermap['OBJTYPE'] == 'BAD'
             sky = targets.fibermap['OBJTYPE'] == 'SKY'
 
             targetids = targets.fibermap['TARGETID']
@@ -708,7 +716,7 @@ def rrdesi(options=None, comm=None):
             ii = np.isin(zfit['targetid'], targetids[poorpos])
             zfit['zwarn'][ii] |= ZWarningMask.POORDATA
 
-            ii = np.isin(zfit['targetid'], targetids[badpos | broken])
+            ii = np.isin(zfit['targetid'], targetids[badpos | broken | unassigned | bad])
             zfit['zwarn'][ii] |= ZWarningMask.NODATA
 
             ii = np.isin(zfit['targetid'], targetids[broken])
