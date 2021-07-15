@@ -23,6 +23,7 @@ class ZWarningMask(object):
     BAD_TARGET        = 2**8  #- catastrophically bad targeting data
     NODATA            = 2**9  #- No data for this fiber, e.g. because spectrograph was broken during this exposure (ivar=0 for all pixels)
     BAD_MINFIT        = 2**10 #- Bad parabola fit to the chi2 minimum
+    POORDATA          = 2**11 #- Poor input data quality but try fitting anyway
 
     #- The following bits are reserved for experiment-specific post-redrock
     #- afterburner updates to ZWARN; redrock commits to *not* setting these bits

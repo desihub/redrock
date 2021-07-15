@@ -376,7 +376,6 @@ class DistTargetsCopy(DistTargets):
         if comm_rank == root:
             for tg in targets:
                 self._alltargetids.append(tg.id)
-            self._alltargetids = sorted(self._alltargetids)
 
         if comm is not None:
             self._alltargetids = comm.bcast(self._alltargetids, root=root)

@@ -20,6 +20,9 @@ from astropy.table import Table
 from desiutil.io import encode_table
 
 from desispec.resolution import Resolution
+from desispec.coaddition import coadd_fibermap
+from desispec.specscore import compute_coadd_tsnr_scores
+from desispec.maskbits import fibermask
 
 from ..utils import elapsed, get_mp, distribute_work
 
@@ -31,19 +34,27 @@ from ..results import write_zscan
 
 from ..zfind import zfind
 
+from ..zwarning import ZWarningMask
+
 from .._version import __version__
 
 from ..archetypes import All_archetypes
 
 
-def write_zbest(outfile, zbest, fibermap, template_version, archetype_version):
+def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
+        template_version, archetype_version):
     """Write zbest and fibermap Tables to outfile
 
     Args:
         outfile (str): output path.
         zbest (Table): best fit table.
-        fibermap (Table): the fibermap from the original inputs.
+        fibermap (Table): the coadded fibermap from the original inputs.
+        tsnr2 (Table): table of input coadded TSNR2 values
+        exp_fibermap (Table): the per-exposure fibermap from the orig inputs.
+        template_version (str): template version used
+        archetype_version (str): archetype version used
 
+    Modifies input tables.meta['EXTNAME']
     """
     header = fits.Header()
     header['RRVER'] = (__version__, 'Redrock version')
@@ -54,17 +65,23 @@ def write_zbest(outfile, zbest, fibermap, template_version, archetype_version):
         for i, fulltype in enumerate(archetype_version.keys()):
             header['ARCNAM'+str(i).zfill(2)] = fulltype
             header['ARCVER'+str(i).zfill(2)] = archetype_version[fulltype]
-    zbest.meta['EXTNAME'] = 'ZBEST'
+    zbest.meta['EXTNAME'] = 'REDSHIFTS'
     fibermap.meta['EXTNAME'] = 'FIBERMAP'
+    exp_fibermap.meta['EXTNAME'] = 'EXP_FIBERMAP'
+    tsnr2.meta['EXTNAME'] = 'TSNR2'
 
     hx = fits.HDUList()
     hx.append(fits.PrimaryHDU(header=header))
     hx.append(fits.convenience.table_to_hdu(zbest))
     hx.append(fits.convenience.table_to_hdu(fibermap))
+    hx.append(fits.convenience.table_to_hdu(exp_fibermap))
+    hx.append(fits.convenience.table_to_hdu(tsnr2))
+
     outfile = os.path.expandvars(outfile)
     tempfile = outfile + '.tmp'
     hx.writeto(tempfile, overwrite=True)
     os.rename(tempfile, outfile)
+
     return
 
 
@@ -72,9 +89,8 @@ class DistTargetsDESI(DistTargets):
     """Distributed targets for DESI.
 
     DESI spectral data is grouped by sky location, but is just a random
-    collection of spectra for all targets.  Reading this into memory with
-    spectra grouped by target ID involves not just loading the data, but
-    also sorting it by target.
+    collection of spectra for all targets.  Read this into memory while
+    grouping by target ID, preserving order in which each target first appears.
 
     We pass through the spectra files once to compute all the book-keeping
     associated with regrouping the spectra by target.  Then we pass through
@@ -131,33 +147,73 @@ class DistTargetsDESI(DistTargets):
 
         # The full list of targets from all files
 
-        self._alltargetids = set()
+        self._alltargetids = list()
 
         # The fibermaps from all files
 
-        self._fmaps = {}
+        self._coadd_fmaps = {}
+        self._exp_fmaps = {}
+        self._tsnr2 = {}         #- template signal-to-noise from SCORES
 
         for sfile in spectrafiles:
             hdus = None
             nhdu = None
-            fmap = None
+            input_coadded = 'unknown'
+            coadd_fmap = None
+            exp_fmap = None
+            tsnr2 = None
             if comm_rank == 0:
                 hdus = fits.open(sfile, memmap=False)
                 nhdu = len(hdus)
-                fmap = encode_table(Table(hdus["FIBERMAP"].data,
-                    copy=True).as_array())
+
+                if 'EXP_FIBERMAP' in hdus:
+                    input_coadded = True
+                    coadd_fmap = encode_table(Table(hdus["FIBERMAP"].data,
+                        copy=True).as_array())
+                    exp_fmap = encode_table(Table(hdus["EXP_FIBERMAP"].data,
+                        copy=True).as_array())
+                    tsnr2 = encode_table(Table(hdus["SCORES"].data,
+                        copy=True).as_array())
+                    for col in tsnr2.colnames.copy():
+                        if col == 'TARGETID' or col.startswith('TSNR2_'):
+                            continue
+                        else:
+                            tsnr2.remove_column(col)
+                else:
+                    input_coadded = False
+                    tmpfmap = encode_table(Table(hdus["FIBERMAP"].data,
+                        copy=True).as_array())
+                    assert 'COADD_NUMEXP' not in tmpfmap.dtype.names
+
+                    if np.all(tmpfmap['TILEID'] == tmpfmap['TILEID'][0]):
+                        onetile = True
+                    else:
+                        onetile = False
+
+                    coadd_fmap, exp_fmap = coadd_fibermap(tmpfmap, onetile=onetile)
+
+                    scores = encode_table(Table(hdus["SCORES"].data,
+                        copy=True).as_array())
+                    tsnr2 = Table(compute_coadd_tsnr_scores(scores)[0])
+
+                    #- we later rely upon exp_fmap having same order as the
+                    #- uncoadded input fmap, so check that now
+                    assert np.all(exp_fmap['TARGETID'] == tmpfmap['TARGETID'])
 
             if comm is not None:
                 nhdu = comm.bcast(nhdu, root=0)
-                fmap = comm.bcast(fmap, root=0)
+                input_coadded = comm.bcast(input_coadded, root=0)
+                coadd_fmap = comm.bcast(coadd_fmap, root=0)
+                exp_fmap = comm.bcast(exp_fmap, root=0)
+                tsnr2 = comm.bcast(tsnr2, root=0)
 
             # Now every process has the fibermap and number of HDUs.  Build the
             # mapping between spectral rows and target IDs.
 
             if targetids is None:
-                keep_targetids = sorted(fmap["TARGETID"])
+                keep_targetids = coadd_fmap["TARGETID"]
             else:
-                keep_targetids = sorted(targetids)
+                keep_targetids = targetids
 
             # Select a subset of the target range from each file if desired.
 
@@ -182,13 +238,18 @@ class DistTargetsDESI(DistTargets):
 
             keep_targetids = keep_targetids[first_target:first_target+nkeep]
 
-            self._alltargetids.update(keep_targetids)
+            self._alltargetids.extend(keep_targetids)
 
             # This is the spectral row to target mapping using the original
             # global indices (before slicing).
 
+            if input_coadded:
+                input_targetids = coadd_fmap['TARGETID']
+            else:
+                input_targetids = exp_fmap['TARGETID']
+
             self._spec_to_target[sfile] = [ x if y in keep_targetids else -1 \
-                for x, y in enumerate(fmap["TARGETID"]) ]
+                for x, y in enumerate(input_targetids) ]
 
             # The reduced set of spectral rows.
 
@@ -200,9 +261,18 @@ class DistTargetsDESI(DistTargets):
             self._spec_sliced[sfile] = { x : y for y, x in \
                 enumerate(self._spec_keep[sfile]) }
 
-            # Slice the fibermap
+            # Slice the fibermap to keep just the requested targets
+            keep_coadd = np.isin(coadd_fmap['TARGETID'], keep_targetids)
+            self._coadd_fmaps[sfile] = coadd_fmap[keep_coadd]
+            self._tsnr2[sfile] = tsnr2[keep_coadd]
 
-            self._fmaps[sfile] = fmap[self._spec_keep[sfile]]
+            keep_exp = np.isin(exp_fmap['TARGETID'], keep_targetids)
+            self._exp_fmaps[sfile] = exp_fmap[keep_exp]
+
+            if input_coadded:
+                input_targetids = input_targetids[keep_coadd]
+            else:
+                input_targetids = input_targetids[keep_exp]
 
             # For each target, store the sliced row index of all spectra,
             # so that we can do a fast lookup later.
@@ -210,7 +280,7 @@ class DistTargetsDESI(DistTargets):
             self._target_specs[sfile] = {}
             for id in keep_targetids:
                 self._target_specs[sfile][id] = [ x for x, y in \
-                    enumerate(self._fmaps[sfile]["TARGETID"]) if y == id ]
+                    enumerate(input_targetids) if y == id ]
 
             # We need some more metadata information for each file-
             # specifically, the bands that are used and their wavelength grids.
@@ -231,11 +301,10 @@ class DistTargetsDESI(DistTargets):
                     if mat is None:
                         continue
                     band = mat.group(1).lower()
-                    if band not in self._bands[sfile]:
-                        self._bands[sfile].append(band)
                     htype = mat.group(2)
-
                     if htype == "WAVELENGTH":
+                        if band not in self._bands[sfile]:
+                            self._bands[sfile].append(band)
                         self._wave[sfile][band] = \
                             hdus[h].data.astype(np.float64).copy()
 
@@ -246,7 +315,14 @@ class DistTargetsDESI(DistTargets):
             if comm_rank == 0:
                 hdus.close()
 
-        self._keep_targets = list(sorted(self._alltargetids))
+        # _alltargetids can have repeats from multiple files.  Trim to
+        # unique set while retaining order in which they appeared
+
+        sortedidx = np.unique(self._alltargetids, return_index=True)[1]
+        ii = np.argsort(sortedidx)
+        unique_targetids = np.asarray(self._alltargetids)[sortedidx[ii]]
+        self._alltargetids = unique_targetids
+        self._keep_targets = unique_targetids.copy()
 
         # Now we have the metadata for all targets in all files.  Distribute
         # the targets among process weighted by the amount of work to do for
@@ -277,30 +353,16 @@ class DistTargetsDESI(DistTargets):
 
         for t in self._my_targets:
             speclist = list()
-            tileids = set()
-            exps = set()
             for sfile in spectrafiles:
-                hastileid = ("TILEID" in self._fmaps[sfile].colnames)
                 for b in self._bands[sfile]:
                     if t in self._target_specs[sfile]:
                         nspec = len(self._target_specs[sfile][t])
                         for s in range(nspec):
                             sindx = self._target_specs[sfile][t][s]
-                            frow = self._fmaps[sfile][sindx]
-                            if "EXPID" in frow:
-                                exps.add(frow["EXPID"])
-                            if hastileid:
-                                tileids.add(frow["TILEID"])
                             speclist.append(Spectrum(self._wave[sfile][b],
                                 None, None, None, None))
-            # Meta dictionary for this target.  Whatever keys we put in here
-            # will end up as columns in the final zbest output table.
-            tmeta = dict()
-            tmeta["NUMEXP"] = len(exps)
-            tmeta["NUMEXP_datatype"] = "i4"
-            tmeta["NUMTILE"] = len(tileids)
-            tmeta["NUMTILE_datatype"] = "i4"
-            self._my_data.append(Target(t, speclist, coadd=False, meta=tmeta))
+
+            self._my_data.append(Target(t, speclist, coadd=False))
 
         # Iterate over the data and broadcast.  Every process selects the rows
         # of each table that contain pieces of local target data and copies it
@@ -412,7 +474,13 @@ class DistTargetsDESI(DistTargets):
             for t in self._my_data:
                 t.compute_coadd(cache_Rcsr,cosmics_nsig=self.cosmics_nsig)
 
-        self.fibermap = Table(np.hstack([ self._fmaps[x] \
+        self.fibermap = Table(np.hstack([ self._coadd_fmaps[x] \
+            for x in self._spectrafiles ]))
+
+        self.exp_fibermap = Table(np.hstack([ self._exp_fmaps[x] \
+            for x in self._spectrafiles ]))
+
+        self.tsnr2 = Table(np.hstack([ self._tsnr2[x] \
             for x in self._spectrafiles ]))
 
         super(DistTargetsDESI, self).__init__(self._keep_targets, comm=comm)
@@ -446,13 +514,14 @@ def rrdesi(options=None, comm=None):
         required=False, help="template file or directory")
 
     parser.add_argument("--archetypes", type=str, default=None,
-        required=False, help="archetype file or directory for final redshift comparison")
+        required=False,
+        help="archetype file or directory for final redshift comparison")
 
-    parser.add_argument("-o", "--output", type=str, default=None,
-        required=False, help="output file")
+    parser.add_argument("-d", "--details", type=str, default=None,
+        required=False, help="output file for full redrock fit details")
 
-    parser.add_argument("-z", "--zbest", type=str, default=None,
-        required=False, help="output zbest FITS file")
+    parser.add_argument("-o", "--outfile", type=str, default=None,
+        required=False, help="output FITS file with best redshift per target")
 
     parser.add_argument("--targetids", type=str, default=None,
         required=False, help="comma-separated list of target IDs")
@@ -496,7 +565,8 @@ def rrdesi(options=None, comm=None):
     parser.add_argument("--cosmics-nsig", type=float, default=0,
         required=False, help="n sigma cosmic ray threshold in coaddition")
 
-    parser.add_argument("infiles", nargs='*')
+    parser.add_argument("-i", "--infiles", nargs='+', required=True,
+            help="Input spectra, coadd, or cframe files")
 
     args = None
     if options is None:
@@ -525,9 +595,9 @@ def rrdesi(options=None, comm=None):
             if comm is not None:
                 comm.Abort()
 
-        if (args.output is None) and (args.zbest is None):
+        if (args.details is None) and (args.outfile is None):
             parser.print_help()
-            print("ERROR: --output or --zbest required")
+            print("ERROR: --details or --outfile required")
             sys.stdout.flush()
             if comm is not None:
                 comm.Abort()
@@ -631,15 +701,39 @@ def rrdesi(options=None, comm=None):
 
         stop = elapsed(start, "Computing redshifts took", comm=comm)
 
+        # Set some DESI-specific ZWARN bits from input fibermap
+        if comm_rank == 0:
+            fiberstatus = targets.fibermap['COADD_FIBERSTATUS']
+            poorpos = (fiberstatus & fibermask.POORPOSITION) != 0
+            badpos = (fiberstatus & fibermask.BADPOSITION) != 0
+            broken = (fiberstatus & fibermask.BROKENFIBER) != 0
+            unassigned = (fiberstatus & fibermask.UNASSIGNED) != 0
+            bad = targets.fibermap['OBJTYPE'] == 'BAD'
+            sky = targets.fibermap['OBJTYPE'] == 'SKY'
+
+            targetids = targets.fibermap['TARGETID']
+
+            ii = np.isin(zfit['targetid'], targetids[poorpos])
+            zfit['zwarn'][ii] |= ZWarningMask.POORDATA
+
+            ii = np.isin(zfit['targetid'], targetids[badpos | broken | unassigned | bad])
+            zfit['zwarn'][ii] |= ZWarningMask.NODATA
+
+            ii = np.isin(zfit['targetid'], targetids[broken])
+            zfit['zwarn'][ii] |= ZWarningMask.UNPLUGGED
+
+            ii = np.isin(zfit['targetid'], targetids[sky])
+            zfit['zwarn'][ii] |= ZWarningMask.SKY
+
         # Write the outputs
 
-        if args.output is not None:
+        if args.details is not None:
             start = elapsed(None, "", comm=comm)
             if comm_rank == 0:
-                write_zscan(args.output, scandata, zfit, clobber=True)
+                write_zscan(args.details, scandata, zfit, clobber=True)
             stop = elapsed(start, "Writing zscan data took", comm=comm)
 
-        if args.zbest:
+        if args.outfile:
             start = elapsed(None, "", comm=comm)
             if comm_rank == 0:
                 zbest = zfit[zfit['znum'] == 0]
@@ -657,9 +751,12 @@ def rrdesi(options=None, comm=None):
                 if not args.archetypes is None:
                     archetypes = All_archetypes(archetypes_dir=args.archetypes).archetypes
                     archetype_version = {name:arch._version for name, arch in archetypes.items() }
-                write_zbest(args.zbest, zbest, targets.fibermap, template_version, archetype_version)
+                write_zbest(args.outfile, zbest,
+                        targets.fibermap, targets.exp_fibermap,
+                        targets.tsnr2,
+                        template_version, archetype_version)
 
-            stop = elapsed(start, "Writing zbest data took", comm=comm)
+            stop = elapsed(start, f"Writing {args.outfile} took", comm=comm)
 
     except Exception as err:
         exc_type, exc_value, exc_traceback = sys.exc_info()
