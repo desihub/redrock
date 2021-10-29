@@ -10,10 +10,25 @@ from __future__ import division, print_function
 import sys
 import traceback
 import numpy as np
+import cupy as cp
 
 from .utils import elapsed
 
 from .targets import distribute_targets
+
+def _zchi2_batch(Tb, weights, flux, wflux, zcoeff):
+    """Calculate a batch of chi2.
+
+    For one redshift and a set of spectral data, compute the chi2 for template
+    data that is already on the correct grid.
+    """
+
+    M = Tb.swapaxes(-2, -1) @ (weights[None, :, None] * Tb)
+    y = (Tb.swapaxes(-2, -1) @ wflux)
+    zcoeff[:] = np.linalg.solve(M, y)
+    model = np.squeeze((Tb @ zcoeff[:, :, None]))
+    zchi2 = ((flux - model)**2 @ weights)
+    return zchi2
 
 def _zchi2_one(Tb, weights, flux, wflux, zcoeff):
     """Calculate a single chi2.
@@ -139,10 +154,93 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None):
                 if OIIflux < 0:
                     zchi2penalty[j,i] = -OIIflux
 
-        if dtemplate.comm is None:
-            progress.put(1)
+        # if dtemplate.comm is None:
+        #     progress.put(1)
 
     return zchi2, zcoeff, zchi2penalty
+
+def calc_zchi2_gpu(target_ids, target_data, dtemplate, progress=None):
+    """Calculate chi2 vs. redshift for a given PCA template.
+
+    Args:
+        target_ids (list): targets IDs.
+        target_data (list): list of Target objects.
+        dtemplate (DistTemplate): distributed template data
+        progress (multiprocessing.Queue): optional queue for tracking
+            progress, only used if MPI is disabled.
+
+    Returns:
+        tuple: (zchi2, zcoeff, zchi2penalty) with:
+            - zchi2[ntargets, nz]: array with one element per target per
+                redshift
+            - zcoeff[ntargets, nz, ncoeff]: array of best fit template
+                coefficients for each target at each redshift
+            - zchi2penalty[ntargets, nz]: array of penalty priors per target
+                and redshift, e.g. to penalize unphysical fits
+
+    """
+    nz = len(dtemplate.local.redshifts)
+    ntargets = len(target_ids)
+    nbasis = dtemplate.template.nbasis
+    print(f'using gpu! {nz}, {ntargets}, {nbasis}')
+
+    zchi2 = cp.zeros( (ntargets, nz) )
+    zchi2penalty = cp.zeros( (ntargets, nz) )
+    zcoeff = cp.zeros( (ntargets, nz, nbasis) )
+
+    # Redshifts near [OII]; used only for galaxy templates
+    if dtemplate.template.template_type == 'GALAXY':
+        isOII = (3724 <= dtemplate.template.wave) & \
+            (dtemplate.template.wave <= 3733)
+        OIItemplate = cp.array(dtemplate.template.flux[:,isOII].T)
+
+    for j in range(ntargets):
+        (weights, flux, wflux) = spectral_data(target_data[j].spectra)        
+        
+        if np.sum(weights) == 0:
+            zchi2[j] = 9e99
+            # print(f"skipping target {j}", flush=True)
+            continue
+            
+        weights = cp.array(weights)
+        flux = cp.array(flux)
+        wflux = cp.array(wflux)
+
+        # Loop over redshifts, solving for template fit
+        # coefficients.  We use the pre-interpolated templates for each
+        # unique wavelength range.
+        Tbs = []
+        for i, _ in enumerate(dtemplate.local.redshifts):
+            tdata = dtemplate.local.data[i]
+            #device_tdata = dict()
+            #for k in tdata.keys():
+            #    device_tdata[k] = cp.array(tdata[k])
+            Tb = list()
+            nbasis = None
+            for s in target_data[j].spectra:
+                #if cp.get_array_module(s.Rcsr) == np:
+                #    s._Rcsr = cupyx.scipy.sparse.csr_matrix(s.Rcsr).todense()
+                key = s.wavehash
+                if nbasis is None:
+                    nbasis = tdata[key].shape[1]
+                    #print("using ",nbasis," basis vectors", flush=True)
+                #Tb.append(s.Rcsr.dot(device_tdata[key]))
+                Tb.append(s.Rcsr.dot(tdata[key]))
+            Tb = np.vstack(Tb)
+            Tbs.append(Tb)
+        Tbs = np.stack(Tbs)
+        Tbs = cp.array(Tbs)
+        zchi2[j] = _zchi2_batch(Tbs, weights, flux, wflux, zcoeff[j])
+        
+        #- Penalize chi2 for negative [OII] flux; ad-hoc
+        if dtemplate.template.template_type == 'GALAXY':
+            OIIflux = np.sum(zcoeff[j] @ OIItemplate.T, axis=1)
+            zchi2penalty[j][OIIflux < 0] = -OIIflux[OIIflux < 0]
+
+        # if dtemplate.comm is None:
+        #     progress.put(1)
+
+    return zchi2.get(), zcoeff.get(), zchi2penalty.get()
 
 
 def _mp_calc_zchi2(indx, target_ids, target_data, t, qout, qprog):
