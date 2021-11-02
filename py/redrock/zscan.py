@@ -11,11 +11,13 @@ import sys
 import traceback
 import numpy as np
 import cupy as cp
+import cupy.prof
 
 from .utils import elapsed
 
 from .targets import distribute_targets
 
+@cupy.prof.TimeRangeDecorator()
 def _zchi2_batch(Tb, weights, flux, wflux, zcoeff):
     """Calculate a batch of chi2.
 
@@ -30,6 +32,7 @@ def _zchi2_batch(Tb, weights, flux, wflux, zcoeff):
     zchi2 = ((flux - model)**2 @ weights)
     return zchi2
 
+@cupy.prof.TimeRangeDecorator()
 def _zchi2_one(Tb, weights, flux, wflux, zcoeff):
     """Calculate a single chi2.
 
@@ -51,6 +54,7 @@ def _zchi2_one(Tb, weights, flux, wflux, zcoeff):
 
     return zchi2
 
+@cupy.prof.TimeRangeDecorator()
 def spectral_data(spectra):
     """Compute concatenated spectral data products.
 
@@ -70,7 +74,7 @@ def spectral_data(spectra):
     wflux = weights * flux
     return (weights, flux, wflux)
 
-
+@cupy.prof.TimeRangeDecorator()
 def calc_zchi2_one(spectra, weights, flux, wflux, tdata):
     """Calculate a single chi2.
 
@@ -103,7 +107,7 @@ def calc_zchi2_one(spectra, weights, flux, wflux, tdata):
 
     return zchi2, zcoeff
 
-
+@cupy.prof.TimeRangeDecorator()
 def calc_zchi2(target_ids, target_data, dtemplate, progress=None):
     """Calculate chi2 vs. redshift for a given PCA template.
 
@@ -159,6 +163,7 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None):
 
     return zchi2, zcoeff, zchi2penalty
 
+@cupy.prof.TimeRangeDecorator()
 def calc_zchi2_gpu(target_ids, target_data, dtemplate, progress=None):
     """Calculate chi2 vs. redshift for a given PCA template.
 
@@ -182,7 +187,7 @@ def calc_zchi2_gpu(target_ids, target_data, dtemplate, progress=None):
     nz = len(dtemplate.local.redshifts)
     ntargets = len(target_ids)
     nbasis = dtemplate.template.nbasis
-    print(f'using gpu! {nz}, {ntargets}, {nbasis}')
+    # print(f'using gpu! {nz}, {ntargets}, {nbasis}', flush=True)
 
     zchi2 = cp.zeros( (ntargets, nz) )
     zchi2penalty = cp.zeros( (ntargets, nz) )
@@ -195,7 +200,8 @@ def calc_zchi2_gpu(target_ids, target_data, dtemplate, progress=None):
         OIItemplate = cp.array(dtemplate.template.flux[:,isOII].T)
 
     for j in range(ntargets):
-        (weights, flux, wflux) = spectral_data(target_data[j].spectra)        
+        cp.cuda.nvtx.RangePush('spectral_data')
+        (weights, flux, wflux) = spectral_data(target_data[j].spectra)
         
         if np.sum(weights) == 0:
             zchi2[j] = 9e99
@@ -205,7 +211,9 @@ def calc_zchi2_gpu(target_ids, target_data, dtemplate, progress=None):
         weights = cp.array(weights)
         flux = cp.array(flux)
         wflux = cp.array(wflux)
+        cp.cuda.nvtx.RangePop()
 
+        cp.cuda.nvtx.RangePush('Tbs')
         # Loop over redshifts, solving for template fit
         # coefficients.  We use the pre-interpolated templates for each
         # unique wavelength range.
@@ -230,6 +238,8 @@ def calc_zchi2_gpu(target_ids, target_data, dtemplate, progress=None):
             Tbs.append(Tb)
         Tbs = np.stack(Tbs)
         Tbs = cp.array(Tbs)
+        print(Tbs.shape, Tb.shape, s.Rcsr.shape, tdata[key].shape)
+        cp.cuda.nvtx.RangePop()
         zchi2[j] = _zchi2_batch(Tbs, weights, flux, wflux, zcoeff[j])
         
         #- Penalize chi2 for negative [OII] flux; ad-hoc
@@ -290,6 +300,9 @@ def calc_zchi2_targets(targets, templates, mp_procs=1):
         am_root = True
     elif targets.comm.rank == 0:
         am_root = True
+
+    if targets.comm is not None:
+        print(targets.comm.rank, cp.cuda.Device().pci_bus_id, flush=True)
 
     # If we are not using MPI, our DistTargets object will have all the targets
     # on the main process.  In that case, we would like to distribute our
@@ -352,7 +365,7 @@ def calc_zchi2_targets(targets, templates, mp_procs=1):
             while not done:
                 # Compute the fit for our current redshift slice.
                 tzchi2, tzcoeff, tpenalty = \
-                    calc_zchi2(targets.local_target_ids(), targets.local(), t)
+                    calc_zchi2_gpu(targets.local_target_ids(), targets.local(), t)
 
                 # Save the results into a dict keyed on targetid
                 tids = targets.local_target_ids()
