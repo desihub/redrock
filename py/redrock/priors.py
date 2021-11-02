@@ -101,11 +101,11 @@ class Priors():
         Returns:
             prior values on the redshift grid.
         """
-
-        tophat_in_xi2_unit = np.vectorize(lambda x : 0 if np.abs(x - z0) < s0/2 else np.NaN)
-
-        prior = tophat_in_xi2_unit(z)
+        
+        prior = np.where(np.abs(z - z0) < s0/2, 0., np.NaN)
+ 
         index_left, index_right = np.argwhere(prior>=0.0)[0], np.argwhere(prior>=0.0)[-1]
+    
         if index_left == 0:
             prior[index_left] = np.inf
         else:
