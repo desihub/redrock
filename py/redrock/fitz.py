@@ -11,6 +11,9 @@ import numpy as np
 import scipy.constants
 import scipy.special
 
+import cupy as cp
+import cupy.prof
+
 from . import constants
 
 from .rebin import rebin_template
@@ -21,6 +24,7 @@ from .zwarning import ZWarningMask as ZW
 
 from .utils import transmission_Lyman
 
+@cupy.prof.TimeRangeDecorator()
 def get_dv(z, zref):
     """Returns velocity difference in km/s for two redshifts
 
@@ -38,7 +42,7 @@ def get_dv(z, zref):
 
     return dv
 
-
+@cupy.prof.TimeRangeDecorator()
 def find_minima(x):
     """Return indices of local minima of x, including edges.
 
@@ -62,7 +66,7 @@ def find_minima(x):
 
     return ii[jj]
 
-
+@cupy.prof.TimeRangeDecorator()
 def minfit(x, y):
     """Fits y = y0 + ((x-x0)/xerr)**2
 
@@ -106,7 +110,7 @@ def minfit(x, y):
 
     return (x0, xerr, y0, zwarn)
 
-
+@cupy.prof.TimeRangeDecorator()
 def fitz(zchi2, redshifts, spectra, template, nminima=3, archetype=None):
     """Refines redshift measurement around up to nminima minima.
 
@@ -164,6 +168,7 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3, archetype=None):
         zzchi2 = np.zeros(nz, dtype=np.float64)
         zzcoeff = np.zeros((nz, nbasis), dtype=np.float64)
 
+        cp.cuda.nvtx.RangePush('sample minimum')
         for i, z in enumerate(zz):
             binned = rebin_template(template, z, dwave)
             for k in list(dwave.keys()):
@@ -172,8 +177,10 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3, archetype=None):
                     binned[k][:,vect] *= T
             zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux,
                 wflux, binned)
+        cp.cuda.nvtx.RangePop()
 
         #- fit parabola to 3 points around minimum
+        cp.cuda.nvtx.RangePush('fit minimum')
         i = min(max(np.argmin(zzchi2),1), len(zz)-2)
         zmin, sigma, chi2min, zwarn = minfit(zz[i-1:i+2], zzchi2[i-1:i+2])
 
@@ -194,6 +201,7 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3, archetype=None):
             else:
                 #- Unknown problem; re-raise error
                 raise err
+        cp.cuda.nvtx.RangePop()
 
         zbest = zmin
         zerr = sigma

@@ -10,6 +10,9 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 import numba
 
+import cupy as cp
+import cupy.prof
+
 def centers2edges(centers):
     """Convert bin centers to bin edges, guessing at what you probably meant
 
@@ -88,6 +91,7 @@ def _trapz_rebin(x, y, edges, results):
 
     return
 
+@cupy.prof.TimeRangeDecorator()
 def trapz_rebin(x, y, xnew=None, edges=None):
     """Rebin y(x) flux density using trapezoidal integration between bin edges
 
@@ -125,7 +129,7 @@ def trapz_rebin(x, y, xnew=None, edges=None):
 
     return result
 
-
+@cupy.prof.TimeRangeDecorator()
 def rebin_template(template, z, dwave):
     """Rebin a template to a set of wavelengths.
 

@@ -143,6 +143,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
     if targets.comm is None:
         mpdist = distribute_targets(targets.local(), mp_procs)
 
+    #- 75% on runtime
     # Compute the coarse-binned chi2 for all local targets.
     if chi2_scan is None:
         results = calc_zchi2_targets(targets, templates, mp_procs=mp_procs)
@@ -176,6 +177,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
         # Here we have another parallelization choice between MPI and
         # multiprocessing.
 
+        #- 25% of runtime
         if targets.comm is not None:
             # MPI case.  Every process just works with its local targets.
             for tg in targets.local():

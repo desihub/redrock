@@ -12,6 +12,7 @@ import traceback
 import numpy as np
 import cupy as cp
 import cupy.prof
+import cupyx.scipy
 
 from .utils import elapsed
 
@@ -163,7 +164,7 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None):
 
     return zchi2, zcoeff, zchi2penalty
 
-@cupy.prof.TimeRangeDecorator()
+@cupy.prof.TimeRangeDecorator("calc_zchi2_gpu")
 def calc_zchi2_gpu(target_ids, target_data, dtemplate, progress=None):
     """Calculate chi2 vs. redshift for a given PCA template.
 
@@ -199,47 +200,48 @@ def calc_zchi2_gpu(target_ids, target_data, dtemplate, progress=None):
             (dtemplate.template.wave <= 3733)
         OIItemplate = cp.array(dtemplate.template.flux[:,isOII].T)
 
+    cp.cuda.nvtx.RangePush('tdata')
+    tdata = dict()
+    for key in dtemplate.local.data[0].keys():
+        tdata[key] = cp.array([tdata[key] for tdata in dtemplate.local.data])
+    cp.cuda.nvtx.RangePop() #tdata
+
     for j in range(ntargets):
         cp.cuda.nvtx.RangePush('spectral_data')
         (weights, flux, wflux) = spectral_data(target_data[j].spectra)
-        
+        cp.cuda.nvtx.RangePop()#spectral_data
         if np.sum(weights) == 0:
             zchi2[j] = 9e99
             # print(f"skipping target {j}", flush=True)
-            continue
-            
+            continue            
         weights = cp.array(weights)
         flux = cp.array(flux)
         wflux = cp.array(wflux)
-        cp.cuda.nvtx.RangePop()
 
         cp.cuda.nvtx.RangePush('Tbs')
         # Loop over redshifts, solving for template fit
         # coefficients.  We use the pre-interpolated templates for each
         # unique wavelength range.
         Tbs = []
-        for i, _ in enumerate(dtemplate.local.redshifts):
-            tdata = dtemplate.local.data[i]
-            #device_tdata = dict()
-            #for k in tdata.keys():
-            #    device_tdata[k] = cp.array(tdata[k])
-            Tb = list()
-            nbasis = None
-            for s in target_data[j].spectra:
-                #if cp.get_array_module(s.Rcsr) == np:
-                #    s._Rcsr = cupyx.scipy.sparse.csr_matrix(s.Rcsr).todense()
-                key = s.wavehash
-                if nbasis is None:
-                    nbasis = tdata[key].shape[1]
-                    #print("using ",nbasis," basis vectors", flush=True)
-                #Tb.append(s.Rcsr.dot(device_tdata[key]))
-                Tb.append(s.Rcsr.dot(tdata[key]))
-            Tb = np.vstack(Tb)
-            Tbs.append(Tb)
-        Tbs = np.stack(Tbs)
-        Tbs = cp.array(Tbs)
-        print(Tbs.shape, Tb.shape, s.Rcsr.shape, tdata[key].shape)
-        cp.cuda.nvtx.RangePop()
+        #print(type(dtemplate.local.data), dtemplate.local.data, flush=True)
+        #cp.zeros((nz, len(flux), nbasis))
+        #print(len(target_data[j].spectra), flush=True)
+        for s in target_data[j].spectra:
+            key = s.wavehash
+            #tdata = cp.array([tdata[key] for tdata in dtemplate.local.data])
+            #print(tdata.shape, flush=True)
+            cp.cuda.nvtx.RangePush('R')
+            R = cupyx.scipy.sparse.csr_matrix(s.Rcsr).toarray()
+            cp.cuda.nvtx.RangePop()#R
+            # print(R.shape, flush=True)
+            #print(s.Rcsr.shape, s.R.shape, type(s.R.todense()), tdata.shape, flush=True)
+            cp.cuda.nvtx.RangePush('einsum')
+            Tbs.append(cp.einsum('mn,jnk->jmk', R, tdata[key]))
+            cp.cuda.nvtx.RangePop()#einsum
+        cp.cuda.nvtx.RangePush('concatenate')
+        Tbs = cp.concatenate(Tbs, axis=1)
+        cp.cuda.nvtx.RangePop()#concatenate
+        cp.cuda.nvtx.RangePop() # TBs
         zchi2[j] = _zchi2_batch(Tbs, weights, flux, wflux, zcoeff[j])
         
         #- Penalize chi2 for negative [OII] flux; ad-hoc
