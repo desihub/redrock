@@ -14,6 +14,9 @@ import argparse
 
 import numpy as np
 
+import cupy as cp
+import cupy.prof
+
 from astropy.io import fits
 from astropy.table import Table
 
@@ -505,6 +508,7 @@ def rrdesi(options=None, comm=None):
         comm (mpi4py.Comm): MPI communicator to use.
 
     """
+    cp.cuda.nvtx.RangePush("rrdesi")
     global_start = elapsed(None, "", comm=comm)
 
     parser = argparse.ArgumentParser(description="Estimate redshifts from"
@@ -664,6 +668,7 @@ def rrdesi(options=None, comm=None):
             sys.stdout.flush()
 
         start = elapsed(None, "", comm=comm)
+        cp.cuda.nvtx.RangePush("Load targets")
 
         # Load the targets.  If comm is None, then the target data will be
         # stored in shared memory.
@@ -684,6 +689,7 @@ def rrdesi(options=None, comm=None):
 
         stop = elapsed(start, "Read and distribution of {} targets"\
             .format(len(targets.all_target_ids)), comm=comm)
+        cp.cuda.nvtx.RangePop() # ("Load targets")
 
         # Read the template data
 
@@ -694,12 +700,14 @@ def rrdesi(options=None, comm=None):
         # refinement.  This function only returns data on the rank 0 process.
 
         start = elapsed(None, "", comm=comm)
+        cp.cuda.nvtx.RangePush("Compute redshifts")
 
         scandata, zfit = zfind(targets, dtemplates, mpprocs,
             nminima=args.nminima, archetypes=args.archetypes,
             priors=args.priors, chi2_scan=args.chi2_scan)
 
         stop = elapsed(start, "Computing redshifts took", comm=comm)
+        cp.cuda.nvtx.RangePop() # ("Compute redshifts")
 
         # Set some DESI-specific ZWARN bits from input fibermap
         if comm_rank == 0:
@@ -729,12 +737,15 @@ def rrdesi(options=None, comm=None):
 
         if args.details is not None:
             start = elapsed(None, "", comm=comm)
+            cp.cuda.nvtx.RangePush("Write zscan")
             if comm_rank == 0:
                 write_zscan(args.details, scandata, zfit, clobber=True)
             stop = elapsed(start, "Writing zscan data took", comm=comm)
+            cp.cuda.nvtx.RangePop() #("Write zscan")
 
         if args.outfile:
             start = elapsed(None, "", comm=comm)
+            cp.cuda.nvtx.RangePush("Write outfile")
             if comm_rank == 0:
                 zbest = zfit[zfit['znum'] == 0]
 
@@ -757,6 +768,7 @@ def rrdesi(options=None, comm=None):
                         template_version, archetype_version)
 
             stop = elapsed(start, f"Writing {args.outfile} took", comm=comm)
+            cp.cuda.nvtx.RangePop() # ("Write outfile")
 
     except Exception as err:
         exc_type, exc_value, exc_traceback = sys.exc_info()
@@ -771,6 +783,7 @@ def rrdesi(options=None, comm=None):
             comm.Abort()
 
     global_stop = elapsed(global_start, "Total run time", comm=comm)
+    cp.cuda.nvtx.RangePop() # "rrdesi"
 
     if args.debug:
         import IPython

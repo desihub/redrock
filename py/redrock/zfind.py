@@ -12,6 +12,8 @@ import sys
 import traceback
 
 import numpy as np
+import cupy as cp
+import cupy.prof
 
 import astropy.table
 
@@ -145,10 +147,12 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
 
     #- 75% on runtime
     # Compute the coarse-binned chi2 for all local targets.
+    cp.cuda.nvtx.RangePush('zscan')
     if chi2_scan is None:
         results = calc_zchi2_targets(targets, templates, mp_procs=mp_procs)
     else:
         results = read_zscan_redrock(chi2_scan)
+    cp.cuda.nvtx.RangePop() # ('zscan')
 
     # Apply redshift prior
     if not priors is None:
@@ -159,6 +163,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
     # For each of our local targets, refine the redshift fit close to the
     # minima in the coarse fit.
 
+    cp.cuda.nvtx.RangePush('findbest')
     sort = np.array([ t.template.full_type for t in templates]).argsort()
     for t in np.array(list(templates))[sort]:
         ft = t.template.full_type
@@ -227,6 +232,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     results[rs[0]][ft]['zfit']['npixels'] = rs[2]
 
         elapsed(start, "    Finished in", comm=t.comm)
+    cp.cuda.nvtx.RangePop() # ('findbest')
 
     # Add the target metadata to the results
 
