@@ -172,6 +172,32 @@ def mp_array(original):
     return nd
 
 
+def distribute_work_lopsided(nproc, ids, weights=None, capacities=None):
+    """
+    """
+    # sort ids by weights
+    if weights is None:
+        weights = { x : 1 for x in ids }
+    sids = list(sorted(ids, key=lambda x: weights[x]))
+    #wts = np.array([ weights[x] for x in sids ], dtype=np.float64)
+
+    #- If scale_factors is not provided assume they are equal
+    if capacities is None:
+        capacities = [1] * nproc
+
+    #- Initialize distributed list of ids
+    dist = [list() for x in capacities]
+    loads = [dict(i=i, load=0, capacity=x) for i, x in enumerate(capacities)]
+    for id in sids:
+        #- Identify lightest load to receive task
+        minload = min(loads, key=lambda x: ((x['load'] + weights[id])*x['capacity'], x['capacity']))
+        i = loads.index(minload)
+        minload['load'] += weights[id]
+        dist[i].append(id)
+
+    return dist
+
+
 def distribute_work(nproc, ids, weights=None):
     """Helper function to distribute work among processes.
 

@@ -27,7 +27,7 @@ from desispec.coaddition import coadd_fibermap
 from desispec.specscore import compute_coadd_tsnr_scores
 from desispec.maskbits import fibermask
 
-from ..utils import elapsed, get_mp, distribute_work
+from ..utils import elapsed, get_mp, distribute_work, distribute_work_lopsided
 
 from ..targets import (Spectrum, Target, DistTargets)
 
@@ -341,8 +341,19 @@ class DistTargetsDESI(DistTargets):
                     if t in self._target_specs[sfile]:
                         tweights[t] += len(self._target_specs[sfile][t])
 
-        self._proc_targets = distribute_work(comm_size,
-            self._keep_targets, weights=tweights)
+        # self._proc_targets = distribute_work(comm_size,
+        #     self._keep_targets, weights=tweights)
+
+        gpu_size = min(8, comm_size)
+        cpu_size = max(comm_size - gpu_size, 0)
+        capacities = [1] * gpu_size + [15] * cpu_size
+        self._proc_targets = distribute_work_lopsided(comm_size,
+            self._keep_targets, weights=tweights, capacities=capacities)
+
+        if comm_rank == 0:
+            print('lopsided targets:', list(map(len, self._proc_targets)), flush=True)
+
+        self.use_gpu = comm_rank < gpu_size
 
         self._my_targets = self._proc_targets[comm_rank]
 
@@ -695,6 +706,8 @@ def rrdesi(options=None, comm=None):
 
         dtemplates = load_dist_templates(dwave, templates=args.templates,
             comm=comm, mp_procs=mpprocs)
+
+        # print(f"{comm_rank} nz={len(dtemplates[0]._piece.redshifts)}", flush=True)
 
         # Compute the redshifts, including both the coarse scan and the
         # refinement.  This function only returns data on the rank 0 process.

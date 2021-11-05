@@ -304,7 +304,10 @@ def calc_zchi2_targets(targets, templates, mp_procs=1):
         am_root = True
 
     if targets.comm is not None:
-        print(targets.comm.rank, cp.cuda.Device().pci_bus_id, flush=True)
+        calc_zchi2_func = calc_zchi2
+        if targets.use_gpu:
+            calc_zchi2_func = calc_zchi2_gpu
+        # print(targets.comm.rank, calc_zchi2_func, cp.cuda.Device().pci_bus_id, flush=True)
 
     # If we are not using MPI, our DistTargets object will have all the targets
     # on the main process.  In that case, we would like to distribute our
@@ -331,7 +334,7 @@ def calc_zchi2_targets(targets, templates, mp_procs=1):
                 .format(t.template.full_type))
             sys.stdout.flush()
 
-        start = elapsed(None, "", comm=t.comm)
+        start = elapsed(None, "", comm=targets.comm)
 
         # There are 2 parallelization techniques supported here (MPI and
         # multiprocessing).
@@ -367,7 +370,7 @@ def calc_zchi2_targets(targets, templates, mp_procs=1):
             while not done:
                 # Compute the fit for our current redshift slice.
                 tzchi2, tzcoeff, tpenalty = \
-                    calc_zchi2_gpu(targets.local_target_ids(), targets.local(), t)
+                    calc_zchi2_func(targets.local_target_ids(), targets.local(), t)
 
                 # Save the results into a dict keyed on targetid
                 tids = targets.local_target_ids()
@@ -452,7 +455,7 @@ def calc_zchi2_targets(targets, templates, mp_procs=1):
                     zcoeff[tid] = res[2][j]
                     penalty[tid] = res[3][j]
 
-        elapsed(start, "    Finished in", comm=t.comm)
+        elapsed(start, "    Finished in", comm=targets.comm)
 
         for tid in sorted(zchi2.keys()):
             results[tid][ft] = dict()
