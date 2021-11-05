@@ -267,11 +267,11 @@ class DistTemplate(object):
             self._comm_rank = self._comm.rank
             self._comm_size = self._comm.size
 
-        # self._distredshifts = np.array_split(self._template.redshifts,
-        #     self._comm_size)
+        self._distredshifts = np.array_split(self._template.redshifts,
+            self._comm_size)
 
-        # myz = self._distredshifts[self._comm_rank]
-        myz = self._template.redshifts
+        myz = self._distredshifts[self._comm_rank]
+        # myz = self._template.redshifts
         nz = len(myz)
 
         data = list()
@@ -313,7 +313,9 @@ class DistTemplate(object):
                 for vect in range(data[i][k].shape[1]):
                     data[i][k][:,vect] *= T
 
-        self._piece = DistTemplatePiece(self._comm_rank, myz, data)
+        data = [e for s in self._comm.allgather(data) for e in s]
+
+        self._piece = DistTemplatePiece(0, self._template.redshifts, data)
 
 
     @property
