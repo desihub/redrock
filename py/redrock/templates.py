@@ -267,10 +267,11 @@ class DistTemplate(object):
             self._comm_rank = self._comm.rank
             self._comm_size = self._comm.size
 
-        self._distredshifts = np.array_split(self._template.redshifts,
-            self._comm_size)
+        # self._distredshifts = np.array_split(self._template.redshifts,
+        #     self._comm_size)
 
-        myz = self._distredshifts[self._comm_rank]
+        # myz = self._distredshifts[self._comm_rank]
+        myz = self._template.redshifts
         nz = len(myz)
 
         data = list()
@@ -343,6 +344,10 @@ class DistTemplate(object):
         """
         # If we are not using MPI, this function is a no-op, so just return.
         if self._comm is None:
+            return True
+
+        # If we have short-circuited redshift distribution
+        if len(self._piece.redshifts) == len(self._template.redshifts):
             return True
 
         rank = self._comm_rank
