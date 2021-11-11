@@ -10,30 +10,34 @@ from __future__ import division, print_function
 import sys
 import traceback
 import numpy as np
-import cupy as cp
-import cupy.prof
-import cupyx.scipy
+
+try:
+    import cupy as cp
+    import cupyx.scipy
+    import cupyx
+    cupy_available = cp.is_available()
+except ImportError:
+    cupy_available = False
 
 from .utils import elapsed
 
 from .targets import distribute_targets
 
-@cupy.prof.TimeRangeDecorator()
 def _zchi2_batch(Tb, weights, flux, wflux, zcoeff):
     """Calculate a batch of chi2.
 
-    For one redshift and a set of spectral data, compute the chi2 for template
+    For many redshifts and a set of spectral data, compute the chi2 for template
     data that is already on the correct grid.
     """
 
     M = Tb.swapaxes(-2, -1) @ (weights[None, :, None] * Tb)
     y = (Tb.swapaxes(-2, -1) @ wflux)
+    # TODO: use cholesky solve here?
     zcoeff[:] = np.linalg.solve(M, y)
     model = np.squeeze((Tb @ zcoeff[:, :, None]))
     zchi2 = ((flux - model)**2 @ weights)
     return zchi2
 
-@cupy.prof.TimeRangeDecorator()
 def _zchi2_one(Tb, weights, flux, wflux, zcoeff):
     """Calculate a single chi2.
 
@@ -55,7 +59,6 @@ def _zchi2_one(Tb, weights, flux, wflux, zcoeff):
 
     return zchi2
 
-@cupy.prof.TimeRangeDecorator()
 def spectral_data(spectra):
     """Compute concatenated spectral data products.
 
@@ -75,7 +78,6 @@ def spectral_data(spectra):
     wflux = weights * flux
     return (weights, flux, wflux)
 
-@cupy.prof.TimeRangeDecorator()
 def calc_zchi2_one(spectra, weights, flux, wflux, tdata):
     """Calculate a single chi2.
 
@@ -108,7 +110,6 @@ def calc_zchi2_one(spectra, weights, flux, wflux, tdata):
 
     return zchi2, zcoeff
 
-@cupy.prof.TimeRangeDecorator()
 def calc_zchi2(target_ids, target_data, dtemplate, progress=None):
     """Calculate chi2 vs. redshift for a given PCA template.
 
@@ -159,12 +160,11 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None):
                 if OIIflux < 0:
                     zchi2penalty[j,i] = -OIIflux
 
-        # if dtemplate.comm is None:
-        #     progress.put(1)
+        if dtemplate.comm is None:
+            progress.put(1)
 
     return zchi2, zcoeff, zchi2penalty
 
-@cupy.prof.TimeRangeDecorator("calc_zchi2_gpu")
 def calc_zchi2_gpu(target_ids, target_data, dtemplate, progress=None):
     """Calculate chi2 vs. redshift for a given PCA template.
 
@@ -188,7 +188,6 @@ def calc_zchi2_gpu(target_ids, target_data, dtemplate, progress=None):
     nz = len(dtemplate.local.redshifts)
     ntargets = len(target_ids)
     nbasis = dtemplate.template.nbasis
-    # print(f'using gpu! {nz}, {ntargets}, {nbasis}', flush=True)
 
     zchi2 = cp.zeros( (ntargets, nz) )
     zchi2penalty = cp.zeros( (ntargets, nz) )
@@ -200,57 +199,38 @@ def calc_zchi2_gpu(target_ids, target_data, dtemplate, progress=None):
             (dtemplate.template.wave <= 3733)
         OIItemplate = cp.array(dtemplate.template.flux[:,isOII].T)
 
-    cp.cuda.nvtx.RangePush('tdata')
+    # Combine redshifted templates
     tdata = dict()
     for key in dtemplate.local.data[0].keys():
         tdata[key] = cp.array([tdata[key] for tdata in dtemplate.local.data])
-    cp.cuda.nvtx.RangePop() #tdata
 
     for j in range(ntargets):
-        cp.cuda.nvtx.RangePush('spectral_data')
         (weights, flux, wflux) = spectral_data(target_data[j].spectra)
-        cp.cuda.nvtx.RangePop()#spectral_data
         if np.sum(weights) == 0:
             zchi2[j] = 9e99
-            # print(f"skipping target {j}", flush=True)
-            continue            
+            continue
         weights = cp.array(weights)
         flux = cp.array(flux)
         wflux = cp.array(wflux)
 
-        cp.cuda.nvtx.RangePush('Tbs')
-        # Loop over redshifts, solving for template fit
-        # coefficients.  We use the pre-interpolated templates for each
+        # Solving for template fit coefficients for all redshifts.
+        # We use the pre-interpolated templates for each
         # unique wavelength range.
         Tbs = []
-        #print(type(dtemplate.local.data), dtemplate.local.data, flush=True)
-        #cp.zeros((nz, len(flux), nbasis))
-        #print(len(target_data[j].spectra), flush=True)
         for s in target_data[j].spectra:
             key = s.wavehash
-            #tdata = cp.array([tdata[key] for tdata in dtemplate.local.data])
-            #print(tdata.shape, flush=True)
-            cp.cuda.nvtx.RangePush('R')
             R = cupyx.scipy.sparse.csr_matrix(s.Rcsr).toarray()
-            cp.cuda.nvtx.RangePop()#R
-            # print(R.shape, flush=True)
-            #print(s.Rcsr.shape, s.R.shape, type(s.R.todense()), tdata.shape, flush=True)
-            cp.cuda.nvtx.RangePush('einsum')
             Tbs.append(cp.einsum('mn,jnk->jmk', R, tdata[key]))
-            cp.cuda.nvtx.RangePop()#einsum
-        cp.cuda.nvtx.RangePush('concatenate')
         Tbs = cp.concatenate(Tbs, axis=1)
-        cp.cuda.nvtx.RangePop()#concatenate
-        cp.cuda.nvtx.RangePop() # TBs
         zchi2[j] = _zchi2_batch(Tbs, weights, flux, wflux, zcoeff[j])
-        
+
         #- Penalize chi2 for negative [OII] flux; ad-hoc
         if dtemplate.template.template_type == 'GALAXY':
             OIIflux = np.sum(zcoeff[j] @ OIItemplate.T, axis=1)
             zchi2penalty[j][OIIflux < 0] = -OIIflux[OIIflux < 0]
 
-        # if dtemplate.comm is None:
-        #     progress.put(1)
+        if dtemplate.comm is None:
+            progress.put(1)
 
     return zchi2.get(), zcoeff.get(), zchi2penalty.get()
 
@@ -273,7 +253,7 @@ def _mp_calc_zchi2(indx, target_ids, target_data, t, qout, qprog):
         sys.stdout.flush()
 
 
-def calc_zchi2_targets(targets, templates, mp_procs=1):
+def calc_zchi2_targets(targets, templates, mp_procs=1, gpu=False):
     """Compute all chi2 fits for the local set of targets and collect.
 
     Given targets and templates distributed across a set of MPI processes,
@@ -287,6 +267,7 @@ def calc_zchi2_targets(targets, templates, mp_procs=1):
         templates (list): list of DistTemplate objects.
         mp_procs (int): if not using MPI, this is the number of multiprocessing
             processes to use.
+        gpu (bool): (optional) use gpu calc_zchi2
 
     Returns:
         dict: dictionary of results for each local target ID.
@@ -304,9 +285,10 @@ def calc_zchi2_targets(targets, templates, mp_procs=1):
         am_root = True
 
     if targets.comm is not None:
-        calc_zchi2_func = calc_zchi2
-        if targets.use_gpu:
+        if gpu:
             calc_zchi2_func = calc_zchi2_gpu
+        else:
+            calc_zchi2_func = calc_zchi2
         # print(targets.comm.rank, calc_zchi2_func, cp.cuda.Device().pci_bus_id, flush=True)
 
     # If we are not using MPI, our DistTargets object will have all the targets
