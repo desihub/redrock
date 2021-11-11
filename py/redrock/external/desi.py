@@ -14,9 +14,6 @@ import argparse
 
 import numpy as np
 
-import cupy as cp
-import cupy.prof
-
 from astropy.io import fits
 from astropy.table import Table
 
@@ -113,11 +110,13 @@ class DistTargetsDESI(DistTargets):
         cache_Rcsr: pre-calculate and cache sparse CSR format of resolution
             matrix R
         cosmics_nsig (float): cosmic rejection threshold used in coaddition
+        gpu (bool): (optional)
     """
 
     ### @profile
     def __init__(self, spectrafiles, coadd=True, targetids=None,
-                 first_target=None, n_target=None, comm=None, cache_Rcsr=False, cosmics_nsig=0):
+                 first_target=None, n_target=None, comm=None, cache_Rcsr=False,
+                 cosmics_nsig=0, gpu=False):
 
         comm_size = 1
         comm_rank = 0
@@ -341,19 +340,21 @@ class DistTargetsDESI(DistTargets):
                     if t in self._target_specs[sfile]:
                         tweights[t] += len(self._target_specs[sfile][t])
 
-        # self._proc_targets = distribute_work(comm_size,
-        #     self._keep_targets, weights=tweights)
+        self.gpu = gpu
+        if comm is not None:
+            gpu_procs = comm.allgather(gpu)
+        else:
+            gpu_procs = [gpu, ]
+        ngpu_procs = sum(gpu_procs)
+        ncpu_procs = comm_size - ngpu_procs
 
-        gpu_size = min(8, comm_size)
-        cpu_size = max(comm_size - gpu_size, 0)
-        capacities = [1] * gpu_size + [15] * cpu_size
-        self._proc_targets = distribute_work_lopsided(comm_size,
-            self._keep_targets, weights=tweights, capacities=capacities)
-
-        if comm_rank == 0:
-            print('lopsided targets:', list(map(len, self._proc_targets)), flush=True)
-
-        self.use_gpu = comm_rank < gpu_size
+        if ngpu_procs > 0 and ncpu_procs > 0:
+            capacities = [1 if gpu_proc else 15 for gpu_proc in gpu_procs]
+            self._proc_targets = distribute_work_lopsided(comm_size,
+                self._keep_targets, weights=tweights, capacities=capacities)
+        else:
+            self._proc_targets = distribute_work(comm_size,
+                self._keep_targets, weights=tweights)
 
         self._my_targets = self._proc_targets[comm_rank]
 
@@ -519,7 +520,6 @@ def rrdesi(options=None, comm=None):
         comm (mpi4py.Comm): MPI communicator to use.
 
     """
-    cp.cuda.nvtx.RangePush("rrdesi")
     global_start = elapsed(None, "", comm=comm)
 
     parser = argparse.ArgumentParser(description="Estimate redshifts from"
@@ -583,6 +583,12 @@ def rrdesi(options=None, comm=None):
     parser.add_argument("-i", "--infiles", nargs='+', required=True,
             help="Input spectra, coadd, or cframe files")
 
+    parser.add_argument("--gpu", action="store_true",
+        required=False, help="use GPUs")
+
+    parser.add_argument("--max-gpuprocs", type=int, default=None,
+        required=False, help="limit number of MPI processes using GPUs")
+
     args = None
     if options is None:
         args = parser.parse_args()
@@ -598,6 +604,10 @@ def rrdesi(options=None, comm=None):
     if comm is not None:
         comm_size = comm.size
         comm_rank = comm.rank
+
+    max_gpuprocs = comm_size
+    if args.max_gpuprocs is not None:
+        max_gpuprocs = args.max_gpuprocs
 
     # Check arguments- all processes have this, so just check on the first
     # process
@@ -635,6 +645,21 @@ def rrdesi(options=None, comm=None):
                 comm.Abort()
             else:
                 sys.exit(1)
+
+        if args.gpu:
+            try:
+                import cupy
+                gpu_ok = cupy.is_available()
+            except ImportError:
+                gpu_ok = False
+            if not gpu_ok:
+                print("ERROR: cupy or GPU not available")
+                sys.stdout.flush()
+                if comm is not None:
+                    comm.Abort()
+                else:
+                    sys.exit(1)
+
 
     targetids = None
     if args.targetids is not None:
@@ -679,13 +704,13 @@ def rrdesi(options=None, comm=None):
             sys.stdout.flush()
 
         start = elapsed(None, "", comm=comm)
-        cp.cuda.nvtx.RangePush("Load targets")
 
         # Load the targets.  If comm is None, then the target data will be
         # stored in shared memory.
+        use_gpu = args.gpu and comm_rank < max_gpuprocs
         targets = DistTargetsDESI(args.infiles, coadd=(not args.allspec),
                                   targetids=targetids, first_target=first_target, n_target=n_target,
-                                  comm=comm, cache_Rcsr=True, cosmics_nsig=args.cosmics_nsig)
+                                  comm=comm, cache_Rcsr=True, cosmics_nsig=args.cosmics_nsig, gpu=use_gpu)
 
         #- Mask some problematic sky lines
         if not args.no_skymask:
@@ -700,27 +725,22 @@ def rrdesi(options=None, comm=None):
 
         stop = elapsed(start, "Read and distribution of {} targets"\
             .format(len(targets.all_target_ids)), comm=comm)
-        cp.cuda.nvtx.RangePop() # ("Load targets")
 
         # Read the template data
 
         dtemplates = load_dist_templates(dwave, templates=args.templates,
-            comm=comm, mp_procs=mpprocs)
-
-        # print(f"{comm_rank} nz={len(dtemplates[0]._piece.redshifts)}", flush=True)
+            comm=comm, mp_procs=mpprocs, gpu=args.gpu)
 
         # Compute the redshifts, including both the coarse scan and the
         # refinement.  This function only returns data on the rank 0 process.
 
         start = elapsed(None, "", comm=comm)
-        cp.cuda.nvtx.RangePush("Compute redshifts")
 
         scandata, zfit = zfind(targets, dtemplates, mpprocs,
             nminima=args.nminima, archetypes=args.archetypes,
             priors=args.priors, chi2_scan=args.chi2_scan)
 
         stop = elapsed(start, "Computing redshifts took", comm=comm)
-        cp.cuda.nvtx.RangePop() # ("Compute redshifts")
 
         # Set some DESI-specific ZWARN bits from input fibermap
         if comm_rank == 0:
@@ -750,15 +770,12 @@ def rrdesi(options=None, comm=None):
 
         if args.details is not None:
             start = elapsed(None, "", comm=comm)
-            cp.cuda.nvtx.RangePush("Write zscan")
             if comm_rank == 0:
                 write_zscan(args.details, scandata, zfit, clobber=True)
             stop = elapsed(start, "Writing zscan data took", comm=comm)
-            cp.cuda.nvtx.RangePop() #("Write zscan")
 
         if args.outfile:
             start = elapsed(None, "", comm=comm)
-            cp.cuda.nvtx.RangePush("Write outfile")
             if comm_rank == 0:
                 zbest = zfit[zfit['znum'] == 0]
 
@@ -781,7 +798,6 @@ def rrdesi(options=None, comm=None):
                         template_version, archetype_version)
 
             stop = elapsed(start, f"Writing {args.outfile} took", comm=comm)
-            cp.cuda.nvtx.RangePop() # ("Write outfile")
 
     except Exception as err:
         exc_type, exc_value, exc_traceback = sys.exc_info()
@@ -796,7 +812,6 @@ def rrdesi(options=None, comm=None):
             comm.Abort()
 
     global_stop = elapsed(global_start, "Total run time", comm=comm)
-    cp.cuda.nvtx.RangePop() # "rrdesi"
 
     if args.debug:
         import IPython
