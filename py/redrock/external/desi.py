@@ -738,9 +738,9 @@ def rrdesi(options=None, comm=None):
 
         scandata, zfit = zfind(targets, dtemplates, mpprocs,
             nminima=args.nminima, archetypes=args.archetypes,
-            priors=args.priors, chi2_scan=args.chi2_scan)
+            priors=args.priors, chi2_scan=args.chi2_scan, gpu=args.gpu)
 
-        stop = elapsed(start, "Computing redshifts took", comm=comm)
+        stop = elapsed(start, "Computing redshifts", comm=comm)
 
         # Set some DESI-specific ZWARN bits from input fibermap
         if comm_rank == 0:
