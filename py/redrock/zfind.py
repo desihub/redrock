@@ -278,7 +278,6 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
     # Add the target metadata to the results
 
     start_finalize = elapsed(None, "", comm=targets.comm)
-    # for tg in targets.local():
     for tg in local_targets:
         results[tg.id]['meta'] = tg.meta
 
