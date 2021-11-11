@@ -254,12 +254,16 @@ class DistTemplate(object):
         mp_procs (int): if not using MPI, restrict the number of
             multiprocesses to this.
         comm (mpi4py.MPI.Comm): (optional) the MPI communicator.
+        gpu (bool): (optional) for GPUs, allgather rebinned templates
+            after distributed rebinning so each process has the full
+            redshift range for the template.
 
     """
-    def __init__(self, template, dwave, mp_procs=1, comm=None):
+    def __init__(self, template, dwave, mp_procs=1, comm=None, gpu=False):
         self._comm = comm
         self._template = template
         self._dwave = dwave
+        self._gpu = gpu
 
         self._comm_rank = 0
         self._comm_size = 1
@@ -271,7 +275,6 @@ class DistTemplate(object):
             self._comm_size)
 
         myz = self._distredshifts[self._comm_rank]
-        # myz = self._template.redshifts
         nz = len(myz)
 
         data = list()
@@ -313,9 +316,11 @@ class DistTemplate(object):
                 for vect in range(data[i][k].shape[1]):
                     data[i][k][:,vect] *= T
 
-        data = [e for s in self._comm.allgather(data) for e in s]
-
-        self._piece = DistTemplatePiece(0, self._template.redshifts, data)
+        if self._gpu and self._comm is not None:
+            data = [e for s in self._comm.allgather(data) for e in s]
+            self._piece = DistTemplatePiece(0, self._template.redshifts, data)
+        else:
+            self._piece = DistTemplatePiece(self._comm_rank, myz, data)
 
 
     @property
@@ -388,7 +393,7 @@ class DistTemplate(object):
         return done
 
 
-def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1):
+def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1, gpu=False):
     """Read and distribute templates from disk.
 
     This reads one or more template files from disk and distributes them among
@@ -415,6 +420,9 @@ def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1):
         comm (mpi4py.MPI.Comm): (optional) the MPI communicator.
         mp_procs (int): if not using MPI, restrict the number of
             multiprocesses to this.
+        gpu (bool): (optional) for GPUs, allgather rebinned templates
+            after distributed rebinning so each process has the full
+            redshift range for the template.
 
     Returns:
         list: a list of DistTemplate objects.
@@ -461,7 +469,7 @@ def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1):
 
     dtemplates = list()
     for t in template_data:
-        dtemplates.append(DistTemplate(t, dwave, mp_procs=mp_procs, comm=comm))
+        dtemplates.append(DistTemplate(t, dwave, mp_procs=mp_procs, comm=comm, gpu=gpu))
 
     timer = elapsed(timer, "Rebinning templates", comm=comm)
 
