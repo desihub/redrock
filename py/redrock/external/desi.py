@@ -719,6 +719,11 @@ def rrdesi(options=None, comm=None):
             bad = targets.fibermap['OBJTYPE'] == 'BAD'
             sky = targets.fibermap['OBJTYPE'] == 'SKY'
 
+            badcoverage = np.zeros(len(fiberstatus), dtype=bool)
+            for key in ('BADCOLUMN', 'BADAMPB', 'BADAMPR', 'BADAMPZ'):
+                if key in fibermask.names():
+                    badcoverage |= (fiberstatus & fibermask.mask(key)) != 0
+
             targetids = targets.fibermap['TARGETID']
 
             ii = np.isin(zfit['targetid'], targetids[poorpos])
@@ -732,6 +737,9 @@ def rrdesi(options=None, comm=None):
 
             ii = np.isin(zfit['targetid'], targetids[sky])
             zfit['zwarn'][ii] |= ZWarningMask.SKY
+
+            ii = np.isin(zfit['targetid'], targetids[badcoverage])
+            zfit['zwarn'][ii] |= ZWarningMask.LITTLE_COVERAGE
 
         # Write the outputs
 
