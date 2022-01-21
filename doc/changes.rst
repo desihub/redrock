@@ -2,10 +2,19 @@
 redrock Change Log
 ==================
 
-0.15.1 (unreleased)
+0.15.2 (unreleased)
 -------------------
 
-* No changes yet
+* No changes yet.
+
+0.15.1 (2022-01-20)
+-------------------
+
+* add dependency keywords to redrock output (PR `#200`_).
+* set zwarn LITTLE_COVERAGE for badamp/badcol (PR `#201`_).
+
+.. _`#200`: https://github.com/desihub/redrock/pull/200
+.. _`#201`: https://github.com/desihub/redrock/pull/201
 
 0.15.0 (2021-07-14)
 -------------------
