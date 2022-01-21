@@ -18,6 +18,7 @@ from astropy.io import fits
 from astropy.table import Table
 
 from desiutil.io import encode_table
+from desiutil.depend import add_dependencies, setdep
 
 from desispec.resolution import Resolution
 from desispec.coaddition import coadd_fibermap
@@ -65,6 +66,13 @@ def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
         for i, fulltype in enumerate(archetype_version.keys()):
             header['ARCNAM'+str(i).zfill(2)] = fulltype
             header['ARCVER'+str(i).zfill(2)] = archetype_version[fulltype]
+
+    # record code versions and key environment variables
+    add_dependencies(header)
+    for key in ['RR_TEMPLATE_DIR', 'RR_ARCHETYPE_DIR']:
+        if key in os.environ:
+            setdep(header, key, os.environ[key])
+
     zbest.meta['EXTNAME'] = 'REDSHIFTS'
     fibermap.meta['EXTNAME'] = 'FIBERMAP'
     exp_fibermap.meta['EXTNAME'] = 'EXP_FIBERMAP'
