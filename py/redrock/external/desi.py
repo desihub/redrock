@@ -18,6 +18,7 @@ from astropy.io import fits
 from astropy.table import Table
 
 from desiutil.io import encode_table
+from desiutil.depend import add_dependencies, setdep
 
 from desispec.resolution import Resolution
 from desispec.coaddition import coadd_fibermap
@@ -42,7 +43,8 @@ from ..archetypes import All_archetypes
 
 
 def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
-        template_version, archetype_version):
+        template_version, archetype_version,
+        spec_header=None):
     """Write zbest and fibermap Tables to outfile
 
     Args:
@@ -54,9 +56,13 @@ def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
         template_version (str): template version used
         archetype_version (str): archetype version used
 
+    Options:
+        spec_header (dict-like): header of HDU 0 of input spectra
+
     Modifies input tables.meta['EXTNAME']
     """
     header = fits.Header()
+    header['LONGSTRN'] = 'OGIP 1.0'
     header['RRVER'] = (__version__, 'Redrock version')
     for i, fulltype in enumerate(template_version.keys()):
         header['TEMNAM'+str(i).zfill(2)] = fulltype
@@ -65,6 +71,19 @@ def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
         for i, fulltype in enumerate(archetype_version.keys()):
             header['ARCNAM'+str(i).zfill(2)] = fulltype
             header['ARCVER'+str(i).zfill(2)] = archetype_version[fulltype]
+
+    # record code versions and key environment variables
+    add_dependencies(header)
+    for key in ['RR_TEMPLATE_DIR', 'RR_ARCHETYPE_DIR']:
+        if key in os.environ:
+            setdep(header, key, os.environ[key])
+
+    if spec_header is not None:
+        for key in ('SPGRP', 'SPGRPVAL', 'TILEID', 'SPECTRO', 'PETAL',
+                'NIGHT', 'EXPID', 'HPXPIXEL', 'HPXNSIDE', 'HPXNEST'):
+            if key in spec_header:
+                header[key] = spec_header[key]
+
     zbest.meta['EXTNAME'] = 'REDSHIFTS'
     fibermap.meta['EXTNAME'] = 'FIBERMAP'
     exp_fibermap.meta['EXTNAME'] = 'EXP_FIBERMAP'
@@ -156,6 +175,7 @@ class DistTargetsDESI(DistTargets):
         self._coadd_fmaps = {}
         self._exp_fmaps = {}
         self._tsnr2 = {}         #- template signal-to-noise from SCORES
+        self.header0 = None      #- header 0 of the first spectrafile
 
         for sfile in spectrafiles:
             hdus = None
@@ -167,6 +187,9 @@ class DistTargetsDESI(DistTargets):
             if comm_rank == 0:
                 hdus = fits.open(sfile, memmap=False)
                 nhdu = len(hdus)
+
+                if self.header0 is None:
+                    self.header0 = hdus[0].header.copy()
 
                 if 'EXP_FIBERMAP' in hdus:
                     input_coadded = True
@@ -208,6 +231,7 @@ class DistTargetsDESI(DistTargets):
                 coadd_fmap = comm.bcast(coadd_fmap, root=0)
                 exp_fmap = comm.bcast(exp_fmap, root=0)
                 tsnr2 = comm.bcast(tsnr2, root=0)
+                self.header0 = comm.bcast(self.header0, root=0)
 
             # Now every process has the fibermap and number of HDUs.  Build the
             # mapping between spectral rows and target IDs.
@@ -752,6 +776,11 @@ def rrdesi(options=None, comm=None):
             bad = targets.fibermap['OBJTYPE'] == 'BAD'
             sky = targets.fibermap['OBJTYPE'] == 'SKY'
 
+            badcoverage = np.zeros(len(fiberstatus), dtype=bool)
+            for key in ('BADCOLUMN', 'BADAMPB', 'BADAMPR', 'BADAMPZ'):
+                if key in fibermask.names():
+                    badcoverage |= (fiberstatus & fibermask.mask(key)) != 0
+
             targetids = targets.fibermap['TARGETID']
 
             ii = np.isin(zfit['targetid'], targetids[poorpos])
@@ -765,6 +794,9 @@ def rrdesi(options=None, comm=None):
 
             ii = np.isin(zfit['targetid'], targetids[sky])
             zfit['zwarn'][ii] |= ZWarningMask.SKY
+
+            ii = np.isin(zfit['targetid'], targetids[badcoverage])
+            zfit['zwarn'][ii] |= ZWarningMask.LITTLE_COVERAGE
 
         # Write the outputs
 
@@ -792,10 +824,12 @@ def rrdesi(options=None, comm=None):
                 if not args.archetypes is None:
                     archetypes = All_archetypes(archetypes_dir=args.archetypes).archetypes
                     archetype_version = {name:arch._version for name, arch in archetypes.items() }
+
                 write_zbest(args.outfile, zbest,
                         targets.fibermap, targets.exp_fibermap,
                         targets.tsnr2,
-                        template_version, archetype_version)
+                        template_version, archetype_version,
+                        spec_header=targets.header0)
 
             stop = elapsed(start, f"Writing {args.outfile} took", comm=comm)
 

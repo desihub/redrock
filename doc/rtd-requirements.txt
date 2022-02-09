@@ -1,1 +1,2 @@
 setuptools
+docutils<0.18
