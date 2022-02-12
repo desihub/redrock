@@ -110,7 +110,7 @@ def calc_zchi2_one(spectra, weights, flux, wflux, tdata):
 
     return zchi2, zcoeff
 
-def calc_zchi2(target_ids, target_data, dtemplate, progress=None):
+def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False):
     """Calculate chi2 vs. redshift for a given PCA template.
 
     Args:
@@ -119,6 +119,7 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None):
         dtemplate (DistTemplate): distributed template data
         progress (multiprocessing.Queue): optional queue for tracking
             progress, only used if MPI is disabled.
+        gpu (bool): (optional) use gpu for calc_zchi2
 
     Returns:
         tuple: (zchi2, zcoeff, zchi2penalty) with:
@@ -130,6 +131,8 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None):
                 and redshift, e.g. to penalize unphysical fits
 
     """
+    if use_gpu:
+        return calc_zchi2_gpu(target_ids, target_data, dtemplate, progress)
     nz = len(dtemplate.local.redshifts)
     ntargets = len(target_ids)
     nbasis = dtemplate.template.nbasis
@@ -253,7 +256,7 @@ def _mp_calc_zchi2(indx, target_ids, target_data, t, qout, qprog):
         sys.stdout.flush()
 
 
-def calc_zchi2_targets(targets, templates, mp_procs=1, gpu=False):
+def calc_zchi2_targets(targets, templates, mp_procs=1, use_gpu=False):
     """Compute all chi2 fits for the local set of targets and collect.
 
     Given targets and templates distributed across a set of MPI processes,
@@ -267,7 +270,7 @@ def calc_zchi2_targets(targets, templates, mp_procs=1, gpu=False):
         templates (list): list of DistTemplate objects.
         mp_procs (int): if not using MPI, this is the number of multiprocessing
             processes to use.
-        gpu (bool): (optional) use gpu calc_zchi2
+        gpu (bool): (optional) use gpu for calc_zchi2
 
     Returns:
         dict: dictionary of results for each local target ID.
@@ -283,13 +286,6 @@ def calc_zchi2_targets(targets, templates, mp_procs=1, gpu=False):
         am_root = True
     elif targets.comm.rank == 0:
         am_root = True
-
-    if targets.comm is not None:
-        if gpu:
-            calc_zchi2_func = calc_zchi2_gpu
-        else:
-            calc_zchi2_func = calc_zchi2
-        # print(targets.comm.rank, calc_zchi2_func, cp.cuda.Device().pci_bus_id, flush=True)
 
     # If we are not using MPI, our DistTargets object will have all the targets
     # on the main process.  In that case, we would like to distribute our
@@ -352,7 +348,7 @@ def calc_zchi2_targets(targets, templates, mp_procs=1, gpu=False):
             while not done:
                 # Compute the fit for our current redshift slice.
                 tzchi2, tzcoeff, tpenalty = \
-                    calc_zchi2_func(targets.local_target_ids(), targets.local(), t)
+                    calc_zchi2(targets.local_target_ids(), targets.local(), t, use_gpu=use_gpu)
 
                 # Save the results into a dict keyed on targetid
                 tids = targets.local_target_ids()

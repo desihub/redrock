@@ -115,7 +115,7 @@ def _rebalance_after_scan(targets, results):
     return local_targets, results
 
 
-def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=None, chi2_scan=None, gpu=False):
+def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=None, chi2_scan=None, use_gpu=False):
     """Compute all redshift fits for the local set of targets and collect.
 
     Given targets and templates distributed across a set of MPI processes,
@@ -139,6 +139,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             to use for final fitz choice of best chi2 vs. z minimum.
         priors (str, optional): file containing redshift priors
         chi2_scan (str, optional): file containing already computed chi2 scan
+        use_gpu (bool, optional): use gpu for calc_zchi2
 
     Returns:
         tuple: (allresults, allzfit), where "allresults" is a dictionary of the
@@ -176,12 +177,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
     # Compute the coarse-binned chi2 for all local targets.
     start_zscan = elapsed(None, "", comm=targets.comm)
     if chi2_scan is None:
-        # targets.gpu indicates if the process should use gpu for calc_zchi2
-        if gpu:
-            use_gpu = targets.gpu
-        else:
-            use_gpu = False
-        results = calc_zchi2_targets(targets, templates, mp_procs=mp_procs, gpu=use_gpu)
+        results = calc_zchi2_targets(targets, templates, mp_procs=mp_procs, use_gpu=use_gpu)
     else:
         results = read_zscan_redrock(chi2_scan)
     elapsed(start_zscan, "Scanning redshifts", comm=targets.comm)
@@ -189,7 +185,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
     # Note: GPU zscan accommodates lopsided distribution of targets but this
     # is not great for the following steps that have not been GPU-ified yet.
     # Rebalance targets and results before proceeded.
-    if gpu and targets.comm is not None:
+    if hasattr(targets, 'is_lopsided') and targets.is_lopsided and targets.comm is not None:
         start_rebalance = elapsed(None, "", comm=targets.comm)
         local_targets, results = _rebalance_after_scan(targets, results)
         elapsed(start_rebalance, "Rebalancing targets", comm=targets.comm)
