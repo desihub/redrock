@@ -410,9 +410,6 @@ class ReDistTemplate(DistTemplate):
     def cycle(self):
         """This function is a no-op since redshift ranges have been redistributed.
 
-        If we have returned to our original data, then return True, otherwise
-        return False.
-
         Args:
             Nothing
 
