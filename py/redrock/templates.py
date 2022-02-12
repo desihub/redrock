@@ -421,7 +421,7 @@ class ReDistTemplate(DistTemplate):
         return True
 
 
-def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1, redistribute_templates=False):
+def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1, redistribute=False):
     """Read and distribute templates from disk.
 
     This reads one or more template files from disk and distributes them among
@@ -448,7 +448,7 @@ def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1, redistribu
         comm (mpi4py.MPI.Comm): (optional) the MPI communicator.
         mp_procs (int): if not using MPI, restrict the number of
             multiprocesses to this.
-        redistribute_templates (bool): (optional) allgather rebinned templates
+        redistribute (bool): (optional) allgather rebinned templates
             after distributed rebinning so each process has the full
             redshift range for the template.
 
@@ -497,7 +497,7 @@ def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1, redistribu
 
     dtemplates = list()
     for t in template_data:
-        if redistribute_templates:
+        if redistribute:
             dtemplate = ReDistTemplate(t, dwave, mp_procs=mp_procs, comm=comm)
         else:
             dtemplate = DistTemplate(t, dwave, mp_procs=mp_procs, comm=comm)
