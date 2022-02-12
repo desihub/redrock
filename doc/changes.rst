@@ -2,10 +2,17 @@
 redrock Change Log
 ==================
 
-0.15.3 (unreleased)
+0.15.4 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.15.3 (2022-02-11)
+-------------------
+
+* Propagate SURVEY and PROGRAM keywords from input files (PR `#203`_).
+
+.. _`#203`: https://github.com/desihub/redrock/pull/203
 
 0.15.2 (2022-01-23)
 -------------------
