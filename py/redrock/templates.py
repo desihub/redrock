@@ -345,10 +345,6 @@ class DistTemplate(object):
         if self._comm is None:
             return True
 
-        # If we have short-circuited redshift distribution
-        if len(self._piece.redshifts) == len(self._template.redshifts):
-            return True
-
         rank = self._comm_rank
         nproc = self._comm_size
 
@@ -410,6 +406,22 @@ class ReDistTemplate(DistTemplate):
             self._piece = DistTemplatePiece(0, self.template.redshifts, data)
         else:
             raise NotImplementedError("ReDistTemplate not implemented for non-MPI")
+
+    def cycle(self):
+        """This function is a no-op since redshift ranges have been redistributed.
+
+        If we have returned to our original data, then return True, otherwise
+        return False.
+
+        Args:
+            Nothing
+
+        Returns (bool):
+            Always returns True
+
+        """
+        # assert len(self.local.redshifts) == len(self.template.redshifts)
+        return True
 
 
 def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1, redistribute_templates=False):
