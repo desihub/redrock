@@ -80,7 +80,8 @@ def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
 
     if spec_header is not None:
         for key in ('SPGRP', 'SPGRPVAL', 'TILEID', 'SPECTRO', 'PETAL',
-                'NIGHT', 'EXPID', 'HPXPIXEL', 'HPXNSIDE', 'HPXNEST'):
+                'NIGHT', 'EXPID', 'HPXPIXEL', 'HPXNSIDE', 'HPXNEST',
+                'SURVEY', 'PROGRAM', 'FAPRGRM'):
             if key in spec_header:
                 header[key] = spec_header[key]
 
