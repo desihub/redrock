@@ -119,7 +119,7 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
         dtemplate (DistTemplate): distributed template data
         progress (multiprocessing.Queue): optional queue for tracking
             progress, only used if MPI is disabled.
-        gpu (bool): (optional) use gpu for calc_zchi2
+        use_gpu (bool): (optional) use gpu for calc_zchi2
 
     Returns:
         tuple: (zchi2, zcoeff, zchi2penalty) with:
