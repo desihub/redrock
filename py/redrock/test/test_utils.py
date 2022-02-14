@@ -24,7 +24,7 @@ class TestUtils(unittest.TestCase):
 
         capacities = [1, 3]
         dist = utils.distribute_work_lopsided(nproc, ids, capacities=capacities)
-        self.assertEqual(list(map(len, dist)), [3, 1])
+        self.assertEqual(list(map(len, dist)), [1, 3])
 
 
 

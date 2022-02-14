@@ -293,7 +293,7 @@ def distribute_work_lopsided(nproc, ids, weights=None, capacities=None):
         weights (dict): dictionary of weights for each ID. If None,
             use equal weighting.
         capacities (list): list of process capacities. If None,
-            use equal capacity per process. A process with lower capacity
+            use equal capacity per process. A process with higher capacity
             can handle more work.
 
     Returns:
@@ -311,7 +311,7 @@ def distribute_work_lopsided(nproc, ids, weights=None, capacities=None):
         capacities = [1] * nproc
 
     # Initialize distributed list of ids
-    dist = [list() for x in capacities]
+    dist = [list() for _ in range(nproc)]
 
     # Initialize process list. Processes are modeled using dictionary
     # with fields for a unique id, capacity, and load (total weight of work).
@@ -320,7 +320,7 @@ def distribute_work_lopsided(nproc, ids, weights=None, capacities=None):
     for id in sids:
         w = weights[id]
         # Identify process to receive task. Smallest normalized load, break ties with capacity
-        minload = min(processes, key=lambda p: ((p['load'] + w)*p['capacity'], p['capacity']))
+        minload = min(processes, key=lambda p: ((p['load'] + w)/p['capacity'], 1/p['capacity']))
         i = processes.index(minload)
         # Assign work unit to process
         minload['load'] += weights[id]
