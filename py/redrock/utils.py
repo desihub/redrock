@@ -301,10 +301,10 @@ def distribute_work_lopsided(nproc, ids, weights=None, capacities=None):
             being a list of the IDs assigned to that process.
 
     """
-    # Sort ids by weights
+    # Sort ids by weights (descending)
     if weights is None:
         weights = { x : 1 for x in ids }
-    sids = list(sorted(ids, key=lambda x: weights[x]))
+    sids = list(sorted(ids, key=lambda x: weights[x], reverse=True))
 
     # If capacities are not provided, assume they are equal
     if capacities is None:
