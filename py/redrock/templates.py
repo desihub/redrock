@@ -459,3 +459,51 @@ def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1):
     timer = elapsed(timer, "Rebinning templates", comm=comm)
 
     return dtemplates
+
+
+def eval_model(data, wave, R=None, templates=None):
+    """Evaluate model spectra.
+
+    Given a bunch of fits with coefficients COEFF, redshifts Z, and types
+    SPECTYPE, SUBTYPE in data, evaluate the redrock model fits at the
+    wavelengths wave using resolution matrix R.
+
+    The wavelength and resolution matrices may be dictionaries including for
+    multiple cameras.
+
+    Args:
+        data (array, [nspec]): array containing information on each model to
+            evaluate.  Must contain at least Z, COEFF, SPECTYPE, and SUBTYPE
+            fields.
+        wave (array [nwave] or dictionary thereof): array of wavelengths in
+            angstrom at which to evaluate the models.
+        R (list of [nwave, nwave] arrays of floats or dictionary thereof):
+            resolution matrices for evaluating spectra.
+        templates (dictionary of Template): dictionary with (SPECTYPE, SUBTYPE)
+            giving the template corresponding to each type.
+
+    Returns:
+        model fluxes, array [nspec, nwave].  If wave and R are dictionaries, then
+        a dictionary of model fluxes, one for each camera.
+    """
+    if templates is None:
+        templates = dict()
+        templatefn = find_templates()
+        for fn in templatefn:
+            tx = Template(fn)
+            templates[(tx.template_type, tx.sub_type)] = tx
+    if isinstance(wave, dict):
+        Rdict = R if R is not None else {x: None for x in wave}
+        return {x: eval_model(data, wave[x], R=Rdict[x], templates=templates)
+                for x in wave}
+    out = np.zeros((len(data), len(wave)), dtype='f4')
+    for i in range(len(data)):
+        tx = templates[(data['SPECTYPE'][i], data['SUBTYPE'][i])]
+        coeff = data['COEFF'][i][0:tx.nbasis]
+        model = tx.flux.T.dot(coeff).T
+        mx = trapz_rebin(tx.wave*(1+data['Z'][i]), model, wave)
+        if R is None:
+            out[i] = mx
+        else:
+            out[i] = R[i].dot(mx)
+    return out
