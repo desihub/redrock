@@ -196,13 +196,14 @@ class DistTargetsDESI(DistTargets):
                         copy=True).as_array())
                     exp_fmap = encode_table(Table(hdus["EXP_FIBERMAP"].data,
                         copy=True).as_array())
-                    tsnr2 = encode_table(Table(hdus["SCORES"].data,
-                        copy=True).as_array())
-                    for col in tsnr2.colnames.copy():
-                        if col == 'TARGETID' or col.startswith('TSNR2_'):
-                            continue
-                        else:
-                            tsnr2.remove_column(col)
+                    if 'SCORES' in hdus:
+                        tsnr2 = encode_table(Table(hdus["SCORES"].data,
+                            copy=True).as_array())
+                        for col in tsnr2.colnames.copy():
+                            if col == 'TARGETID' or col.startswith('TSNR2_'):
+                                continue
+                            else:
+                                tsnr2.remove_column(col)
                 else:
                     input_coadded = False
                     tmpfmap = encode_table(Table(hdus["FIBERMAP"].data,
@@ -216,10 +217,11 @@ class DistTargetsDESI(DistTargets):
 
                     coadd_fmap, exp_fmap = coadd_fibermap(tmpfmap, onetile=onetile)
 
-                    scores = encode_table(Table(hdus["SCORES"].data,
-                        copy=True).as_array())
-                    tsnr2 = Table(compute_coadd_tsnr_scores(scores)[0])
-
+                    if 'SCORES' in hdus:
+                        scores = encode_table(Table(hdus["SCORES"].data,
+                            copy=True).as_array())
+                        tsnr2 = Table(compute_coadd_tsnr_scores(scores)[0])
+    
                     #- we later rely upon exp_fmap having same order as the
                     #- uncoadded input fmap, so check that now
                     assert np.all(exp_fmap['TARGETID'] == tmpfmap['TARGETID'])
@@ -289,7 +291,8 @@ class DistTargetsDESI(DistTargets):
             # Slice the fibermap to keep just the requested targets
             keep_coadd = np.isin(coadd_fmap['TARGETID'], keep_targetids)
             self._coadd_fmaps[sfile] = coadd_fmap[keep_coadd]
-            self._tsnr2[sfile] = tsnr2[keep_coadd]
+            if tsnr2 is not None:
+                self._tsnr2[sfile] = tsnr2[keep_coadd]
 
             keep_exp = np.isin(exp_fmap['TARGETID'], keep_targetids)
             self._exp_fmaps[sfile] = exp_fmap[keep_exp]
@@ -505,8 +508,9 @@ class DistTargetsDESI(DistTargets):
         self.exp_fibermap = Table(np.hstack([ self._exp_fmaps[x] \
             for x in self._spectrafiles ]))
 
-        self.tsnr2 = Table(np.hstack([ self._tsnr2[x] \
-            for x in self._spectrafiles ]))
+        if tsnr2 is not None:
+            self.tsnr2 = Table(np.hstack([ self._tsnr2[x] \
+                for x in self._spectrafiles ]))
 
         super(DistTargetsDESI, self).__init__(self._keep_targets, comm=comm)
 
