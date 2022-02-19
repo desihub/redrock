@@ -404,6 +404,7 @@ class DistTargetsDESI(DistTargets):
         tspec_mask = tspec_flux.copy()
         tspec_res = tspec_flux.copy()
 
+        _have_resolution = True
         for sfile in spectrafiles:
             rows = self._spec_keep[sfile]
             if len(rows) == 0:
@@ -476,22 +477,27 @@ class DistTargetsDESI(DistTargets):
                 extname = "{}_{}".format(b.upper(), "RESOLUTION")
                 hdata = None
                 if comm_rank == 0:
-                    hdata = hdus[extname].data[rows]
+                    if extname in hdus:
+                        hdata = hdus[extname].data[rows]
+                    else:
+                        _have_resolution = False
 
                 if comm is not None:
                     hdata = comm.bcast(hdata, root=0)
+                    _have_resolution = comm.bcast(_have_resolution, root=0)
 
-                toff = 0
-                for t in self._my_targets:
-                    if t in self._target_specs[sfile]:
-                        for trow in self._target_specs[sfile][t]:
-                            dia = Resolution(hdata[trow].astype(np.float64))
-                            self._my_data[toff].spectra[tspec_res[t]].R = dia
-                            #- Coadds replace Rcsr so only compute if not coadding
-                            if not coadd and cache_Rcsr:
-                                self._my_data[toff].spectra[tspec_res[t]].Rcsr = dia.tocsr()
-                            tspec_res[t] += 1
-                    toff += 1
+                if hdata is not None:
+                    toff = 0
+                    for t in self._my_targets:
+                        if t in self._target_specs[sfile]:
+                            for trow in self._target_specs[sfile][t]:
+                                dia = Resolution(hdata[trow].astype(np.float64))
+                                self._my_data[toff].spectra[tspec_res[t]].R = dia
+                                #- Coadds replace Rcsr so only compute if not coadding
+                                if not coadd and cache_Rcsr:
+                                    self._my_data[toff].spectra[tspec_res[t]].Rcsr = dia.tocsr()
+                                tspec_res[t] += 1
+                        toff += 1
 
                 del hdata
 
@@ -500,7 +506,7 @@ class DistTargetsDESI(DistTargets):
 
         # Compute the coadds now if we are going to use those
 
-        if coadd:
+        if coadd and _have_resolution:
             for t in self._my_data:
                 t.compute_coadd(cache_Rcsr,cosmics_nsig=self.cosmics_nsig)
 
