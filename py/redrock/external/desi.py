@@ -88,14 +88,16 @@ def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
     zbest.meta['EXTNAME'] = 'REDSHIFTS'
     fibermap.meta['EXTNAME'] = 'FIBERMAP'
     exp_fibermap.meta['EXTNAME'] = 'EXP_FIBERMAP'
-    tsnr2.meta['EXTNAME'] = 'TSNR2'
 
     hx = fits.HDUList()
     hx.append(fits.PrimaryHDU(header=header))
     hx.append(fits.convenience.table_to_hdu(zbest))
     hx.append(fits.convenience.table_to_hdu(fibermap))
     hx.append(fits.convenience.table_to_hdu(exp_fibermap))
-    hx.append(fits.convenience.table_to_hdu(tsnr2))
+
+    if tsnr2 is not None:
+        tsnr2.meta['EXTNAME'] = 'TSNR2'
+        hx.append(fits.convenience.table_to_hdu(tsnr2))
 
     outfile = os.path.expandvars(outfile)
     tempfile = outfile + '.tmp'
