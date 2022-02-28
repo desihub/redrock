@@ -472,7 +472,7 @@ def eval_model(data, wave, R=None, templates=None):
     multiple cameras.
 
     Args:
-        data (array, [nspec]): array containing information on each model to
+        data (table-like, [nspec]): table with information on each model to
             evaluate.  Must contain at least Z, COEFF, SPECTYPE, and SUBTYPE
             fields.
         wave (array [nwave] or dictionary thereof): array of wavelengths in
@@ -483,7 +483,7 @@ def eval_model(data, wave, R=None, templates=None):
             giving the template corresponding to each type.
 
     Returns:
-        model fluxes, array [nspec, nwave].  If wave and R are dictionaries, then
+        model fluxes, array [nspec, nwave].  If wave and R are dict, then
         a dictionary of model fluxes, one for each camera.
     """
     if templates is None:
