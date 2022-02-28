@@ -2,10 +2,17 @@
 redrock Change Log
 ==================
 
-0.15.4 (unreleased)
+0.15.5 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.15.4 (2022-02-28)
+-------------------
+
+* Add redrock.templates.eval_model convenience routine (PR `#206`_).
+
+.. _`#206`: https://github.com/desihub/redrock/pull/206
 
 0.15.3 (2022-02-11)
 -------------------
