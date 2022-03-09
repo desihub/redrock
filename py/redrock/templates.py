@@ -381,7 +381,47 @@ class DistTemplate(object):
         return done
 
 
-def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1):
+class ReDistTemplate(DistTemplate):
+    """Distributed template data interpolated to all redshifts.
+
+    For a given template, the redshifts are distributed among the
+    processes in the communicator.  Then each process will rebin the
+    template to those redshifts for the wavelength grids specified by
+    dwave. After rebinning, the full redshift ranges are redistributed to
+    each process in the communicator.
+
+    Args:
+        template (Template): the template to distribute
+        dwave (dict): the keys are the "wavehash" and the values
+            are a 1D array containing the wavelength grid.
+        mp_procs (int): if not using MPI, restrict the number of
+            multiprocesses to this.
+        comm (mpi4py.MPI.Comm): (optional) the MPI communicator.
+
+    """
+    def __init__(self, template, dwave, mp_procs=1, comm=None):
+        super().__init__(template, dwave, mp_procs=mp_procs, comm=comm)
+        if comm is not None:
+            data = [e for s in comm.allgather(self.local.data) for e in s]
+            self._piece = DistTemplatePiece(0, self.template.redshifts, data)
+        else:
+            raise NotImplementedError("ReDistTemplate not implemented for non-MPI")
+
+    def cycle(self):
+        """This function is a no-op since redshift ranges have been redistributed.
+
+        Args:
+            Nothing
+
+        Returns (bool):
+            Always returns True
+
+        """
+        # assert len(self.local.redshifts) == len(self.template.redshifts)
+        return True
+
+
+def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1, redistribute=False):
     """Read and distribute templates from disk.
 
     This reads one or more template files from disk and distributes them among
@@ -408,6 +448,9 @@ def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1):
         comm (mpi4py.MPI.Comm): (optional) the MPI communicator.
         mp_procs (int): if not using MPI, restrict the number of
             multiprocesses to this.
+        redistribute (bool): (optional) allgather rebinned templates
+            after distributed rebinning so each process has the full
+            redshift range for the template.
 
     Returns:
         list: a list of DistTemplate objects.
@@ -454,7 +497,11 @@ def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1):
 
     dtemplates = list()
     for t in template_data:
-        dtemplates.append(DistTemplate(t, dwave, mp_procs=mp_procs, comm=comm))
+        if redistribute:
+            dtemplate = ReDistTemplate(t, dwave, mp_procs=mp_procs, comm=comm)
+        else:
+            dtemplate = DistTemplate(t, dwave, mp_procs=mp_procs, comm=comm)
+        dtemplates.append(dtemplate)
 
     timer = elapsed(timer, "Rebinning templates", comm=comm)
 
