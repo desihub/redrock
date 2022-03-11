@@ -25,7 +25,7 @@ from desispec.coaddition import coadd_fibermap
 from desispec.specscore import compute_coadd_tsnr_scores
 from desispec.maskbits import fibermask
 
-from ..utils import elapsed, get_mp, distribute_work, distribute_work_lopsided
+from ..utils import elapsed, get_mp, distribute_work
 
 from ..targets import (Spectrum, Target, DistTargets)
 
@@ -374,7 +374,7 @@ class DistTargetsDESI(DistTargets):
                 self._keep_targets, weights=tweights)
         else:
             self.is_lopsided = True
-            self._proc_targets = distribute_work_lopsided(comm_size,
+            self._proc_targets = distribute_work(comm_size,
                 self._keep_targets, weights=tweights, capacities=self.capacities)
 
         self._my_targets = self._proc_targets[comm_rank]
