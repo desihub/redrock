@@ -206,8 +206,8 @@ def distribute_work(nproc, ids, weights=None, capacities=None):
 
     for id in sids:
         w = weights[id]
-        # Identify process to receive task. Smallest normalized load, break ties with capacity
-        minload = min(processes, key=lambda p: ((p['load'] + w)/p['capacity'], 1/p['capacity']))
+        # Identify process to receive task. Smallest normalized load, break ties with capacity, followed by id.
+        minload = min(processes, key=lambda p: ((p['load'] + w)/p['capacity'], 1/p['capacity'], p['id']))
         i = processes.index(minload)
         # Assign work unit to process
         minload['load'] += weights[id]
