@@ -132,11 +132,15 @@ class DistTargetsDESI(DistTargets):
         cache_Rcsr: pre-calculate and cache sparse CSR format of resolution
             matrix R
         cosmics_nsig (float): cosmic rejection threshold used in coaddition
+        capacities (list): (optional) list of process capacities. If None,
+            use equal capacity per process. A process with higher capacity
+            can handle more work.
     """
 
     ### @profile
     def __init__(self, spectrafiles, coadd=True, targetids=None,
-                 first_target=None, n_target=None, comm=None, cache_Rcsr=False, cosmics_nsig=0):
+                 first_target=None, n_target=None, comm=None, cache_Rcsr=False,
+                 cosmics_nsig=0, capacities=None):
 
         comm_size = 1
         comm_rank = 0
@@ -368,8 +372,15 @@ class DistTargetsDESI(DistTargets):
                     if t in self._target_specs[sfile]:
                         tweights[t] += len(self._target_specs[sfile][t])
 
-        self._proc_targets = distribute_work(comm_size,
-            self._keep_targets, weights=tweights)
+        self.capacities = capacities
+        if self.capacities is None:
+            self.is_lopsided = False
+            self._proc_targets = distribute_work(comm_size,
+                self._keep_targets, weights=tweights)
+        else:
+            self.is_lopsided = True
+            self._proc_targets = distribute_work(comm_size,
+                self._keep_targets, weights=tweights, capacities=self.capacities)
 
         self._my_targets = self._proc_targets[comm_rank]
 
@@ -606,6 +617,12 @@ def rrdesi(options=None, comm=None):
     parser.add_argument("-i", "--infiles", nargs='+', required=True,
             help="Input spectra, coadd, or cframe files")
 
+    parser.add_argument("--gpu", action="store_true",
+        required=False, help="use GPUs")
+
+    parser.add_argument("--max-gpuprocs", type=int, default=None,
+        required=False, help="limit number of MPI processes using GPUs")
+
     args = None
     if options is None:
         args = parser.parse_args()
@@ -659,6 +676,21 @@ def rrdesi(options=None, comm=None):
             else:
                 sys.exit(1)
 
+        if args.gpu:
+            try:
+                import cupy
+                gpu_ok = cupy.is_available()
+            except ImportError:
+                gpu_ok = False
+            if not gpu_ok:
+                print("ERROR: cupy or GPU not available")
+                sys.stdout.flush()
+                if comm is not None:
+                    comm.Abort()
+                else:
+                    sys.exit(1)
+
+
     targetids = None
     if args.targetids is not None:
         targetids = [ int(x) for x in args.targetids.split(",") ]
@@ -695,6 +727,34 @@ def rrdesi(options=None, comm=None):
         print("Running with {} processes".format(comm_size))
         sys.stdout.flush()
 
+    # GPU configuration
+    if args.gpu:
+        # Determine which processes will use a GPU
+        max_gpuprocs = comm_size
+        if args.max_gpuprocs is not None:
+            max_gpuprocs = args.max_gpuprocs
+        use_gpu = comm_rank < max_gpuprocs
+
+        # Determine cpu/gpu process capacities for target distribution
+        if comm is not None:
+            gpu_proc_flags = comm.allgather(use_gpu)
+        else:
+            gpu_proc_flags = [use_gpu, ]
+        ngpu_procs = sum(gpu_proc_flags)
+        ncpu_procs = comm_size - ngpu_procs
+        if ngpu_procs > 0 and ncpu_procs > 0:
+            # On Perlmutter, 1:15 seems like a good ratio
+            capacities = [1 if is_gpu_proc else 1.0/15 for is_gpu_proc in gpu_proc_flags]
+        else:
+            capacities = None
+
+        # Redistribute templates after rebinning when using GPUs
+        redistribute_templates = True
+    else:
+        use_gpu = False
+        capacities = None
+        redistribute_templates = False
+
     try:
         # Load and distribute the targets
         if comm_rank == 0:
@@ -707,7 +767,8 @@ def rrdesi(options=None, comm=None):
         # stored in shared memory.
         targets = DistTargetsDESI(args.infiles, coadd=(not args.allspec),
                                   targetids=targetids, first_target=first_target, n_target=n_target,
-                                  comm=comm, cache_Rcsr=True, cosmics_nsig=args.cosmics_nsig)
+                                  comm=comm, cache_Rcsr=True, cosmics_nsig=args.cosmics_nsig,
+                                  capacities=capacities)
 
         #- Mask some problematic sky lines
         if not args.no_skymask:
@@ -724,9 +785,8 @@ def rrdesi(options=None, comm=None):
             .format(len(targets.all_target_ids)), comm=comm)
 
         # Read the template data
-
         dtemplates = load_dist_templates(dwave, templates=args.templates,
-            comm=comm, mp_procs=mpprocs)
+            comm=comm, mp_procs=mpprocs, redistribute=redistribute_templates)
 
         # Compute the redshifts, including both the coarse scan and the
         # refinement.  This function only returns data on the rank 0 process.
@@ -735,9 +795,9 @@ def rrdesi(options=None, comm=None):
 
         scandata, zfit = zfind(targets, dtemplates, mpprocs,
             nminima=args.nminima, archetypes=args.archetypes,
-            priors=args.priors, chi2_scan=args.chi2_scan)
+            priors=args.priors, chi2_scan=args.chi2_scan, use_gpu=use_gpu)
 
-        stop = elapsed(start, "Computing redshifts took", comm=comm)
+        stop = elapsed(start, "Computing redshifts", comm=comm)
 
         # Set some DESI-specific ZWARN bits from input fibermap
         if comm_rank == 0:

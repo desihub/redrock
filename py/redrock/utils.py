@@ -171,115 +171,47 @@ def mp_array(original):
     nd.shape = shape
     return nd
 
-
-def distribute_work(nproc, ids, weights=None):
-    """Helper function to distribute work among processes.
-
-    This takes a list of unique IDs associated with each work unit, and a
-    dictionary of weights for each ID.  It returns a list of lists which
-    contain the IDs assigned to each process.
+def distribute_work(nproc, ids, weights=None, capacities=None):
+    """Helper function to distribute work among processes with varying capacities.
 
     Args:
         nproc (int): the number of processes.
-        ids (list): list of IDs
-        weights (dict): dictionary of weights for each ID.  If None,
+        ids (list): list of work unit IDs
+        weights (dict): dictionary of weights for each ID. If None,
             use equal weighting.
+        capacities (list): list of process capacities. If None,
+            use equal capacity per process. A process with higher capacity
+            can handle more work.
 
     Returns:
-        list:  A list (one element for each process) with each element
+        list: A list (one element for each process) with each element
             being a list of the IDs assigned to that process.
 
     """
-    #
-    # These are two helper functions.
-    #
-    def distribute_required_groups(A, max_per_group):
-        ngroup = 1
-        total = 0
-        for i in range(A.shape[0]):
-            total += A[i]
-            if total > max_per_group:
-                total = A[i]
-                ngroup += 1
-        return ngroup
-
-    def distribute_partition(A, k):
-        low = np.max(A)
-        high = np.sum(A)
-        while low < high:
-            mid = low + int((high - low) / 2)
-            required = distribute_required_groups(A, mid)
-            if required <= k:
-                high = mid
-            else:
-                low = mid + 1
-        return low
-
-    # First sort the IDs and weights
-
+    # Sort ids by weights (descending)
     if weights is None:
         weights = { x : 1 for x in ids }
+    sids = list(sorted(ids, key=lambda x: weights[x], reverse=True))
 
-    sids = list(sorted(ids))
-    wts = np.array([ weights[x] for x in sids ], dtype=np.float64)
+    # If capacities are not provided, assume they are equal
+    if capacities is None:
+        capacities = [1] * nproc
 
-    # Compute the partitioning
+    # Initialize distributed list of ids
+    dist = [list() for _ in range(nproc)]
 
-    max_per_proc = float(distribute_partition(wts.astype(np.int64),
-        nproc))
+    # Initialize process list. Processes are modeled using dictionary
+    # with fields for a unique id, capacity, and load (total weight of work).
+    processes = [dict(id=i, capacity=c, load=0) for i, c in enumerate(capacities)]
 
-    if len(sids) <= nproc:
-        # This is wasteful, but the best we can do is assign one target
-        # to each process and leave some idle.
-        dist = [ [x] for x in sids ]
-        dist.extend([ list() for i in range(nproc - len(sids)) ])
-        return dist
-
-    goal = np.sum(wts) / float(nproc)
-
-    ranges = []
-
-    off = 0
-    curweight = 0.0
-    for cur,elwts in enumerate(wts):
-        if curweight + elwts > max_per_proc:
-            ranges.append( (off, cur-off) )
-            over = curweight - goal
-            curweight = elwts + over
-            off = cur
-        else:
-            curweight += elwts
-
-    # Now distribute the remaining items uniformly among the remaining
-    # processes.  In the case of good load balance, there should only be
-    # one worker left, but that does not always happen...
-
-    remain_procs = nproc-len(ranges)
-    remain_items = len(wts) - off
-
-    if remain_items <= remain_procs:
-        # really bad load imbalance...
-        ranges.extend([ (off+i, 1) for i in range(remain_items) ])
-    else:
-        for i in range(remain_procs):
-            ntask = remain_items // remain_procs
-            firsttask = 0
-            leftover = remain_items % remain_procs
-            if i < leftover:
-                ntask += 1
-                firsttask = i * ntask
-            else:
-                firsttask = ((ntask + 1) * leftover) + \
-                    (ntask * (i - leftover))
-            ranges.append( (off+firsttask, ntask) )
-
-    # Convert our ranges into a list of IDs for each process
-
-    dist = [ list(sids[x[0]:x[0]+x[1]]) for x in ranges ]
-    if len(dist) < nproc:
-        empty = nproc - len(dist)
-        for i in range(empty):
-            dist.append( list() )
+    for id in sids:
+        w = weights[id]
+        # Identify process to receive task. Smallest normalized load, break ties with capacity, followed by id.
+        minload = min(processes, key=lambda p: ((p['load'] + w)/p['capacity'], 1/p['capacity'], p['id']))
+        i = processes.index(minload)
+        # Assign work unit to process
+        minload['load'] += weights[id]
+        dist[i].append(id)
 
     return dist
 

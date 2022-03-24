@@ -85,7 +85,37 @@ def calc_deltachi2(chi2, z, dvlimit=None):
 
     return deltachi2
 
-def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=None, chi2_scan=None):
+
+def _rebalance_after_scan(targets, results):
+    """Helper for rebalancing targets and results after lopsided zscan
+    """
+
+    # gather lopsided results and targets on rank 0 for rebalancing
+    results = targets.comm.gather(results, root=0)
+    lopsided_targets = targets.comm.gather(targets.local(), root=0)
+
+    if targets.comm.rank == 0:
+        # Flatten lopsided distributed targets (list of list of targets)
+        flattened_targets = [t for sl in lopsided_targets for t in sl]
+        # Split targets into approximately equal lengths sublists
+        ix = np.array_split(np.arange(len(flattened_targets)), len(lopsided_targets))
+        dist_targets = [flattened_targets[i[0]:i[0] + len(i)] for i in ix]
+        # Merge list of result dictionaries
+        results = {k: v for d in results for k, v in d.items()}
+        # Split results using rebalanced target lists
+        dist_results = [{t.id: results[t.id] for t in s} for s in dist_targets]
+    else:
+        dist_targets = None
+        dist_results = None
+
+    # distribute rebalance targets and results
+    local_targets = targets.comm.scatter(dist_targets, root=0)
+    results = targets.comm.scatter(dist_results, root=0)
+
+    return local_targets, results
+
+
+def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=None, chi2_scan=None, use_gpu=False):
     """Compute all redshift fits for the local set of targets and collect.
 
     Given targets and templates distributed across a set of MPI processes,
@@ -109,6 +139,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             to use for final fitz choice of best chi2 vs. z minimum.
         priors (str, optional): file containing redshift priors
         chi2_scan (str, optional): file containing already computed chi2 scan
+        use_gpu (bool, optional): use gpu for calc_zchi2
 
     Returns:
         tuple: (allresults, allzfit), where "allresults" is a dictionary of the
@@ -144,10 +175,22 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
         mpdist = distribute_targets(targets.local(), mp_procs)
 
     # Compute the coarse-binned chi2 for all local targets.
+    start_zscan = elapsed(None, "", comm=targets.comm)
     if chi2_scan is None:
-        results = calc_zchi2_targets(targets, templates, mp_procs=mp_procs)
+        results = calc_zchi2_targets(targets, templates, mp_procs=mp_procs, use_gpu=use_gpu)
     else:
         results = read_zscan_redrock(chi2_scan)
+    elapsed(start_zscan, "Scanning redshifts", comm=targets.comm)
+
+    # Note: GPU zscan accommodates lopsided distribution of targets but this
+    # is not great for the following steps that have not been GPU-ified yet.
+    # Rebalance targets and results before proceeded.
+    if hasattr(targets, 'is_lopsided') and targets.is_lopsided and targets.comm is not None:
+        start_rebalance = elapsed(None, "", comm=targets.comm)
+        local_targets, results = _rebalance_after_scan(targets, results)
+        elapsed(start_rebalance, "Rebalancing targets", comm=targets.comm)
+    else:
+        local_targets = targets.local()
 
     # Apply redshift prior
     if not priors is None:
@@ -158,6 +201,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
     # For each of our local targets, refine the redshift fit close to the
     # minima in the coarse fit.
 
+    start_findbest = elapsed(None, "", comm=targets.comm)
     sort = np.array([ t.template.full_type for t in templates]).argsort()
     for t in np.array(list(templates))[sort]:
         ft = t.template.full_type
@@ -171,14 +215,14 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                 .format(t.template.full_type))
             sys.stdout.flush()
 
-        start = elapsed(None, "", comm=t.comm)
+        start = elapsed(None, "", comm=targets.comm)
 
         # Here we have another parallelization choice between MPI and
         # multiprocessing.
 
         if targets.comm is not None:
             # MPI case.  Every process just works with its local targets.
-            for tg in targets.local():
+            for tg in local_targets:
                 zfit = fitz(results[tg.id][ft]['zchi2'] \
                     + results[tg.id][ft]['penalty'],
                     t.template.redshifts, tg.spectra,
@@ -224,11 +268,13 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     results[rs[0]][ft]['zfit'] = rs[1]
                     results[rs[0]][ft]['zfit']['npixels'] = rs[2]
 
-        elapsed(start, "    Finished in", comm=t.comm)
+        elapsed(start, "    Finished in", comm=targets.comm)
+    elapsed(start_findbest, "Finding best redshift", comm=targets.comm)
 
     # Add the target metadata to the results
 
-    for tg in targets.local():
+    start_finalize = elapsed(None, "", comm=targets.comm)
+    for tg in local_targets:
         results[tg.id]['meta'] = tg.meta
 
     # Gather our results to the root process and split off the zfit data.
@@ -389,5 +435,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             coeff = np.zeros((ntarg, maxcoeff), dtype=allzfit['coeff'].dtype)
             coeff[:,0:ncoeff] = allzfit['coeff']
             allzfit.replace_column('coeff', coeff)
+
+    elapsed(start_finalize, "Finalizing results", comm=targets.comm)
 
     return allresults, allzfit
