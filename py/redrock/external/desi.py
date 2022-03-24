@@ -519,7 +519,8 @@ class DistTargetsDESI(DistTargets):
         if tsnr2 is not None:
             self.tsnr2 = Table(np.hstack([ self._tsnr2[x] \
                 for x in self._spectrafiles ]))
-
+        else:
+            self.tsnr2 = None
         super(DistTargetsDESI, self).__init__(self._keep_targets, comm=comm)
 
 
@@ -796,6 +797,7 @@ def rrdesi(options=None, comm=None):
                 if not args.archetypes is None:
                     archetypes = All_archetypes(archetypes_dir=args.archetypes).archetypes
                     archetype_version = {name:arch._version for name, arch in archetypes.items() }
+
 
                 write_zbest(args.outfile, zbest,
                         targets.fibermap, targets.exp_fibermap,
