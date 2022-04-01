@@ -6,4 +6,5 @@ Redrock for DESI - serial / multiprocessing entry point.
 
 from redrock.external import desi
 
-desi.rrdesi(comm=None)
+if __name__ == '__main__':
+    desi.rrdesi(comm=None)
