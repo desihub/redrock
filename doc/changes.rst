@@ -5,7 +5,10 @@ redrock Change Log
 0.15.5 (unreleased)
 -------------------
 
-* No changes yet.
+* Add rrdesi ``if __name__ == "__main__"`` wrapper for multiprocessing
+  robustness (PR `#209`_).
+
+.. _`#209`: https://github.com/desihub/redrock/pull/209
 
 0.15.4 (2022-02-28)
 -------------------
