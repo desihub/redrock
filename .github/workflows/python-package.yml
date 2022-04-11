@@ -17,11 +17,11 @@ jobs:
             fail-fast: true
             matrix:
                 os: [ubuntu-latest]
-                python-version: [3.7]  # fitsio does not like Python < 3.7
+                python-version: ['3.8', '3.9']  # fitsio does not like Python < 3.7
                 # astropy-version: ['<3.0', '<4.1']  #, '<5.0']
         env:
-            DESIUTIL_VERSION: 3.2.1
-            RR_TEMPLATE_VER: 0.7.1
+            DESIUTIL_VERSION: 3.2.5
+            RR_TEMPLATE_VER: 0.7.2
 
         steps:
             - name: Checkout code
@@ -42,7 +42,7 @@ jobs:
                 /bin/mv py/redrock/redrock-templates-${RR_TEMPLATE_VER} py/redrock/templates
 
             - name: Run the test
-              run: DESIMODEL=$(pwd) pytest
+              run: pytest
 
     coverage:
         name: Test coverage
@@ -51,10 +51,10 @@ jobs:
             fail-fast: true
             matrix:
                 os: [ubuntu-latest]
-                python-version: [3.8]
+                python-version: ['3.9']
         env:
-            DESIUTIL_VERSION: 3.2.1
-            RR_TEMPLATE_VER: 0.7.1
+            DESIUTIL_VERSION: 3.2.5
+            RR_TEMPLATE_VER: 0.7.2
 
         steps:
             - name: Checkout code
@@ -74,7 +74,7 @@ jobs:
                 curl -L https://github.com/desihub/redrock-templates/archive/${RR_TEMPLATE_VER}.tar.gz | tar -x -z -v -C py/redrock
                 /bin/mv py/redrock/redrock-templates-${RR_TEMPLATE_VER} py/redrock/templates
             - name: Run the test with coverage
-              run: DESIMODEL=$(pwd) pytest --cov
+              run: pytest --cov
             - name: Coveralls
               env:
                 COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
@@ -88,7 +88,7 @@ jobs:
             fail-fast: false
             matrix:
                 os: [ubuntu-latest]
-                python-version: [3.8]
+                python-version: ['3.9']
 
         steps:
             - name: Checkout code
@@ -100,7 +100,7 @@ jobs:
               with:
                 python-version: ${{ matrix.python-version }}
             - name: Install Python dependencies
-              run: python -m pip install --upgrade pip wheel docutils\<0.18 Sphinx==3.1.2
+              run: python -m pip install --upgrade pip wheel Sphinx
             - name: Test the documentation
               run: sphinx-build -W --keep-going -b html doc doc/_build/html
 
@@ -111,7 +111,7 @@ jobs:
             fail-fast: false
             matrix:
                 os: [ubuntu-latest]
-                python-version: [3.8]
+                python-version: ['3.9']
 
         steps:
             - name: Checkout code
@@ -127,4 +127,4 @@ jobs:
             - name: Test the style; failures are allowed
               # This is equivalent to an allowed falure.
               continue-on-error: true
-              run: pycodestyle --count py/desispec
+              run: pycodestyle --count py/redrock

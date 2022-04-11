@@ -1,5 +1,5 @@
-# Based on desimodules/20.8.
-astropy==4.0.1.post1
+# Based on desimodules/22.2.
+astropy
 scipy
 h5py
 numba
@@ -8,4 +8,4 @@ fitsio
 # Install desiutil separately since it is needed for the other installs.
 # git+https://github.com/desihub/desiutil.git@3.1.0#egg=desiutil
 
-git+https://github.com/desihub/desispec.git@0.43.0#egg=desispec
+git+https://github.com/desihub/desispec.git@0.51.13#egg=desispec
