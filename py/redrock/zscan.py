@@ -23,6 +23,179 @@ from .utils import elapsed
 
 from .targets import distribute_targets
 
+
+if (cupy_available):
+    #set this flag to use cupy's linalg.solve as below:
+    #            zc = cp.linalg.solve(all_M, all_y)
+    #to solve the matrix for all templates in parallel for each object.
+    #set this to 0 to copy data to the host and use numpy's linalg.solve,
+    #looping over each template.  For some reason this is faster on
+    #consumer grade GeForce 1660, likely due to double precision being slow,
+    #but CUPY solve is much faster on A100s on perlmutter so this should
+    #always be 1 unless running on a consumer grade chip
+    use_cupy_linalg = 1
+
+    # cuda_source contains raw CUDA kernels to be loaded as CUPY module
+
+    cuda_source = r'''
+        extern "C" {
+            __global__ void batch_dot_product(const double* Rcsr_values, const int* Rcsr_cols, const int* Rcsr_indptr, const double* tdata, double* tb, int nrows, int ncols, int nbatch, int nt) {
+                // This kernel performs a batch dot product of a sparse matrix Rcsr
+                // with a set of redshifted templates
+                //** Args:
+                //       Rcsr_values, Rcsr_cols, Rcsr_indptr = individualarrays from sparse matrix
+                //           (Rcsr = sparse array, ncols x nrows)
+                //       tdata = redshifted templates, nt x ncols x nbatch
+                //       tb = output array = nt x ncols x nbatch
+                //       nrows, ncols, nbatch, nt = array dimensions
+
+                const int i = blockDim.x*blockIdx.x + threadIdx.x; //thread index i - corresponds to the output array index
+                if (i >= ncols*nbatch*nt) return;
+                double x = 0; //define a local var to accumulate
+                //ibatch, icol, it = index in 3d representation of output tb array
+                //icol also == row in Rcsr input
+                int ibatch = i % nbatch;
+                int icol = (i % (nbatch*ncols)) / nbatch;
+                int it = i / (nbatch*ncols);
+                int t_start = it*nbatch*ncols; //first index in tdata for this thread
+                int row = icol;
+
+                int col;
+                //loop over all nonzero entries in sparse matrix and compute dot product
+                for (int j = Rcsr_indptr[row]; j < Rcsr_indptr[row+1]; j++) {
+                    col = Rcsr_cols[j];
+                    x += Rcsr_values[j] * tdata[t_start+nbatch*col+ibatch];
+                }
+                tb[i] = x;
+                return;
+            }
+
+            __global__ void calc_M_and_y_atomic(const double* all_Tb, const double* weights, const double* wflux, double* M, double* y, int nrows, int nbatch, int nt, int nparallel) {
+                // This kernel computes the dot products resulting in the M and y arrays in parallel
+                // The y array is small compared to the M array so rather than launching a separate kernel,
+                // a small number of threads will be diverted to compute y in parallel since the Tb array
+                // is used to compute both.
+                // It will use nparallel threads to compute the dot product for each output element in M and y.
+                // Each thread will handle nrows/nparallel products and sums into an intermediate local variable
+                // and then an atomicAdd will be used to add this intermediate sum to the output array.
+
+                // This replicates the python commands:
+                //     M = Tb.T.dot(np.multiply(weights[:,None], Tb))
+                //     y = Tb.T.dot(wflux)
+                //** Args:
+                //       all_Tb = the Tb array, the stacked output from all 3 filters from
+                //           batch_dot_product, for all redshift templates (nt x nrows x nbatch)
+                //       weights = the weights array for this target (1d, size = nrows)
+                //       wflux = the wflux array for this target (1d, size = nrows)
+                //       M = the output M array (nt x nbatch x nbatch)
+                //       y = the output y array (nt x nbatch)
+                //       nrows, nbatch, nt = array dimensions
+                //       nparallel = number of parallel threads to used for each output
+
+                const int i = blockDim.x*blockIdx.x + threadIdx.x; //thread index i
+                if (i >= nbatch*nbatch*nt*nparallel+nbatch*nt*nparallel) return;
+
+                if (i < nbatch*nbatch*nt*nparallel) {
+                    //These threads compute M
+                    int m_idx = i / nparallel; //index in output M array
+                    int t = m_idx / (nbatch*nbatch); //target number
+                    int allTb_row = (m_idx % (nbatch*nbatch)) % nbatch; //row in all_Tb array
+                    int wTb_row = (m_idx % (nbatch*nbatch)) / nbatch; // row in (weights*Tb)
+
+                    int stride = nrows/nparallel; //stride to divide up nparallel threads
+
+                    int start = (threadIdx.x % nparallel)*stride; //start index in nrows dim
+                    int end = ((threadIdx.x % nparallel)+1)*stride; //end index in nrows dim
+                    if (threadIdx.x % nparallel == (nparallel-1)) end = nrows;
+                    int allTb_idx = t*nrows*nbatch + allTb_row; // 1-d index for first element to be processed by this thread
+                    int wTb_idx = t*nrows*nbatch + wTb_row; // 1-d index for first element to be processed by this thread
+
+                    double x = 0; //define local var to accumulate
+
+                    //perform intermediate sum dot product for this thread
+                    for (int j = start; j < end; j++) {
+                        //stride by nbatch
+                        x += all_Tb[allTb_idx+j*nbatch] * (all_Tb[wTb_idx+j*nbatch] * weights[j]);
+                    }
+                    //use atomic add to avoid collisions between threads
+                    atomicAdd(&M[m_idx], x);
+                } else {
+                    //These threads compute y
+                    int i2 = (i-nbatch*nbatch*nt*nparallel); //index among y-threads
+                    int y_idx = i2 / nparallel; //index in output y array
+                    int t = y_idx / nbatch; //target number
+                    int allTb_row = y_idx % nbatch; //row in all_Tb array
+
+                    int stride = nrows/nparallel; //stride to divide up nparallel threads
+
+                    int start = (threadIdx.x % nparallel)*stride; //start index in nrows dim
+                    int end = ((threadIdx.x % nparallel)+1)*stride; //end index in nrows dim
+                    if (threadIdx.x % nparallel == (nparallel-1)) end = nrows;
+                    int allTb_idx = t*nrows*nbatch + allTb_row; // 1-d index for first element to be processed by this thread
+
+                    double x = 0; //define local var to accumulate
+
+                    //perform intermediate sum dot product for this thread
+                    for (int j = start; j < end; j++) {
+                        //stride by nbatch
+                        x += all_Tb[allTb_idx+j*nbatch] * wflux[j];
+                    }
+                    //use atomic add to avoid collisions between threads
+                    atomicAdd(&y[y_idx], x);
+                }
+            }
+
+            __global__ void tb_zc_dot(const double* tb, const double* zc, double* model, int nrows, int nbatch, int nt) {
+                // This kernel computes the dot product of Tb and zc, the result of the
+                // matrix solution of M and y, for all templates in parallel.  It
+                // results in the model array.  Each thread computes an element in the
+                // output model array.  It replaces the python code:
+                //     model = Tb.dot(cupy.array(zc))
+                //** Args:
+                //       tb = the Tb array, the stacked output from all 3 filters from
+                //           batch_dot_product, for all redshift templates (nt x nrows x nbatch)
+                //       zc = the zc array, the output of
+                //           zc = cp.linalg.solve(all_M, all_y)
+                //           shape = (nt x nbatch)
+                //       model = the output of the dot product, (nt x nrows)
+                const int i = blockDim.x*blockIdx.x + threadIdx.x; //thread index i
+                if (i >= nrows*nt) return;
+                int it = i / nrows; //target num
+                int row = i % nrows; //row num
+                int i_tb = it * nrows * nbatch + row * nbatch; //start index in Tb array
+                int i_zc = it * nbatch; //start index in zc array
+                double x = 0; //use local var to accumulate
+                //compute dot product
+                for (int j = 0; j < nbatch; j++) {
+                    x += tb[i_tb+j] * zc[i_zc+j];
+                }
+                //copy to output
+                model[i] = x;
+            }
+
+            __global__ void calc_z_prod(const double* flux, const double* model, const double* weights, double* z_product, int nrows, int nt) {
+                // This kernel computes the dot product of (flux-model)^2 and weights
+                // that results in the final zchi2 for all templates and one target.
+                // It replaces the python code:
+                //     zchi2[i,j] = cupy.dot((flux-model)**2, weights)
+                //** Args:
+                //       flux = the flux array for this target (1d, size = nrows)
+                //       model = the output of tb_zc_dot (nt x nrows)
+                //       weights = the weights array for this target (1d, size = nrows)
+                //       z_product = the output of the dot product (nt x nrows)
+                const int i = blockDim.x*blockIdx.x + threadIdx.x; //thread index i
+                if (i >= nrows*nt) return;
+                int it = i / nrows; //target num
+                int row = i % nrows; //row num
+                int i_model = it * nrows + row; //index in model array
+                double x = flux[row]-model[i_model];
+                z_product[i] = x*x*weights[row];
+            }
+
+        }
+    '''
+
+
 def _zchi2_batch(Tb, weights, flux, wflux, zcoeff):
     """Calculate a batch of chi2.
 
@@ -132,7 +305,9 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
 
     """
     if use_gpu:
-        return calc_zchi2_gpu(target_ids, target_data, dtemplate, progress)
+        #return calc_zchi2_gpu(target_ids, target_data, dtemplate, progress)
+        #Call new calc_zchi2_gpu_new method
+        return calc_zchi2_gpu_new(target_ids, target_data, dtemplate, progress)
     nz = len(dtemplate.local.redshifts)
     ntargets = len(target_ids)
     nbasis = dtemplate.template.nbasis
@@ -237,6 +412,206 @@ def calc_zchi2_gpu(target_ids, target_data, dtemplate, progress=None):
 
     return zchi2.get(), zcoeff.get(), zchi2penalty.get()
 
+
+def calc_zchi2_gpu_new(target_ids, target_data, dtemplate, progress=None):
+    """Calculate chi2 vs. redshift for a given PCA template.
+
+    New GPU algorithms 4/22/22
+
+    Args:
+        target_ids (list): targets IDs.
+        target_data (list): list of Target objects.
+        dtemplate (DistTemplate): distributed template data
+        progress (multiprocessing.Queue): optional queue for tracking
+            progress, only used if MPI is disabled.
+
+    Returns:
+        tuple: (zchi2, zcoeff, zchi2penalty) with:
+            - zchi2[ntargets, nz]: array with one element per target per
+                redshift
+            - zcoeff[ntargets, nz, ncoeff]: array of best fit template
+                coefficients for each target at each redshift
+            - zchi2penalty[ntargets, nz]: array of penalty priors per target
+                and redshift, e.g. to penalize unphysical fits
+
+    """
+    nz = len(dtemplate.local.redshifts)
+    ntargets = len(target_ids)
+    nbasis = dtemplate.template.nbasis
+
+    zchi2 = np.zeros( (ntargets, nz) )
+    zchi2penalty = np.zeros( (ntargets, nz) )
+    zcoeff = np.zeros( (ntargets, nz, nbasis) )
+
+    block_size = 512 #Default block size, should work on all modern nVidia GPUs
+    # Load CUDA kernels
+    cp_module = cp.RawModule(code=cuda_source)
+    batch_dot_product = cp_module.get_function('batch_dot_product')
+    calc_M_y = cp_module.get_function('calc_M_and_y_atomic')
+    tb_zc_dot = cp_module.get_function('tb_zc_dot')
+    calc_z_prod = cp_module.get_function('calc_z_prod')
+
+    # Redshifts near [OII]; used only for galaxy templates
+    if dtemplate.template.template_type == 'GALAXY':
+        isOII = (3724 <= dtemplate.template.wave) & \
+            (dtemplate.template.wave <= 3733)
+        OIItemplate = np.array(dtemplate.template.flux[:,isOII].T)
+
+    # Combine redshifted templates
+    tdata = dict()
+    for key in dtemplate.local.data[0].keys():
+        tdata[key] = cp.array([tdata[key] for tdata in dtemplate.local.data])
+
+    for j in range(ntargets):
+        (weights, flux, wflux) = spectral_data(target_data[j].spectra)
+        if np.sum(weights) == 0:
+            zchi2[j,:] = 9e99
+            continue
+        weights = cp.array(weights)
+        flux = cp.array(flux)
+        wflux = cp.array(wflux)
+
+        # Solving for template fit coefficients for all redshifts.
+        # We use the pre-interpolated templates for each
+        # unique wavelength range.
+        Tbs = []
+        for s in target_data[j].spectra:
+            key = s.wavehash
+            #R = cupyx.scipy.sparse.csr_matrix(s.Rcsr).toarray()
+
+            #Use actual numpy arrays that represent sparse array - .data, .indices, and .indptr
+            #Use batch_dot_product array to perform dot product in parallel for all templates
+            #for this (target, spectrum) combination.
+            #Allocate CUPY arrays and calculate number of blocks to use.
+            n = tdata[key].size
+            blocks = (n+block_size-1)//block_size
+            Rcsr_values = cp.array(s.Rcsr.data, cp.float64)
+            Rcsr_cols = cp.array(s.Rcsr.indices, cp.int32)
+            Rcsr_indptr = cp.array(s.Rcsr.indptr, cp.int32)
+            #Array dimensions
+            nrows = cp.int32(s.Rcsr.shape[1])
+            ncols = cp.int32(s.Rcsr.shape[0])
+            nbatch = cp.int32(tdata[key].shape[2])
+            nt = cp.int32(tdata[key].shape[0])
+            curr_tb = cp.empty((nz, ncols, nbatch))
+            #Launch kernel and syncrhronize
+            batch_dot_product((blocks,), (block_size,), (Rcsr_values, Rcsr_cols, Rcsr_indptr, tdata[key], curr_tb, nrows, ncols, nbatch, nt))
+            #Commented out synchronize - needed for timing kernels but we still
+            #get execution of this kernel before data is needed for next kernel
+            #so output is the same and slightly faster without synchronize
+            #cp.cuda.Stream.null.synchronize()
+            #Append to list
+            Tbs.append(curr_tb)
+        #Use CUPY.hstack to combine into one nt x ncols x nbatch array
+        Tbs = cp.hstack(Tbs)
+
+        #Use calc_M_y_atomic kernel to compute M and y arrays
+        #nparallel - number of parallel threads for each output array element
+        #For larger input Tbs arrays - e.g., GALAXY, QSO, 4 parallel threads
+        #is faster because we don't want to create too many total threads
+        #But for smaller Tb arrays - STARS - we can use more parallel threads
+        #to maximize parallelism - this can be dynamically tuned but in test
+        #data, 4 and 64 were optimal.  Needs to be power of 2.
+        if (nt > 512):
+            nparallel = cp.int32(4)
+        else:
+            nparallel = cp.int32(64)
+        #Create CUPY arrays and calculate number of blocks
+        nrows = cp.int32(Tbs.shape[1])
+        n = nt*nbatch*nbatch*nparallel + nt*nbatch*nparallel
+        blocks = (n+block_size-1)//block_size
+        if (j == 0):
+            #Only need to allocate first iteration through loop
+            #provided the shape is constant which it should be
+            #all elements will be overwritten by kernel each iteration
+            #empty is super fast but this saves us time on cudaFree
+            all_M = cp.empty((nt, nbatch, nbatch))
+            all_y = cp.empty((nt, nbatch))
+        #Launch kernel and syncrhonize
+        calc_M_y((blocks,), (block_size,), (Tbs, weights, wflux, all_M, all_y, nrows, nbatch, nt, nparallel))
+        #Commented out synchronize - needed for timing kernels but we still
+        #get execution of this kernel before data is needed for next kernel
+        #so output is the same and slightly faster without synchronize
+        #cp.cuda.Stream.null.synchronize()
+
+        ### CUPY ####
+        #Commented out because above code is slightly faster but leaving for
+        #future reference because this is simpler code that does the same
+        #all_M = Tbs.swapaxes(-2, -1) @ (weights[None, :, None] * Tbs)
+        #all_y = (Tbs.swapaxes(-2, -1) @ wflux)
+        #cp.cuda.Stream.null.synchronize()
+
+        #bool array to track elements with LinAlgError from np.linalg.solve
+        iserr = np.zeros(nt, dtype=np.bool)
+        #use_cupy_linalg should alwyas be 1 for running on Perlmutter or other
+        #supercomputer with A100s.  For some reason on GeForce 1660, looping
+        #over templates and running np.linalg.solve is faster than
+        #cp.linalg.solve.  Possibly because consumer grade GPUs are slower with
+        #double precision. use_cupy_linalg = 0 should be run on consumer grade
+        #GPUs.
+        if (use_cupy_linalg == 1):
+            #Normal case on Perlmutter - solve for all templates at once
+            zc = cp.linalg.solve(all_M, all_y)
+        else:
+            #For consumer grade GPUs, copy data to host, loop over
+            #templates, and run np.linalg.solve
+            M1 = all_M.get()
+            y1 = all_y.get()
+            zc = cp.zeros((nt, nbatch), dtype=cp.float64)
+            for i, _ in enumerate(dtemplate.local.redshifts):
+                M = M1[i,:,:]
+                y = y1[i,:]
+                try:
+                    zc[i,:] = cp.array(np.linalg.solve(M, y))
+                except np.linalg.LinAlgError:
+                    iserr[i] = True
+                    continue
+
+        #Use tb_zc_dot kernel to computer model array
+        #Allocate CUPY array and calc blocks to be used
+        n = nrows * nt
+        blocks = (n+block_size-1)//block_size
+        if (j == 0):
+            #Again only allocate first iteration through loop
+            model = cp.empty((nt, nrows), cp.float64)
+        #Launch kernel and synchronize
+        tb_zc_dot((blocks,), (block_size,), (Tbs, zc, model, nrows, nbatch, nt))
+        #cp.cuda.Stream.null.synchronize()
+
+        #Use calc_z_prod kernel to calculate all zchi2 for this target in parallel
+        #Allocate temp array to hold results - blocks is the same as in tb_zc_dot kernel above.
+        if (j == 0):
+            #Again only allocate first iteration through loop
+            z_product = cp.empty((nt, nrows), cp.float64)
+        #Launch kernel
+        calc_z_prod((blocks,), (block_size,), (flux, model, weights, z_product, nrows, nt))
+        #Copy data from GPU to numpy arrays
+        zchi2[j,:] = z_product.sum(1).get()
+        zchi2[j,:][iserr] = 9e99
+        zcoeff[j,:,:] = zc.get()
+        #Free data from GPU
+        del zc
+        del Tbs
+        #Moved freeing these to after loop, only allocate and free once
+        #del model
+        #del z_product
+        #del all_M
+        #del all_y
+
+        #- Penalize chi2 for negative [OII] flux; ad-hoc
+        if dtemplate.template.template_type == 'GALAXY':
+            OIIflux = np.sum(zcoeff[j] @ OIItemplate.T, axis=1)
+            zchi2penalty[j][OIIflux < 0] = -OIIflux[OIIflux < 0]
+
+        if dtemplate.comm is None:
+            progress.put(1)
+    #Free all_M and all_y here since only allocating once
+    del all_M
+    del all_y
+    del model
+    del z_product
+
+    return zchi2, zcoeff, zchi2penalty
 
 def _mp_calc_zchi2(indx, target_ids, target_data, t, qout, qprog):
     """Wrapper for multiprocessing version of calc_zchi2.
@@ -345,6 +720,12 @@ def calc_zchi2_targets(targets, templates, mp_procs=1, use_gpu=False):
             prog = 1
 
             done = False
+            #CW 04/25/22 - when running in GPU mode, all non-GPU procs should
+            #have 0 targets.  Set done to true in these cases so it skips the
+            #while loop - this saves ~2s on 500 targets on 64 CPU / 4 GPU
+            #and no need to call calc_zchi2 on empty target list
+            if (len(targets.local_target_ids()) == 0):
+                done = True
             while not done:
                 # Compute the fit for our current redshift slice.
                 tzchi2, tzcoeff, tpenalty = \

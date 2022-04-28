@@ -731,7 +731,10 @@ def rrdesi(options=None, comm=None):
         ncpu_procs = comm_size - ngpu_procs
         if ngpu_procs > 0 and ncpu_procs > 0:
             # On Perlmutter, 1:15 seems like a good ratio
-            capacities = [1 if is_gpu_proc else 1.0/15 for is_gpu_proc in gpu_proc_flags]
+            #capacities = [1 if is_gpu_proc else 1.0/15 for is_gpu_proc in gpu_proc_flags]
+            #With new GPU implementation of zscan, use 1:10000 so that only GPU-enabled
+            #procs get allocated targets
+            capacities = [1 if is_gpu_proc else 1.0/10000 for is_gpu_proc in gpu_proc_flags]
         else:
             capacities = None
 
