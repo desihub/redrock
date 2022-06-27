@@ -774,7 +774,6 @@ def calc_batch_dot_product_3d3d_gpu(a, b, transpose_a=False):
 ###    3d and 2d arrays respetively, then do a linalg.solve for each one...
 def calc_zchi2_batch_v2(Tbs, weights, flux, wflux, nz, nbasis, use_gpu):
     """Calculate a batch of chi2.
-
     For many redshifts and a set of spectral data, compute the chi2 for template
     data that is already on the correct grid.
 
@@ -790,10 +789,9 @@ def calc_zchi2_batch_v2(Tbs, weights, flux, wflux, nz, nbasis, use_gpu):
         use_gpu (bool): use GPU or not
 
     Returns:
-        - zchi2[nz]: array with one element per redshift for this target
-        - zcoeff[nz, ncoeff]: array of best fit template coefficients for
+        zchi2[nz]: array with one element per redshift for this target
+        zcoeff[nz, ncoeff]: array of best fit template coefficients for
             this target at each redshift
-
     """
 
     zchi2 = np.zeros(nz)
@@ -952,8 +950,7 @@ def calc_zchi2_batch_v3(spectra, tdata, weights, flux, wflux, nz, nbasis, use_gp
 
     Args:
         spectra (list): list of Spectrum objects.
-        tdata (dict): dictionary of interpolated template values for each
-            wavehash.
+        tdata (dict): dictionary of interpolated template values for each wavehash.
         weights (array): concatenated spectral weights (ivar).
         flux (array): concatenated flux values.
         wflux (array): concatenated weighted flux values.
@@ -965,11 +962,8 @@ def calc_zchi2_batch_v3(spectra, tdata, weights, flux, wflux, nz, nbasis, use_gp
         - zchi2[nz]: array with one element per redshift for this target
         - zcoeff[nz, ncoeff]: array of best fit template coefficients for
             this target at each redshift
-
     """
-
     zchi2 = np.zeros(nz)
-
     if (use_gpu):
         #On the GPU, all operations are batch operations for all templates
         #in parallel.
