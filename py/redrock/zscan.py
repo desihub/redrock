@@ -790,8 +790,8 @@ def calc_zchi2_batch_v2(Tbs, weights, flux, wflux, nz, nbasis, use_gpu):
 
     Returns:
         zchi2 (array): array with one element per redshift for this target
-        zcoeff (array): array of best fit template coefficients for
-            this target at each redshift
+        zcoeff (array): array of best fit template coefficients
+        
     """
 
     zchi2 = np.zeros(nz)
@@ -952,8 +952,8 @@ def calc_zchi2_batch_v3(spectra, tdata, weights, flux, wflux, nz, nbasis, use_gp
 
     Returns:
         zchi2 (array): array with one element per redshift for this target
-        zcoeff (array): array of best fit template coefficients for
-            this target at each redshift
+        zcoeff (array): array of best fit template coefficients
+        
     """
     zchi2 = np.zeros(nz)
     if (use_gpu):
