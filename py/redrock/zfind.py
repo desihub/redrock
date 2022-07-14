@@ -32,6 +32,7 @@ from .zscan import calc_zchi2_targets
 from .fitz import fitz, get_dv
 
 from .zwarning import ZWarningMask as ZW
+from .zwarning import badfit_mask
 
 
 def _mp_fitz(chi2, target_data, t, nminima, qout, archetype):
@@ -57,33 +58,52 @@ def _mp_fitz(chi2, target_data, t, nminima, qout, archetype):
         print("".join(lines))
         sys.stdout.flush()
 
-def calc_deltachi2(chi2, z, dvlimit=None):
+def calc_deltachi2(chi2, z, zwarn, dvlimit=constants.max_velo_diff):
     '''
-    Calculate chi2 differences, excluding candidates with close z
+    Calculate chi2 differences, excluding candidates with close z or bad fits
 
     Args:
         chi2 : array of chi2 values
         z : array of redshifts
+        zwarn : array of zwarn values
 
     Options:
         dvlimit: exclude candidates that are closer than dvlimit [km/s]
+
+    Returns (deltachi2, setzwarn) where `deltachi2` is array of chi2 differences
+        to next best good fit, and `setzwarn` is boolean array of whether
+        a SMALL_DELTACHI2 zwarn bit should be set.
 
     Note: The final target always has deltachi2=0.0 because we don't know
         what the next chi2 would have been.  This can also occur for the
         last N targets if all N of them are within dvlimit of each other.
     '''
-    if dvlimit is None:
-        dvlimit = constants.max_velo_diff
-
-    deltachi2 = np.zeros(len(chi2))
+    nz = len(chi2)
+    deltachi2 = np.zeros(nz)
+    okfit = (zwarn & badfit_mask) == 0
     for i in range(len(chi2)-1):
         dv = get_dv(z[i+1:], z[i])
-        ii = np.abs(dv)>dvlimit
+        ii = (np.abs(dv)>dvlimit) & okfit[i+1:]
         if np.any(ii):
             dchi2 = chi2[i+1:] - chi2[i]
             deltachi2[i] = np.min(dchi2[ii])
 
-    return deltachi2
+    #- zwarn SMALL_DELTA_CHI2 is based upon small difference to any good fit,
+    #- including a slightly better one
+    noti = np.ones(nz, dtype=bool)
+    setzwarn = np.zeros(nz, dtype=bool)
+    for i in range(nz):
+        noti[:] = True
+        noti[i] = False
+        alldeltachi2 = np.absolute(chi2[noti] - chi2[i])
+        alldv = np.absolute(get_dv(z=z[noti], zref=z[i]))
+        zwarn = np.any( okfit[noti] &
+                    (alldeltachi2 < constants.min_deltachi2) &
+                    (alldv >= dvlimit) )
+        if zwarn:
+            setzwarn[i] = True
+
+    return deltachi2, setzwarn
 
 
 def _rebalance_after_scan(targets, results):
@@ -114,6 +134,18 @@ def _rebalance_after_scan(targets, results):
 
     return local_targets, results
 
+def sort_zfit(zfit):
+    """
+    Sorts zfit table by goodness of fit, using 'zwarn' and 'chi2' columns
+
+    Args:
+        zfit: astropy Table with columns 'zwarn' and 'chi2'
+
+    Modifies zfit in-place by sorting it
+    """
+    zfit['__badfit__'] = (zfit['zwarn'] & badfit_mask) != 0
+    zfit.sort( ('__badfit__', 'chi2') )
+    zfit.remove_column('__badfit__')
 
 def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=None, chi2_scan=None, use_gpu=False):
     """Compute all redshift fits for the local set of targets and collect.
@@ -330,29 +362,16 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     tmp.replace_column('coeff', c)
 
             tzfit = astropy.table.vstack(tzfit)
-            tzfit.sort('chi2')
             tzfit['targetid'] = tid
-            tzfit['znum'] = np.arange(len(tzfit))
-            tzfit['zwarn'][ tzfit['npixels']==0 ] |= ZW.NODATA
-            tzfit['zwarn'][ (tzfit['npixels']<10*tzfit['ncoeff']) ] |= \
-                ZW.LITTLE_COVERAGE
             if archetypes:
                 tzfit['zwarn'][ tzfit['coeff'][:,0]<=0. ] |= ZW.NEGATIVE_MODEL
 
-            #- set ZW.SMALL_DELTA_CHI2 flag
-            tzfit['deltachi2'] = calc_deltachi2(tzfit['chi2'], tzfit['z'])
-            ii = (tzfit['deltachi2'] < constants.min_deltachi2)
-            tzfit['zwarn'][ii] |= ZW.SMALL_DELTA_CHI2
+            tzfit['zwarn'][ tzfit['npixels']==0 ] |= ZW.NODATA
+            tzfit['zwarn'][ (tzfit['npixels']<10*tzfit['ncoeff']) ] |= \
+                ZW.LITTLE_COVERAGE
 
-            for i in range(len(tzfit)-1):
-                noti = (np.arange(len(tzfit))!=i)
-                alldeltachi2 = np.absolute(tzfit['chi2'][noti]-tzfit['chi2'][i])
-                alldv = np.absolute(get_dv(z=tzfit['z'][noti],
-                    zref=tzfit['z'][i]))
-                zwarn = np.any( (alldeltachi2<constants.min_deltachi2) & \
-                    (alldv>=constants.max_velo_diff) )
-                if zwarn:
-                    tzfit['zwarn'][i] |= ZW.SMALL_DELTA_CHI2
+            #- Sort by badfit zwarn bits and chi2
+            sort_zfit(tzfit)
 
             # Trim down cases of multiple subtypes for a single type (e.g.
             # STARs) tzfit is already sorted by chi2, so keep first nminima of
@@ -363,10 +382,17 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                 iikeep.extend(ii[0:nminima])
             if len(iikeep) < len(tzfit):
                 tzfit = tzfit[iikeep]
-                #- grouping by spectype could get chi2 out of order; resort
-                tzfit.sort('chi2')
+                #- grouping by spectype could get chi2 out of order so re-sort
+                sort_zfit(tzfit)
 
+            #- Add ranking column 'znum'
             tzfit['znum'] = np.arange(len(tzfit))
+
+            #- calc deltachi2 and set ZW.SMALL_DELTA_CHI2 flag
+            deltachi2, setzwarn = calc_deltachi2(
+                    tzfit['chi2'], tzfit['z'], tzfit['zwarn'])
+            tzfit['deltachi2'] = deltachi2
+            tzfit['zwarn'][setzwarn] |= ZW.SMALL_DELTA_CHI2
 
             # Store
             allzfit.append(tzfit)
