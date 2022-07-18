@@ -157,12 +157,13 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
             zchi2[j,i], zcoeff[j,i] = calc_zchi2_one(target_data[j].spectra,
                 weights, flux, wflux, dtemplate.local.data[i])
 
-            #- Penalize chi2 for negative [OII] flux; ad-hoc
+            #- Penalize chi2 for negative [OII] and [OIII] flux; ad-hoc
             if dtemplate.template.template_type == 'GALAXY':
                 OIIflux = np.sum( OIItemplate.dot(zcoeff[j,i]) )
                 if OIIflux < 0:
                     zchi2penalty[j,i] = -OIIflux
-
+                print(zcoeff[j,i])
+                
         if dtemplate.comm is None:
             progress.put(1)
 
