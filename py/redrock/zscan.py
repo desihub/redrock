@@ -141,11 +141,15 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
     zchi2penalty = np.zeros( (ntargets, nz) )
     zcoeff = np.zeros( (ntargets, nz, nbasis) )
 
-    # Redshifts near [OII]; used only for galaxy templates
+    # Redshifts near [OII] and [OIII]; used only for galaxy templates
     if dtemplate.template.template_type == 'GALAXY':
         isOII = (3724 <= dtemplate.template.wave) & \
             (dtemplate.template.wave <= 3733)
         OIItemplate = dtemplate.template.flux[:,isOII].T
+        
+        isOIII = (5003 <= dtemplate.template.wave) & \
+            (dtemplate.template.wave <= 5011)
+        OIIItemplate = dtemplate.template.flux[:,isOIII].T
 
     for j in range(ntargets):
         (weights, flux, wflux) = spectral_data(target_data[j].spectra)
@@ -159,9 +163,14 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
 
             #- Penalize chi2 for negative [OII] and [OIII] flux; ad-hoc
             if dtemplate.template.template_type == 'GALAXY':
-                OIIflux = np.sum( OIItemplate.dot(zcoeff[j,i]) )
+                OIIflux = np.sum( OIItemplate.dot(zcoeff[j,i]))
                 if OIIflux < 0:
                     zchi2penalty[j,i] = -OIIflux
+                print(zcoeff[j,i], zchi2penalty)
+                                 
+                OIIIflux = np.sum( OIIItemplate.dot(zcoeff[j,i]))
+                if OIIIflux < 0:
+                    zchi2penalty[j,i] = -OIIIflux
                 print(zcoeff[j,i])
                 
         if dtemplate.comm is None:
