@@ -198,18 +198,18 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3, archetype=None):
         zbest = zmin
         zerr = sigma
 
+        #- parabola minimum outside fit range; replace with min of scan
+        if zbest < zz[0] or zbest > zz[-1]:
+            zwarn |= ZW.BAD_MINFIT
+            imin = np.where(zzchi2 == np.min(zzchi2))[0][0]
+            zbest = zz[imin]
+            chi2min = zzchi2[imin]
+
         #- Initial minimum or best fit too close to edge of redshift range
         if zbest < redshifts[1] or zbest > redshifts[-2]:
             zwarn |= ZW.Z_FITLIMIT
         if zmin < redshifts[1] or zmin > redshifts[-2]:
             zwarn |= ZW.Z_FITLIMIT
-
-        #- parabola minimum outside fit range; replace with min of scan
-        if zbest < zz[0] or zbest > zz[-1]:
-            zwarn |= ZW.BAD_MINFIT
-            imin = np.where(zbest == np.min(zbest))[0][0]
-            zbest = zz[imin]
-            chi2min = zzchi2[imin]
 
         #- Skip this better defined minimum if it is within
         #- constants.max_velo_diff km/s of a previous one

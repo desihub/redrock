@@ -37,6 +37,10 @@ def write_zscan(filename, zscan, zfit, clobber=False):
     if clobber and os.path.exists(filename):
         os.remove(filename)
 
+    outdir = os.path.dirname(os.path.abspath(filename))
+    if not os.path.exists(outdir):
+        os.makedirs(outdir)
+
     zfit = zfit.copy()
 
     #- convert unicode to byte strings
