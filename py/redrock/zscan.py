@@ -145,7 +145,11 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
     if dtemplate.template.template_type == 'GALAXY':
         isOII = (3724 <= dtemplate.template.wave) & \
             (dtemplate.template.wave <= 3733)
+       # isOIIcont = (3720 = dtemplate.template.wave) & \
+        #    (dtemplate.template.wave = 3737)
         OIItemplate = dtemplate.template.flux[:,isOII].T
+        #OIItcont = dtemplate.template.flux[:,isOIIcont].T
+        #OIIwcont = dtemplate.template.wave[:,isOIIcont].T
         
         isOIII = (5003 <= dtemplate.template.wave) & \
             (dtemplate.template.wave <= 5011)
@@ -163,15 +167,17 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
 
             #- Penalize chi2 for negative [OII] and [OIII] flux; ad-hoc
             if dtemplate.template.template_type == 'GALAXY':
-                OIIflux = np.sum( OIItemplate.dot(zcoeff[j,i]))
+                OIIflux = np.sum(OIItemplate.dot(zcoeff[j,i]))
+                #OIIcont = np.sum(OIItcont.dot(zcoeff[j,i]))
+                #if OIIflux < (np.minimum(OIIcont[0],OIIcont[-1])*(OIIwcont[-1]-OIIwcont[0])):
                 if OIIflux < 0:
                     zchi2penalty[j,i] = -OIIflux
-                print(zcoeff[j,i], zchi2penalty)
+                print(zchi2penalty.shape)
                                  
-                OIIIflux = np.sum( OIIItemplate.dot(zcoeff[j,i]))
+                OIIIflux = np.sum(OIIItemplate.dot(zcoeff[j,i]))
                 if OIIIflux < 0:
                     zchi2penalty[j,i] = -OIIIflux
-                print(zcoeff[j,i])
+                # print(zcoeff[j,i])
                 
         if dtemplate.comm is None:
             progress.put(1)
@@ -212,6 +218,10 @@ def calc_zchi2_gpu(target_ids, target_data, dtemplate, progress=None):
             (dtemplate.template.wave <= 3733)
         OIItemplate = cp.array(dtemplate.template.flux[:,isOII].T)
 
+        isOIII = (5003 <= dtemplate.template.wave) & \
+            (dtemplate.template.wave <= 5011)
+        OIIItemplate = dtemplate.template.flux[:,isOIII].T
+        
     # Combine redshifted templates
     tdata = dict()
     for key in dtemplate.local.data[0].keys():
@@ -242,6 +252,9 @@ def calc_zchi2_gpu(target_ids, target_data, dtemplate, progress=None):
             OIIflux = np.sum(zcoeff[j] @ OIItemplate.T, axis=1)
             zchi2penalty[j][OIIflux < 0] = -OIIflux[OIIflux < 0]
 
+            OIIIflux = np.sum(zcoeff[j] @ OIIItemplate.T, axis=1)
+            zchi2penalty[j][OIIIflux < 0] = -OIIIflux[OIIIflux < 0]
+            
         if dtemplate.comm is None:
             progress.put(1)
 
