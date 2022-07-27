@@ -146,15 +146,17 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
         isOII = (3724 <= dtemplate.template.wave) & \
             (dtemplate.template.wave <= 3733)
         isOIIcont = ((3710 <= dtemplate.template.wave) & (dtemplate.template.wave <= 3720)) + \
-                    ((3737 <= dtemplate.template.wave) & (dtemplate.template.wave <= 3747))
+            ((3737 <= dtemplate.template.wave) & (dtemplate.template.wave <= 3747))
         OIItemplate = dtemplate.template.flux[:,isOII].T
         OIItempcont = dtemplate.template.flux[:,isOIIcont].T
-        # OIIwavecont = dtemplate.template.wave[:,isOIIcont].T
-        print(dtemplate.template.wave[isOII])
+        # print(dtemplate.template.wave[isOII])
         
         isOIII = (5003 <= dtemplate.template.wave) & \
             (dtemplate.template.wave <= 5011)
+        isOIIIcont = ((4990 <= dtemplate.template.wave) & (dtemplate.template.wave <= 5000)) + \
+            ((5015 <= dtemplate.template.wave) & (dtemplate.template.wave <= 5025))
         OIIItemplate = dtemplate.template.flux[:,isOIII].T
+        OIIItempcont = dtemplate.template.flux[:,isOIIIcont].T
 
     for j in range(ntargets):
         (weights, flux, wflux) = spectral_data(target_data[j].spectra)
@@ -173,10 +175,12 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
                 if OIIflux < (np.mean(OIIfluxcont)*(dtemplate.template.wave[isOII][-1]-dtemplate.template.wave[isOII][0])):
                 # if OIIflux < 0:
                     zchi2penalty[j,i] = -OIIflux
-                print(zchi2penalty.shape)
+                # print(zchi2penalty.shape)
                                  
                 OIIIflux = np.sum(OIIItemplate.dot(zcoeff[j,i]))
-                if OIIIflux < 0:
+                OIIIfluxcont = OIIItempcont.dot(zcoeff[j,i])
+                if OIIIflux < (np.mean(OIIIfluxcont)*(dtemplate.template.wave[isOIII][-1]-dtemplate.template.wave[isOIII][0])):
+                # if OIIIflux < 0:
                     zchi2penalty[j,i] = -OIIIflux
                 # print(zcoeff[j,i])
                 
