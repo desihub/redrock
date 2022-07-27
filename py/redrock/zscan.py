@@ -149,7 +149,8 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
                     ((3737 <= dtemplate.template.wave) & (dtemplate.template.wave <= 3747))
         OIItemplate = dtemplate.template.flux[:,isOII].T
         OIItempcont = dtemplate.template.flux[:,isOIIcont].T
-        #OIIwcont = dtemplate.template.wave[:,isOIIcont].T
+        # OIIwavecont = dtemplate.template.wave[:,isOIIcont].T
+        print(dtemplate.template.wave[isOII])
         
         isOIII = (5003 <= dtemplate.template.wave) & \
             (dtemplate.template.wave <= 5011)
@@ -168,8 +169,8 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
             #- Penalize chi2 for negative [OII] and [OIII] flux; ad-hoc
             if dtemplate.template.template_type == 'GALAXY':
                 OIIflux = np.sum(OIItemplate.dot(zcoeff[j,i]))
-                OIIfluxcont = np.sum(OIItempcont.dot(zcoeff[j,i]))
-                if OIIflux < (np.mean(OIIfluxcont)*(OIIwcont[-1]-OIIwcont[0])):
+                OIIfluxcont = OIItempcont.dot(zcoeff[j,i])
+                if OIIflux < (np.mean(OIIfluxcont)*(dtemplate.template.wave[isOII][-1]-dtemplate.template.wave[isOII][0])):
                 # if OIIflux < 0:
                     zchi2penalty[j,i] = -OIIflux
                 print(zchi2penalty.shape)
