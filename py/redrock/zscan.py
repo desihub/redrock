@@ -153,8 +153,8 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
         
         isOIII = (5003 <= dtemplate.template.wave) & \
             (dtemplate.template.wave <= 5011)
-        isOIIIcont = ((4990 <= dtemplate.template.wave) & (dtemplate.template.wave <= 5000)) + \
-            ((5015 <= dtemplate.template.wave) & (dtemplate.template.wave <= 5025))
+        isOIIIcont = ((4980 <= dtemplate.template.wave) & (dtemplate.template.wave <= 4990)) + \
+            ((5025 <= dtemplate.template.wave) & (dtemplate.template.wave <= 5035))
         OIIItemplate = dtemplate.template.flux[:,isOIII].T
         OIIItempcont = dtemplate.template.flux[:,isOIIIcont].T
 
