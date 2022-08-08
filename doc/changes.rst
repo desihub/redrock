@@ -2,13 +2,23 @@
 redrock Change Log
 ==================
 
-0.15.5 (unreleased)
+0.16.0 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.16.0 (2022-08-08)
 -------------------
 
 * Add rrdesi ``if __name__ == "__main__"`` wrapper for multiprocessing
   robustness (PR `#209`_).
+* Update GitHub test automation (PR `#210`_).
+* Avoid bad fits when ranking zchi2 vs. z minima; fixes redshift pileup
+  for new QSO templates at edges of zscan range (PR `#218`_).
 
 .. _`#209`: https://github.com/desihub/redrock/pull/209
+.. _`#210`: https://github.com/desihub/redrock/pull/210
+.. _`#218`: https://github.com/desihub/redrock/pull/218
 
 0.15.4 (2022-02-28)
 -------------------
