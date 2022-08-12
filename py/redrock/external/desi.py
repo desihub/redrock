@@ -775,8 +775,9 @@ def rrdesi(options=None, comm=None):
             .format(len(targets.all_target_ids)), comm=comm)
 
         # Read the template data
+        # Pass both use_gpu (this proc) and args.gpu (if any proc is using GPU)
         dtemplates = load_dist_templates(dwave, templates=args.templates,
-            comm=comm, mp_procs=mpprocs, redistribute=redistribute_templates)
+            comm=comm, mp_procs=mpprocs, redistribute=redistribute_templates, use_gpu=use_gpu, gpu_mode=args.gpu)
 
         # Compute the redshifts, including both the coarse scan and the
         # refinement.  This function only returns data on the rank 0 process.

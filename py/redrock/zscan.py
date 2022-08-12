@@ -11,27 +11,30 @@ import sys
 import traceback
 import numpy as np
 
-try:
-    import cupy as cp
-    import cupyx.scipy
-    import cupyx
-    cupy_available = cp.is_available()
-except ImportError:
-    cupy_available = False
+#try:
+#    import cupy as cp
+#    import cupyx.scipy
+#    import cupyx
+#    cupy_available = cp.is_available()
+#except ImportError:
+#    cupy_available = False
+#Moved CUPY import to local within method.  Set global var to None here
+cp = None
 
 from .utils import elapsed
 
 from .targets import distribute_targets
 
-if (cupy_available):
-    block_size = 512 #Default block size, should work on all modern nVidia GPUs
+#Since CUPY import is moved, vars block_size and cuda_source will always be
+#set but this should cost no real time.
+block_size = 512 #Default block size, should work on all modern nVidia GPUs
 
-    # cuda_source contains raw CUDA kernels to be loaded as CUPY module
+# cuda_source contains raw CUDA kernels to be loaded as CUPY module
 
-    ###!!! NOTE - calc_M_and_y_atomic and calc_z_prod will be removed in
-    ###    the final product
+###!!! NOTE - calc_M_and_y_atomic and calc_z_prod will be removed in
+###    the final product
 
-    cuda_source = r'''
+cuda_source = r'''
         extern "C" {
             __global__ void batch_dot_product_sparse(const double* Rcsr_values, const int* Rcsr_cols, const int* Rcsr_indptr, const double* tdata, double* tb, int nrows, int ncols, int nbasis, int nt) {
                 // This kernel performs a batch dot product of a sparse matrix Rcsr
@@ -247,9 +250,10 @@ if (cupy_available):
             }
 
         }
-    '''
+'''
 
 ###!!! NOTE - this is used by original GPU algorithm and will be removed
+### TO BE REMOVED ###
 def _zchi2_batch(Tb, weights, flux, wflux, zcoeff):
     """Calculate a batch of chi2.
 
@@ -267,6 +271,7 @@ def _zchi2_batch(Tb, weights, flux, wflux, zcoeff):
 
 ###!!! NOTE - This is used by original CPU algorithm and is replaced in new
 ###    v2 and v3 versions so will be removed
+### TO BE REMOVED ###
 def _zchi2_one(Tb, weights, flux, wflux, zcoeff):
     """Calculate a single chi2.
 
@@ -309,6 +314,7 @@ def spectral_data(spectra):
 
 ###!!! NOTE - This is used by original CPU algorithm and is replaced in new
 ###    v2 and v3 versions so will be removed
+### TO BE REMOVED ###
 def calc_zchi2_one(spectra, weights, flux, wflux, tdata):
     """Calculate a single chi2.
 
@@ -345,6 +351,7 @@ def calc_zchi2_one(spectra, weights, flux, wflux, tdata):
 ###    propagate to any of the other algorithms with calls documented below.
 ###    In final version, it will be replaced by the algorithm we select
 ###    (v2 or v3).  For thd draft PR, the default is set to run v3.
+### TO BE REMOVED ###
 def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False):
     """Calculate chi2 vs. redshift for a given PCA template.
 
@@ -366,6 +373,12 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
                 and redshift, e.g. to penalize unphysical fits
 
     """
+    if (use_gpu):
+        #Use global to import cupy here - it will not be needed to be imported
+        #in any other method
+        global cp
+        import cupy as cp
+
     ###!!! NOTE - uncomment the below line to run v2 algorithm
     #return calc_zchi2_v2(target_ids, target_data, dtemplate, progress, use_gpu)
     ###!!! NOTE - uncomment the below line to run v3 algorithm
@@ -509,7 +522,7 @@ def batch_dot_product_sparse_gpu(spectra, tdata):
     return Tbs
 
 ###!!! NOTE - used in v3 algorithm instead of batch_dot_product_sparse for CPU
-def dot_product_sparse_one(spectra, tdata):
+def dot_product_sparse_one(spectra, tdata, i):
     """Calculate a dot product of the 3 sparse matrices in spectra
     with ONE template in tdata.  Sparse matrix libraries are used
     to perform the dot products.
@@ -517,7 +530,8 @@ def dot_product_sparse_one(spectra, tdata):
     Args:
         spectra (list): list of Spectrum objects.
         tdata (dict): dictionary of interpolated template values for each
-            wavehash for ONE template.
+            wavehash - arrays are 3d (nz x nlambda x nbasis)
+        i (int): index of this redshift
 
     Returns:
         Tb (array): dot products of these 3 spectra with ONE templates
@@ -527,13 +541,15 @@ def dot_product_sparse_one(spectra, tdata):
     Tb = list()
     for s in spectra:
         key = s.wavehash
-        Tb.append(s.Rcsr.dot(tdata[key]))
+        Tb.append(s.Rcsr.dot(tdata[key][i,:,:]))
     Tb = np.vstack(Tb)
     return Tb
+
 
 ###!!! NOTE - This will be removed in the final version but is included
 ###    here for the ability to run timing tests - this is the fastest version
 ###    of calculating the M and y arrays via a custom GPU kernel.
+### TO BE REMOVED ###
 def calc_M_y_batch(Tbs, weights, wflux, nz, nbasis):
     """Use calc_M_y_atomic kernel to compute M and y arrays
     nparallel - number of parallel threads for each output array element
@@ -772,11 +788,11 @@ def calc_batch_dot_product_3d3d_gpu(a, b, transpose_a=False):
 ###    In this version, everything is done in batch on both GPU and CPU
 ###    E.g. we calculate M and y for all templates and store them in
 ###    3d and 2d arrays respetively, then do a linalg.solve for each one...
+### TO BE REMOVED ###
 def calc_zchi2_batch_v2(Tbs, weights, flux, wflux, nz, nbasis, use_gpu):
     """Calculate a batch of chi2.
-
-    For many redshifts and a set of spectral data, compute the chi2 for template
-    data that is already on the correct grid.
+    For many redshifts and a set of spectral data, compute the chi2 for
+    template data that is already on the correct grid.
 
     Args:
         Tbs (array): the stacked output from all 3 filters from
@@ -790,9 +806,8 @@ def calc_zchi2_batch_v2(Tbs, weights, flux, wflux, nz, nbasis, use_gpu):
         use_gpu (bool): use GPU or not
 
     Returns:
-        - zchi2[nz]: array with one element per redshift for this target
-        - zcoeff[nz, ncoeff]: array of best fit template coefficients for
-            this target at each redshift
+        zchi2 (array): array with one element per redshift for this target
+        zcoeff (array): array of best fit template coefficients
 
     """
 
@@ -854,6 +869,7 @@ def calc_zchi2_batch_v2(Tbs, weights, flux, wflux, nz, nbasis, use_gpu):
 ###    In this version, everything is done in batch on both GPU and CPU
 ###    E.g. we calculate M and y for all templates and store them in
 ###    3d and 2d arrays respetively, then do a linalg.solve for each one...
+### TO BE REMOVED ###
 def calc_zchi2_v2(target_ids, target_data, dtemplate, progress=None, use_gpu=False):
     """Calculate chi2 vs. redshift for a given PCA template.
 
@@ -890,13 +906,9 @@ def calc_zchi2_v2(target_ids, target_data, dtemplate, progress=None, use_gpu=Fal
             (dtemplate.template.wave <= 3733)
         OIItemplate = dtemplate.template.flux[:,isOII].T
 
-    tdata = dict()
-    # Combine redshifted templates
-    for key in dtemplate.local.data[0].keys():
-        if (use_gpu):
-            tdata[key] = cp.array([tdata[key] for tdata in dtemplate.local.data])
-        else:
-            tdata[key] = np.array([tdata[key] for tdata in dtemplate.local.data])
+    ## Redshifted templates are now already in format needed - dict of 3d
+    # arrays.
+    tdata = dtemplate.local.data
 
     for j in range(ntargets):
         (weights, flux, wflux) = spectral_data(target_data[j].spectra)
@@ -938,22 +950,13 @@ def calc_zchi2_v2(target_ids, target_data, dtemplate, progress=None, use_gpu=Fal
 ###    maintainable.  The main difference is the extra loop on the CPU version
 def calc_zchi2_batch_v3(spectra, tdata, weights, flux, wflux, nz, nbasis, use_gpu):
     """Calculate a batch of chi2.
-
-    New helper method June 2022 CW
-
-    For many redshifts and a set of spectral data, compute the chi2 for template
-    data that is already on the correct grid.
-
-    This method integrates both GPU and CPU logic.  The operations performed
-    on the data are analagous in both GPU and CPU but on the CPU, the
-    templates are looped over and all operations are performed on each
-    template before proceeding to the next whereas all templates are
-    operated on in parallel on the GPU.
+    For many redshifts and a set of spectral data, compute the chi2 for
+    template data that is already on the correct grid.
 
     Args:
-        spectra (list): list of Spectrum objects.
-        tdata (dict): dictionary of interpolated template values for each
-            wavehash.
+        Tbs (array): the stacked output from all 3 filters from
+            batch_dot_product_sparse, for all redshift templates
+            (nt x nrows x nbasis)
         weights (array): concatenated spectral weights (ivar).
         flux (array): concatenated flux values.
         wflux (array): concatenated weighted flux values.
@@ -962,15 +965,14 @@ def calc_zchi2_batch_v3(spectra, tdata, weights, flux, wflux, nz, nbasis, use_gp
         use_gpu (bool): use GPU or not
 
     Returns:
-        - zchi2[nz]: array with one element per redshift for this target
-        - zcoeff[nz, ncoeff]: array of best fit template coefficients for
-            this target at each redshift
+        zchi2 (array): array with one element per redshift for this target
+        zcoeff (array): array of best fit template coefficients
 
     """
-
     zchi2 = np.zeros(nz)
-
     if (use_gpu):
+        global cp
+        import cupy as cp
         #On the GPU, all operations are batch operations for all templates
         #in parallel.
 
@@ -1039,7 +1041,7 @@ def calc_zchi2_batch_v3(spectra, tdata, weights, flux, wflux, nz, nbasis, use_gp
             #1) dot_product_sparse_one will compute dot products of all
             #spectra with ONE template and return a 2D array of size
             #(ncols x nbasis)
-            Tb = dot_product_sparse_one(spectra, tdata[i])
+            Tb = dot_product_sparse_one(spectra, tdata, i)
 
             #2) On the CPU, M and y are computed for each template
             M = Tb.T.dot(np.multiply(weights[:,None], Tb))
@@ -1102,14 +1104,9 @@ def calc_zchi2_v3(target_ids, target_data, dtemplate, progress=None, use_gpu=Fal
             (dtemplate.template.wave <= 3733)
         OIItemplate = dtemplate.template.flux[:,isOII].T
 
-    # Combine redshifted templates into CUPY arrays if using GPU
-    if (use_gpu):
-        tdata = dict()
-        for key in dtemplate.local.data[0].keys():
-            tdata[key] = cp.array([tdata[key] for tdata in dtemplate.local.data])
-    else:
-        #For CPU, pass through data as-is
-        tdata = dtemplate.local.data
+    ## Redshifted templates are now already in format needed - dict of 3d
+    # arrays (CUPY or numpy).
+    tdata = dtemplate.local.data
 
     for j in range(ntargets):
         (weights, flux, wflux) = spectral_data(target_data[j].spectra)
@@ -1142,6 +1139,7 @@ def calc_zchi2_v3(target_ids, target_data, dtemplate, progress=None, use_gpu=Fal
 
 ###!!! NOTE - this is the original GPU implementation and will be removed
 ###    in the final version
+### TO BE REMOVED ###
 def calc_zchi2_gpu(target_ids, target_data, dtemplate, progress=None):
     """Calculate chi2 vs. redshift for a given PCA template.
 
@@ -1176,10 +1174,9 @@ def calc_zchi2_gpu(target_ids, target_data, dtemplate, progress=None):
             (dtemplate.template.wave <= 3733)
         OIItemplate = cp.array(dtemplate.template.flux[:,isOII].T)
 
-    # Combine redshifted templates
-    tdata = dict()
-    for key in dtemplate.local.data[0].keys():
-        tdata[key] = cp.array([tdata[key] for tdata in dtemplate.local.data])
+    ## Redshifted templates are now already in format needed - dict of 3d
+    # arrays (CUPY or numpy).
+    tdata = dtemplate.local.data
 
     for j in range(ntargets):
         (weights, flux, wflux) = spectral_data(target_data[j].spectra)
@@ -1216,6 +1213,7 @@ def calc_zchi2_gpu(target_ids, target_data, dtemplate, progress=None):
 ###!!! NOTE - this is the v1 GPU implementation, modified to time all
 ###    of the custom kernels versus their CUPY implementations.  It will be
 ###    removed in the final version
+### TO BE REMOVED ###
 def calc_zchi2_gpu_new(target_ids, target_data, dtemplate, progress=None):
     """Calculate chi2 vs. redshift for a given PCA template.
 
@@ -1262,10 +1260,9 @@ def calc_zchi2_gpu_new(target_ids, target_data, dtemplate, progress=None):
             (dtemplate.template.wave <= 3733)
         OIItemplate = np.array(dtemplate.template.flux[:,isOII].T)
 
-    # Combine redshifted templates
-    tdata = dict()
-    for key in dtemplate.local.data[0].keys():
-        tdata[key] = cp.array([tdata[key] for tdata in dtemplate.local.data])
+    ## Redshifted templates are now already in format needed - dict of 3d
+    # arrays (CUPY or numpy).
+    tdata = dtemplate.local.data
 
     for j in range(ntargets):
         (weights, flux, wflux) = spectral_data(target_data[j].spectra)
