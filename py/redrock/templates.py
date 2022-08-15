@@ -220,14 +220,16 @@ class DistTemplatePiece(object):
         self.data = data
 
 
-def _mp_rebin_template(template, dwave, zlist, qout):
+def _mp_rebin_template(template, dwave, zlist, qout, use_gpu=False):
     """Function for multiprocessing version of rebinning.
     """
     try:
-        results = dict()
-        for z in zlist:
-            binned = rebin_template(template, z, dwave)
-            results[z] = binned
+        print ("REBIN", len(zlist))
+        results = rebin_template(template, zlist, dwave, use_gpu=use_gpu)
+        #results = dict()
+        #for z in zlist:
+        #    binned = rebin_template(template, z, dwave)
+        #    results[z] = binned
         qout.put(results)
     except:
         exc_type, exc_value, exc_traceback = sys.exc_info()
@@ -300,7 +302,7 @@ class DistTemplate(object):
             # return a dict of three 3-d arrays (nz x nlambda x nbasis)
             data = rebin_template(self._template, myz, self._dwave, use_gpu=use_gpu)
         else:
-            print ("MULTI")
+            print ("MULTI", mp_procs)
             # We don't have MPI, so use multiprocessing
             import multiprocessing as mp
 
@@ -310,16 +312,28 @@ class DistTemplate(object):
             for i in range(mp_procs):
                 p = mp.Process(target=_mp_rebin_template,
                     args=(self._template, self._dwave, work[i], qout))
+                #p = mp.Process(target=_mp_rebin_template,
+                #    args=(self._template, self._dwave, myz, qout, use_gpu))
                 procs.append(p)
                 p.start()
 
             # Extract the output into a single list
             results = dict()
+            data = dict()
             for i in range(mp_procs):
                 res = qout.get()
-                results.update(res)
-            for z in myz:
-                data.append(results[z])
+                for key in res:
+                    if (not key in data):
+                        data[key] = list()
+                    data[key].append(res[key])
+                #results.update(res)
+                #print ("RES", type(res), type(results))
+            #data = results
+            for key in data:
+                data[key] = np.vstack(data[key])
+                print ("DATA", key, data[key].shape)
+            #for z in myz:
+            #    data.append(results[z])
 
         # Correct spectra for Lyman-series
         for k in list(self._dwave.keys()):
