@@ -20,6 +20,9 @@ import numpy as np
 #    cupy_available = False
 #Moved CUPY import to local within method.  Set global var to None here
 cp = None
+#On consumer grade GPUs with lower memory this will be set to True
+#and attempts will be made to minimize memory usage to under 4 GB
+cp_memcheck = False
 
 from .utils import elapsed
 
@@ -378,6 +381,13 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
         #in any other method
         global cp
         import cupy as cp
+        #Get CUDA device and check available memory.
+        #If < 3 GB free set cp_memcheck
+        d = cp.cuda.Device()
+        print ("DEV MEM", d.mem_info)
+        if (d.mem_info[0] < 3*1024*1024*1024):
+            global cp_memcheck
+            cp_memcheck = True
 
     ###!!! NOTE - uncomment the below line to run v2 algorithm
     #return calc_zchi2_v2(target_ids, target_data, dtemplate, progress, use_gpu)
@@ -860,6 +870,14 @@ def calc_zchi2_batch_v2(Tbs, weights, flux, wflux, nz, nbasis, use_gpu):
     else:
         for i in range(nz):
             zchi2[i] = np.dot((flux-model[i,:])**2, weights)
+    if (cp_memcheck):
+        #Free memory on consumer grade GPUs with low resources
+        del all_M
+        del all_y
+        del model
+        mpool = cp.get_default_memory_pool()
+        mpool.free_all_blocks()
+
 
     zchi2[iserr] = 9e99
     return (zchi2, zcoeff)
@@ -913,6 +931,9 @@ def calc_zchi2_v2(target_ids, target_data, dtemplate, progress=None, use_gpu=Fal
     for j in range(ntargets):
         (weights, flux, wflux) = spectral_data(target_data[j].spectra)
         if np.sum(weights) == 0:
+            #Update progress for multiprocessing!!
+            if dtemplate.comm is None:
+                progress.put(1)
             zchi2[j,:] = 9e99
             continue
         if (use_gpu):
@@ -928,6 +949,10 @@ def calc_zchi2_v2(target_ids, target_data, dtemplate, progress=None, use_gpu=Fal
         # Use helper method batch_dot_product_sparse to create dot products
         # of all three spectra for this target with all templates
         Tbs = batch_dot_product_sparse(target_data[j].spectra, tdata, nz, use_gpu)
+        if (cp_memcheck):
+            #Free memory on consumer grade GPUs with low resources
+            mpool = cp.get_default_memory_pool()
+            mpool.free_all_blocks()
         (zchi2[j,:], zcoeff[j,:,:]) = calc_zchi2_batch_v2(Tbs, weights, flux, wflux, nz, nbasis, use_gpu)
 
         #Free data from GPU
@@ -980,6 +1005,10 @@ def calc_zchi2_batch_v3(spectra, tdata, weights, flux, wflux, nz, nbasis, use_gp
         #spectra with all templates in batch and return a 3D array of
         #size (nz x ncols x nbasis).
         Tbs = batch_dot_product_sparse(spectra, tdata, nz, use_gpu)
+        if (cp_memcheck):
+            #Free memory on consumer grade GPUs with low resources
+            mpool = cp.get_default_memory_pool()
+            mpool.free_all_blocks()
 
         #2) On the GPU, M and y are computed for all templates at once
         #CUPY swapaxes is the equivalent of the transpose in CPU mode
@@ -1033,6 +1062,15 @@ def calc_zchi2_batch_v3(spectra, tdata, weights, flux, wflux, nz, nbasis, use_gp
         zchi2[:] = (((flux - model)*(flux-model)) @ weights).get()
         #Copy data from GPU to numpy arrays
         zcoeff = zcoeff.get()
+
+        if (cp_memcheck):
+            #Free memory on consumer grade GPUs with low resources
+            del Tbs
+            del all_M
+            del all_y
+            del model
+            mpool = cp.get_default_memory_pool()
+            mpool.free_all_blocks()
     else:
         zcoeff = np.zeros((nz, nbasis))
         #On the CPU, the templates are looped over and all operations
@@ -1112,6 +1150,9 @@ def calc_zchi2_v3(target_ids, target_data, dtemplate, progress=None, use_gpu=Fal
         (weights, flux, wflux) = spectral_data(target_data[j].spectra)
         if np.sum(weights) == 0:
             zchi2[j,:] = 9e99
+            #Update progress for multiprocessing!!
+            if dtemplate.comm is None:
+                progress.put(1)
             continue
         if (use_gpu):
             #Copy data to CUPY arrays
@@ -1182,6 +1223,9 @@ def calc_zchi2_gpu(target_ids, target_data, dtemplate, progress=None):
         (weights, flux, wflux) = spectral_data(target_data[j].spectra)
         if np.sum(weights) == 0:
             zchi2[j] = 9e99
+            #Update progress for multiprocessing!!
+            if dtemplate.comm is None:
+                progress.put(1)
             continue
         weights = cp.array(weights)
         flux = cp.array(flux)
@@ -1267,6 +1311,9 @@ def calc_zchi2_gpu_new(target_ids, target_data, dtemplate, progress=None):
     for j in range(ntargets):
         (weights, flux, wflux) = spectral_data(target_data[j].spectra)
         if np.sum(weights) == 0:
+            #Update progress for multiprocessing!!
+            if dtemplate.comm is None:
+                progress.put(1)
             zchi2[j,:] = 9e99
             continue
         weights = cp.array(weights)
