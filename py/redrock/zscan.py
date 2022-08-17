@@ -157,10 +157,12 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
             ((5025 <= dtemplate.template.wave) & (dtemplate.template.wave <= 5035))
         OIIItemplate = dtemplate.template.flux[:,isOIII].T
         OIIItempcont = dtemplate.template.flux[:,isOIIIcont].T
+        
 
     for j in range(ntargets):
         (weights, flux, wflux) = spectral_data(target_data[j].spectra)
-
+        wave = np.concatenate([ s.wave for s in target_data[j].spectra ])
+        
         # Loop over redshifts, solving for template fit
         # coefficients.  We use the pre-interpolated templates for each
         # unique wavelength range.
@@ -170,20 +172,28 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
 
             #- Penalize chi2 for negative [OII] and [OIII] flux; ad-hoc
             if dtemplate.template.template_type == 'GALAXY':
+
                 OIIflux = np.sum(OIItemplate.dot(zcoeff[j,i]))
                 OIIfluxcont = OIItempcont.dot(zcoeff[j,i])
                 if OIIflux < (np.mean(OIIfluxcont)*(dtemplate.template.wave[isOII][-1]-dtemplate.template.wave[isOII][0])):
                 # if OIIflux < 0:
-                    zchi2penalty[j,i] = -OIIflux
+                    zchi2penalty[j,i] = -(OIIflux-np.mean(OIIfluxcont))
                 # print(zchi2penalty.shape)
-                                 
+                
+                # print(len(flux), OIIItempcont[-1])
+
+                
                 OIIIflux = np.sum(OIIItemplate.dot(zcoeff[j,i]))
                 OIIIfluxcont = OIIItempcont.dot(zcoeff[j,i])
                 if OIIIflux < (np.mean(OIIIfluxcont)*(dtemplate.template.wave[isOIII][-1]-dtemplate.template.wave[isOIII][0])):
                 # if OIIIflux < 0:
-                    zchi2penalty[j,i] = -OIIIflux
+                    zchi2penalty[j,i] = -(OIIIflux-np.mean(OIIIfluxcont))
+                    # print(-OIIIflux)
                 # print(zcoeff[j,i])
-                
+
+        # print(j, dtemplate.template.wave[isOIII][-1], wave[-1], flux[-1])
+
+                    
         if dtemplate.comm is None:
             progress.put(1)
 
