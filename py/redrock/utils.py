@@ -223,13 +223,13 @@ def transmission_Lyman(zObj,lObs, use_gpu=False):
     0 -> nothing is transmitted (medium is opaque)
 
     This method will handle 3 options:
-    For GPU mode, zObj is an array of all z for a template and the return
-        value will be a cupy array (nz x nlambda)
-    In CPU mode, it can auto-detect if zObj is a numpy array and if so,
-        again, all z will be processed as a vector and the return value
-        will be a numpy array (nz x nlambda)
-    For legacy, it is still supported to pass zObj as a float and
-        in this case, the return value will be a 1-d numpy array (nlambda).
+    1 -> For GPU mode, zObj is an array of all z for a template and the return
+    value will be a cupy array (nz x nlambda)
+    2-> In CPU mode, it can auto-detect if zObj is a numpy array and if so,
+    again, all z will be processed as a vector and the return value
+    will be a numpy array (nz x nlambda)
+    3-> For legacy, it is still supported to pass zObj as a float and
+    in this case, the return value will be a 1-d numpy array (nlambda).
 
     Args:
         zObj (float or array of float): Redshift(s) of object
