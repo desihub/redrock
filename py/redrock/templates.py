@@ -521,7 +521,9 @@ def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1, redistribu
     if (use_gpu):
         import cupy as cp
         c = cp.ones(1)
-        timer = elapsed(timer, "Creating GPU context", comm=comm)
+    # Take this timer out of if (use_gpu) block - for reference it hangs
+    # entire code if only some procs call it
+    timer = elapsed(timer, "Creating GPU context", comm=comm)
 
     # Compute the interpolated templates in a distributed way with every
     # process generating a slice of the redshift range.

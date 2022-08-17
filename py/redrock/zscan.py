@@ -384,7 +384,6 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
         #Get CUDA device and check available memory.
         #If < 3 GB free set cp_memcheck
         d = cp.cuda.Device()
-        print ("DEV MEM", d.mem_info)
         if (d.mem_info[0] < 3*1024*1024*1024):
             global cp_memcheck
             cp_memcheck = True
