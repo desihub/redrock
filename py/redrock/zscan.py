@@ -141,6 +141,8 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
     zchi2penalty = np.zeros( (ntargets, nz) )
     zcoeff = np.zeros( (ntargets, nz, nbasis) )
 
+    print('test3')
+    
     # Redshifts near [OII] and [OIII]; used only for galaxy templates
     if dtemplate.template.template_type == 'GALAXY':
         wO2line = (3724 <= dtemplate.template.wave) & \
@@ -153,8 +155,8 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
         O2range = dtemplate.template.flux[:,wO2range].T
         O2cont = dtemplate.template.flux[:,wO2cont].T
         
-        wO3line = (5003 <= dtemplate.template.wave) & \
-            (dtemplate.template.wave <= 5011)
+        wO3line = (5000 <= dtemplate.template.wave) & \
+            (dtemplate.template.wave <= 5015)
         wO3range = (4980 <= dtemplate.template.wave) & \
             (dtemplate.template.wave <= 5035)
         wO3cont = ((4980 <= dtemplate.template.wave) & (dtemplate.template.wave <= 4990)) + \
@@ -163,10 +165,8 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
         O3range = dtemplate.template.flux[:,wO3range].T
         O3cont = dtemplate.template.flux[:,wO3cont].T
         
-
     for j in range(ntargets):
         (weights, flux, wflux) = spectral_data(target_data[j].spectra)
-        wave = np.concatenate([ s.wave for s in target_data[j].spectra ])
         
         # Loop over redshifts, solving for template fit
         # coefficients.  We use the pre-interpolated templates for each
@@ -177,23 +177,25 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
 
             #- Penalize chi2 for negative [OII] and [OIII] flux; ad-hoc
             if dtemplate.template.template_type == 'GALAXY':
-
-                fO2line = np.sum(O2line.dot(zcoeff[j,i]))
-                fO2range = np.sum(O2range.dot(zcoeff[j,i]))
-                fO2cont = O2cont.dot(zcoeff[j,i])
-                if fO2range < (np.mean(fO2cont)*(dtemplate.template.wave[wO2range][-1]-dtemplate.template.wave[wO2range][0])):
-                    zchi2penalty[j,i] = -(fO2line-np.mean(fO2cont))
-
-
                 
-                fO3line = np.sum(O3line.dot(zcoeff[j,i]))
-                fO3range = np.sum(O3range.dot(zcoeff[j,i]))
-                fO3cont = O3cont.dot(zcoeff[j,i])
-                if fO3range < (np.mean(fO3cont)*(dtemplate.template.wave[wO3range][-1]-dtemplate.template.wave[wO3range][0])):
-                    zchi2penalty[j,i] = -(fO3line-np.mean(fO3cont))
+                #check for wavelength coverage
+                if wO3cont[-1]<9825.:  
 
-        # print(j, dtemplate.template.wave[isOIII][-1], wave[-1], flux[-1])
+                    fO2line = np.sum(O2line.dot(zcoeff[j,i]))
+                    fO2range = np.sum(O2range.dot(zcoeff[j,i]))
+                    fO2cont = O2cont.dot(zcoeff[j,i])
+                    #check for negative lines (background subtracted)
+                    if fO2range < (np.mean(fO2cont)*(dtemplate.template.wave[wO2range][-1]-dtemplate.template.wave[wO2range][0])):
+                        #add penalty (background subtracted)
+                        zchi2penalty[j,i] = -(fO2line-np.mean(fO2cont))
 
+                    fO3line = np.sum(O3line.dot(zcoeff[j,i]))
+                    fO3range = np.sum(O3range.dot(zcoeff[j,i]))
+                    fO3cont = O3cont.dot(zcoeff[j,i])
+                    #check for negative lines (background subtracted)
+                    if fO3range < (np.mean(fO3cont)*(dtemplate.template.wave[wO3range][-1]-dtemplate.template.wave[wO3range][0])):
+                        #add penalty (background subtracted)
+                        zchi2penalty[j,i] = -(fO3line-np.mean(fO3cont))
                     
         if dtemplate.comm is None:
             progress.put(1)
@@ -234,10 +236,6 @@ def calc_zchi2_gpu(target_ids, target_data, dtemplate, progress=None):
             (dtemplate.template.wave <= 3733)
         OIItemplate = cp.array(dtemplate.template.flux[:,isOII].T)
 
-        isOIII = (5003 <= dtemplate.template.wave) & \
-            (dtemplate.template.wave <= 5011)
-        OIIItemplate = dtemplate.template.flux[:,isOIII].T
-        
     # Combine redshifted templates
     tdata = dict()
     for key in dtemplate.local.data[0].keys():
@@ -267,10 +265,7 @@ def calc_zchi2_gpu(target_ids, target_data, dtemplate, progress=None):
         if dtemplate.template.template_type == 'GALAXY':
             OIIflux = np.sum(zcoeff[j] @ OIItemplate.T, axis=1)
             zchi2penalty[j][OIIflux < 0] = -OIIflux[OIIflux < 0]
-
-            OIIIflux = np.sum(zcoeff[j] @ OIIItemplate.T, axis=1)
-            zchi2penalty[j][OIIIflux < 0] = -OIIIflux[OIIIflux < 0]
-            
+ 
         if dtemplate.comm is None:
             progress.put(1)
 
