@@ -1,7 +1,11 @@
 import unittest
 import numpy as np
-import cupy as cp
 cp_available = False
+try:
+    import cupy as cp
+    cp_available = True
+except Exception:
+    cp_available = False
 
 from .. import utils
 
