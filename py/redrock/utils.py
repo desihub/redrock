@@ -234,64 +234,37 @@ def transmission_Lyman(zObj,lObs, use_gpu=False):
     Args:
         zObj (float or array of float): Redshift(s) of object
         lObs (array of float): wavelength grid
+        use_gpu (boolean): whether to use CUPY
     Returns:
-        array of float: transmitted flux fraction
+        array of float: transmitted flux fraction (nlambda in case of
+        scalar input; nz x nlambda in case of array input)
 
     """
+    if (use_gpu):
+        import cupy as cp
+        tile = cp.tile
+        array = cp.array
+    else:
+        tile = np.tile
+        array = np.array
 
     Lyman_series = constants.Lyman_series
-    if (use_gpu):
-        #Use GPU helper function
-        return transmission_Lyman_gpu(zObj, lObs)
-    elif (type(zObj) == np.ndarray):
+    if (np.isscalar(zObj)):
+        #zObj is a float
+        lRF = lObs/(1.+zObj)
+    else:
         #This is an array of float
         if (lObs.min()/(1+zObj.max()) > Lyman_series['Lya']['line']):
             #Return None if wavelength range doesn't overlap with Lyman series
             #No need to perform any calculations in this case
             return None
-        lObs = np.tile(lObs, (zObj.size, 1))
-        lRF = lObs/(1.+np.array(zObj)[:,None])
-        T = np.ones(lRF.shape)
-    else:
-        #zObj is a float
-        lRF = lObs/(1.+zObj)
-        T   = np.ones(lObs.size)
-
+        lObs = tile(lObs, (zObj.size, 1))
+        lRF = lObs/(1.+array(zObj)[:,None])
+    T = np.ones_like(lRF)
     for l in list(Lyman_series.keys()):
         w      = lRF<Lyman_series[l]['line']
         zpix   = lObs[w]/Lyman_series[l]['line']-1.
         tauEff = Lyman_series[l]['A']*(1.+zpix)**Lyman_series[l]['B']
         T[w]  *= np.exp(-tauEff)
-
-    return T
-
-def transmission_Lyman_gpu(all_zObj,lObs):
-    """Calculate the transmitted flux fraction from the Lyman series
-    This returns the transmitted flux fraction:
-    1 -> everything is transmitted (medium is transparent)
-    0 -> nothing is transmitted (medium is opaque)
-    Args:
-        all_zObj (array of float): Redshift of all objects
-        lObs (array of float): wavelength grid
-    Returns:
-        cp.array of float (nz x nlambda): transmitted flux fraction
-    """
-    import cupy as cp
-
-    Lyman_series = constants.Lyman_series
-    if (lObs.min()/(1+all_zObj.max()) > Lyman_series['Lya']['line']):
-        #Return None if wavelength range doesn't overlap with Lyman series
-        #No need to perform any calculations in this case
-        return None
-    lObs = cp.tile(lObs, (all_zObj.size, 1))
-    lRF = lObs/(1.+cp.array(all_zObj)[:,None])
-    T = cp.ones(lRF.shape)
-
-    Lyman_series = constants.Lyman_series
-    for l in list(Lyman_series.keys()):
-        w      = lRF<Lyman_series[l]['line']
-        zpix   = lObs[w]/Lyman_series[l]['line']-1.
-        tauEff = Lyman_series[l]['A']*(1.+zpix)**Lyman_series[l]['B']
-        T[w] *= cp.exp(-tauEff)
 
     return T

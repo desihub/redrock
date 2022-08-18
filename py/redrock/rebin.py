@@ -327,18 +327,24 @@ def trapz_rebin_batch_gpu(x, y, xnew=None, edges=None, myz=None):
     edges = cp.array(edges, dtype=cp.float64)
 
     if (myz is None):
-        myz = cp.array([1], dtype=cp.float64)
+        myz = cp.array([0], dtype=cp.float64)
     myz = cp.array(myz, dtype=cp.float64)
 
-    x = cp.array(x)
-    y = cp.array(y)
+    x = cp.array(x, dtype=cp.float64)
+    y = cp.array(y, dtype=cp.float64)
+
+    #Must multiply x by 1+z for comparison, only need to look at max/min cases
+    if (edges[0] < x[0]*(1+myz.max()) or edges[-1] > x[-1]*(1+myz.min())):
+        raise ValueError('edges must be within input x range')
+
     if (not np.allclose(x[-1]-x[-2], x[1]-x[0])):
         #Template wavelengths are unevenly spaced - use special kernel
         return trapz_rebin_batch_gpu_unevenly_spaced(x, y, edges, myz)
 
-    nbasis = y.shape[0]
-#    if edges[0] < x[0] or x[-1] < edges[-1]:
-#        raise ValueError('edges must be within input x range')
+    if (len(y.shape) == 2):
+        nbasis = y.shape[0]
+    else:
+        nbasis = 1
 
     # Load CUDA kernel
     cp_module = cp.RawModule(code=cuda_source)
@@ -355,6 +361,10 @@ def trapz_rebin_batch_gpu(x, y, xnew=None, edges=None, myz=None):
     #Launch kernel and syncrhronize
     batch_trapz_rebin_kernel((blocks,), (block_size,), (x, y, edges, myz, result, nz, nbin, nbasis, nt))
     #cp.cuda.Stream.null.synchronize()
+
+    #Squeeze array and remove dims of 1
+    if (nz == 1 or nbasis == 1):
+        result = result.squeeze()
     return result
 
 def trapz_rebin_batch_gpu_unevenly_spaced(x, y, edges, myz):
@@ -384,15 +394,16 @@ def trapz_rebin_batch_gpu_unevenly_spaced(x, y, edges, myz):
 
     """
 
-    nbasis = y.shape[0]
-#    if edges[0] < x[0] or x[-1] < edges[-1]:
-#        raise ValueError('edges must be within input x range')
+    if (len(y.shape) == 2):
+        nbasis = y.shape[0]
+    else:
+        nbasis = 1
 
     #Divide edges output wavelength array by (1+myz) to get 2d array
     #of input wavelengths at each boundary in edges and
     #use serachsorted to find index for each boundary
     e2d = cp.array(edges/(1+myz[:,None]))
-    idx = cp.searchsorted(x, e2d).astype(np.int32)
+    idx = cp.searchsorted(x, e2d, side='right').astype(np.int32)
     # Load CUDA kernel
     cp_module = cp.RawModule(code=cuda_source)
     batch_trapz_rebin_uneven_kernel = cp_module.get_function('batch_trapz_rebin_uneven')
@@ -408,9 +419,18 @@ def trapz_rebin_batch_gpu_unevenly_spaced(x, y, edges, myz):
     #Create output array as empty
     result = cp.empty((nz, nbin, nbasis), dtype=cp.float64)
 
+    if (x.dtype != cp.float64):
+        x = x.astype(cp.float64)
+    if (y.dtype != cp.float64):
+        y = y.astype(cp.float64)
+
     #Launch kernel
     batch_trapz_rebin_uneven_kernel((blocks,), (block_size,), (x, y, edges, myz, idx, result, nz, nbin, nbasis, nt))
     #cp.cuda.Stream.null.synchronize()
+
+    #Squeeze array and remove dims of 1
+    if (nz == 1 or nbasis == 1):
+        result = result.squeeze()
     return result
 
 

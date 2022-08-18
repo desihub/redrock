@@ -1,4 +1,7 @@
 import unittest
+import numpy as np
+import cupy as cp
+cp_available = False
 
 from .. import utils
 
@@ -7,7 +10,11 @@ class TestUtils(unittest.TestCase):
     """
 
     def setUp(self):
-        pass
+        try:
+            d = cp.cuda.Device()
+            cp_available = True
+        except Exception:
+            cp_available = False
 
     def tearDown(self):
         pass
@@ -26,6 +33,32 @@ class TestUtils(unittest.TestCase):
         dist = utils.distribute_work(nproc, ids, capacities=capacities)
         self.assertEqual(list(map(len, dist)), [1, 3])
 
+    def test_Lyman_transmission_batch(self):
+        '''Test the 2D version of Lyman transmission in batch versus
+        the legacy 1D mode'''
+        x = np.arange(300)+800.
+        myz = np.arange(11)*0.1
+
+        c = utils.transmission_Lyman(myz,x)
+        for i in range(len(myz)):
+            a = utils.transmission_Lyman(myz[i], x)
+            self.assertTrue(np.allclose(c[i], a))
+
+    def test_Lyman_transmission_GPU(self):
+        '''Test the GPU version of Lyman transmission in batch versus
+        both the 2D mode and the legacy 1D mode'''
+        if (not cp_available):
+            self.assertTrue(True)
+            return
+        x = np.arange(300)+800.
+        myz = np.arange(11)*0.1
+
+        g = utils.transmission_Lyman(myz,x,use_gpu=True)
+        c = utils.transmission_Lyman(myz,x)
+        self.assertTrue(np.allclose(c, g))
+        for i in range(len(myz)):
+            a = utils.transmission_Lyman(myz[i], x)
+            self.assertTrue(np.allclose(g[i], a))
 
 
 def test_suite():

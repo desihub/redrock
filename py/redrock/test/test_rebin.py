@@ -1,6 +1,8 @@
 import os
 import unittest
 import numpy as np
+import cupy as cp
+cp_available = False
 
 from .. import rebin
 
@@ -10,6 +12,11 @@ class TestRebin(unittest.TestCase):
         #- Supposed to turn off numba.jit of _trapz_rebin, but coverage
         #- still doesn't see the function.  Leaving this here anyway.
         os.environ['NUMBA_DISABLE_JIT'] = '1'
+        try:
+            d = cp.cuda.Device()
+            cp_available = True
+        except Exception:
+            cp_available = False
 
     def tearDown(self):
         del os.environ['NUMBA_DISABLE_JIT']
@@ -73,6 +80,40 @@ class TestRebin(unittest.TestCase):
         yy = rebin.trapz_rebin(x, y, edges=edges)
         self.assertTrue(np.allclose(yy[0:2], 2/np.pi, atol=5e-4))
         self.assertTrue(np.allclose(yy[2:4], -2/np.pi, atol=5e-4))
+
+    def test_gpu_trpazrebin(self):
+        '''Test that GPU version matches CPU for constant flux density at various binnings'''
+        if (not cp_available):
+            self.assertTrue(True)
+            return
+        nx = 10
+        x = np.arange(nx)*1.1
+        y = np.ones(nx)
+
+        #- test various binnings
+        for nedge in range(3,10):
+            edges = np.linspace(min(x), max(x), nedge)
+            yy = rebin.trapz_rebin_batch_gpu(x, y, edges=edges)
+            self.assertTrue(np.all(yy == 1.0), msg=str(yy))
+
+        #- edges starting/stopping in the interior
+        summ = rebin.trapz_rebin_batch_gpu(x, y, edges=[0.5, 8.3])[0]
+        for nedge in range(3, 3*nx):
+            edges = np.linspace(0.5, 8.3, nedge)
+            yy = rebin.trapz_rebin_batch_gpu(x, y, edges=edges)
+            self.assertTrue(np.allclose(yy, 1.0), msg=str(yy))
+
+    def test_gpu_trapzrebin_uneven(self):
+        '''test rebinning unevenly spaced x for GPU vs CPU'''
+        if (not cp_available):
+            self.assertTrue(True)
+            return
+        x = np.linspace(0, 10, 100)**2
+        y = np.sqrt(x)
+        edges = np.linspace(0,100,21)
+        c = rebin.trapz_rebin(x, y, edges=edges)
+        g = rebin.trapz_rebin_batch_gpu(x, y, edges=edges)
+        self.assertTrue(np.allclose(c,g))
 
 
 def test_suite():
