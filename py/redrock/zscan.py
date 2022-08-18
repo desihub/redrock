@@ -140,6 +140,8 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
     zchi2 = np.zeros( (ntargets, nz) )
     zchi2penalty = np.zeros( (ntargets, nz) )
     zcoeff = np.zeros( (ntargets, nz, nbasis) )
+
+    print('test3')
     
     # Redshifts near [OII] and [OIII]; used only for galaxy templates
     if dtemplate.template.template_type == 'GALAXY':
@@ -178,7 +180,7 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
             if dtemplate.template.template_type == 'GALAXY':
                 
                 #check for wavelength coverage
-                if wO3line[-1]*(1+dtemplate.local.redshifts[i]) < 9825.:
+                if wO3line[-1]*(1.+dtemplate.local.redshifts[i]) < 9825.:
 
                     fO2line = np.sum(O2line.dot(zcoeff[j,i]))
                     fO2range = np.sum(O2range.dot(zcoeff[j,i]))
