@@ -141,7 +141,7 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
     zchi2penalty = np.zeros( (ntargets, nz) )
     zcoeff = np.zeros( (ntargets, nz, nbasis) )
 
-    print('test3')
+    # print('test3')
     
     # Redshifts near [OII] and [OIII]; used only for galaxy templates
     if dtemplate.template.template_type == 'GALAXY':
@@ -175,7 +175,7 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
             zchi2[j,i], zcoeff[j,i] = calc_zchi2_one(target_data[j].spectra,
                 weights, flux, wflux, dtemplate.local.data[i])
             
-            print(dtemplate.local.redshifts[i])
+            # print(dtemplate.local.redshifts[i])
             #- Penalize chi2 for negative [OII] and [OIII] flux; ad-hoc
             if dtemplate.template.template_type == 'GALAXY':
                 
