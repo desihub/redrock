@@ -85,7 +85,7 @@ class TestRebin(unittest.TestCase):
         self.assertTrue(np.allclose(yy[0:2], 2/np.pi, atol=5e-4))
         self.assertTrue(np.allclose(yy[2:4], -2/np.pi, atol=5e-4))
 
-    def test_gpu_trpazrebin(self):
+    def test_gpu_trapzrebin(self):
         '''Test that GPU version matches CPU for constant flux density at various binnings'''
         if (not cp_available):
             self.assertTrue(True)
@@ -97,15 +97,18 @@ class TestRebin(unittest.TestCase):
         #- test various binnings
         for nedge in range(3,10):
             edges = np.linspace(min(x), max(x), nedge)
-            yy = rebin.trapz_rebin_batch_gpu(x, y, edges=edges)
+            yy = rebin.trapz_rebin(x, y, edges=edges, use_gpu=True)
             self.assertTrue(np.all(yy == 1.0), msg=str(yy))
+            self.assertTrue(type(yy) == cp.ndarray)
 
         #- edges starting/stopping in the interior
-        summ = rebin.trapz_rebin_batch_gpu(x, y, edges=[0.5, 8.3])[0]
+        summ = rebin.trapz_rebin(x, y, edges=[0.5, 8.3], use_gpu=True)[0]
+        self.assertTrue(type(summ) == cp.ndarray)
         for nedge in range(3, 3*nx):
             edges = np.linspace(0.5, 8.3, nedge)
-            yy = rebin.trapz_rebin_batch_gpu(x, y, edges=edges)
+            yy = rebin.trapz_rebin(x, y, edges=edges, use_gpu=True)
             self.assertTrue(np.allclose(yy, 1.0), msg=str(yy))
+            self.assertTrue(type(yy) == cp.ndarray)
 
     def test_gpu_trapzrebin_uneven(self):
         '''test rebinning unevenly spaced x for GPU vs CPU'''
@@ -116,9 +119,36 @@ class TestRebin(unittest.TestCase):
         y = np.sqrt(x)
         edges = np.linspace(0,100,21)
         c = rebin.trapz_rebin(x, y, edges=edges)
-        g = rebin.trapz_rebin_batch_gpu(x, y, edges=edges)
+        g = rebin.trapz_rebin(x, y, edges=edges, use_gpu=True)
         self.assertTrue(np.allclose(c,g))
+        self.assertTrue(type(g) == cp.ndarray)
+        self.assertTrue(type(c) == np.ndarray)
 
+    def test_gpu_trapzrebin_multidimensional(self):
+        '''Test that GPU version matches CPU in batch mode'''
+        if (not cp_available):
+            self.assertTrue(True)
+            return
+        #First test multiple bases, no redshifts
+        x = np.arange(10)
+        y = np.ones((2,10)) #nbasis = 2
+        y[1,:] = np.arange(10)
+        g = rebin.trapz_rebin(x, y, edges=[0,2,4,6,8], use_gpu=True) #nbasis=2, GPU mode
+        self.assertTrue(type(g) == cp.ndarray)
+        for j in range(2):
+            c = rebin.trapz_rebin(x, y[j,:], edges=[0,2,4,6,8]) #CPU mode
+            self.assertTrue(np.allclose(g[:,j], c))
+            self.assertTrue(type(c) == np.ndarray)
+
+        #Now test 3d mode with multiple redshifts
+        myz = np.linspace(0, 1, 11)
+        g = rebin.trapz_rebin(x, y, edges=[0,2,4,6,8], myz=myz,use_gpu=True) #nbasis=2, multiple redshifts, GPU mode
+        self.assertTrue(type(g) == cp.ndarray)
+        for z in range(len(myz)):
+            for j in range(2):
+                c = rebin.trapz_rebin(x*(1+myz[z]), y[j,:], edges=[0,2,4,6,8]) #CPU mode
+                self.assertTrue(np.allclose(g[z,:,j], c))
+                self.assertTrue(type(c) == np.ndarray)
 
 def test_suite():
     """Allows testing of only this module with the command::

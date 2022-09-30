@@ -10,9 +10,6 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 import numba
 
-#Moved CUPY import to local within method.  Set global var to None here
-cp = None
-
 #Since CUPY import is moved, vars block_size and cuda_source will always be
 #set but this should cost no real time.
 block_size = 512 #Default block size, should work on all modern nVidia GPUs
@@ -20,88 +17,10 @@ block_size = 512 #Default block size, should work on all modern nVidia GPUs
 # cuda_source contains raw CUDA kernels to be loaded as CUPY module
 cuda_source = r'''
         extern "C" {
-            __global__ void batch_trapz_rebin(const double* x, const double* y, const double* edges, const double* myz, double* result, int nz, int nbin, int nbasis, int nt) {
+            __global__ void batch_trapz_rebin(const double* x, const double* y, const double* edges, const double* myz, const int* idx, double* result, int nz, int nbin, int nbasis, int nt) {
                 // This kernel performs a trapezoidal rebinning for all
-                // redshifts and all bases of a template.
-                //** Args:
-                //       x = input x values (1-d array)
-                //       y = input y values (2-d array containing all bases)
-                //       edges = edges of each output bin
-                //       myz = array of redshifts
-                //       nz, nbin, nbasis, nt = array dimensions
-                //
-                //** Returns:
-                //       result = 3d array (nz x nbin x nbasis)
-
-                const int i = blockDim.x*blockIdx.x + threadIdx.x; //thread index i - corresponds to the output array index
-                if (i >= nz*nbin*nbasis) return;
-
-                double area = 0; //define a local var to accumulate
-                double yedge = 0;
-                double r = 0;
-                double ylo, yhi;
-                //ibasis, ibin, iz = index in 3d representation of output tb array
-                int ibasis = i % nbasis;
-                int ibin = (i % (nbasis*nbin)) / nbasis;
-                int iz = i / (nbasis*nbin);
-
-                //create local vars for (1+z) and wavelength stride
-                double z = (1+myz[iz]);
-                double stride = (x[1]-x[0])*z;
-
-                //Calculate first sample beyond this bin edge
-                int j = (int)((edges[ibin]-x[0]*z)/stride)+1;
-                if (j < 0 || j >= nt) {
-                    //this should never happen but safeguard just in case
-                    result[i] = -1;
-                    return;
-                }
-
-                //Calculate the end index for this bin -- can be calculated
-                //since wavelength stride is uniform
-                int end_idx = (int)((edges[ibin+1]-x[0]*z)/stride)+1;
-                //Copy global memory to local registers and multiply by z
-                double xj = x[j]*z;
-                double xj1 = x[j-1]*z;
-                int y_idx = j+ibasis*nt;
-
-                // - What is the y value where the interpolation crossed the edge?
-                yedge = y[y_idx-1] + (edges[ibin]-xj1) * (y[y_idx]-y[y_idx-1]) / (xj-xj1);
-
-                //r = yedge;
-                // - Is this sample inside this bin?
-                if (xj < edges[ibin+1]) {
-                    area = 0.5 * (y[y_idx] + yedge) * (xj - edges[ibin]);
-                    r += area;
-
-                    //- Continue with interior bins
-                    while (j+1 < end_idx) {
-                        j++;
-                        y_idx++;
-                        xj = x[j]*z;
-                        xj1 = x[j-1]*z;
-                        area = 0.5 * (y[y_idx] + y[y_idx-1]) * (xj - xj1);
-                        r += area;
-                    }
-
-                    //- Next sample will be outside this bin; handle upper edge
-                    yedge = y[y_idx] + (edges[ibin+1]-xj) * (y[y_idx+1]-y[y_idx]) / (x[j+1]*z-xj);
-                    area = 0.5 * (yedge + y[y_idx]) * (edges[ibin+1] - xj);
-                    r += area;
-                } else {
-                    //- Otherwise the samples span over this bin
-                    ylo = y[y_idx] + (edges[ibin]-xj) * (y[y_idx] - y[y_idx-1]) / (xj - xj1);
-                    yhi = y[y_idx] + (edges[ibin+1]-xj) * (y[y_idx] - y[y_idx-1]) / (xj - xj1);
-                    area = 0.5 * (ylo+yhi) * (edges[ibin+1]-edges[ibin]);
-                    r += area;
-                }
-                result[i] = r / (edges[ibin+1]-edges[ibin]);
-            }
-
-            __global__ void batch_trapz_rebin_uneven(const double* x, const double* y, const double* edges, const double* myz, const int* idx, double* result, int nz, int nbin, int nbasis, int nt) {
-                // This kernel performs a trapezoidal rebinning for all
-                // redshifts and all bases of a template with unevenly
-                // spaced input wavelength grid (QSOs).
+                // redshifts and all bases of a template with either evenly
+                // or unevenly spaced input wavelength grid (QSOs).
                 //** Args:
                 //       x = input x values (1-d array)
                 //       y = input y values (2-d array containing all bases)
@@ -251,8 +170,9 @@ def _trapz_rebin(x, y, edges, results):
 
     return
 
-def trapz_rebin(x, y, xnew=None, edges=None):
+def trapz_rebin(x, y, xnew=None, edges=None, myz=None, use_gpu=False):
     """Rebin y(x) flux density using trapezoidal integration between bin edges
+    Optionally use GPU helper method to rebin in batch, see trapz_rebin_batch_gpu
 
     Notes:
         y is interpreted as a density, as is the output, e.g.
@@ -261,14 +181,40 @@ def trapz_rebin(x, y, xnew=None, edges=None):
         >>> y = np.ones(10)
         >>> trapz_rebin(x, y, edges=[0,2,4,6,8])  #- density still 1, not 2
         array([ 1.,  1.,  1.,  1.])
+        >>> y = np.ones((2,10)) #nbasis = 2
+        >>> y[1,:] = np.arange(10)
+        >>> rebin.trapz_rebin(x, y, edges=[0,2,4,6,8], use_gpu=True) #nbasis=2, GPU mode
+        array([[1., 1.],
+               [1., 3.],
+               [1., 5.],
+               [1., 7.]])
+        >>> rebin.trapz_rebin(x, y, edges=[0,2,4,6,8], myz=[0,0.5],use_gpu=True) #nbasis=2, multiple redshifts, GPU mode
+        array([[[1. , 1. ],
+                [1. , 3. ],
+                [1. , 5. ],
+                [1. , 7. ]],
+               [[1. , 0.5],
+                [1. , 1.5],
+                [1. , 2.5],
+                [1. , 3.5]]])
 
     Args:
         x (array): input x values.
-        y (array): input y values.
+        y (1-d or 2-d array): input y values (GPU mode allows 2-d array
+            with multiple bases). 
         edges (array): (optional) new bin edges.
+        myz (array): (optional) redshift array to rebin in batch on GPU,
+            applying redshifts on-the-fly to x
+        use_gpu (boolean): whether or not to use GPU batch mode 
 
     Returns:
         array: integrated results with len(results) = len(edges)-1
+            In GPU batch mode, returns cp.array with shape (nz, nbin, nbasis)
+            where nbin = len(results) = len(edges)-1
+            if nz or nbasis is 1, this dimension will be squeezed,
+            e.g. for nbasis = 1 and nz = 100, the shape will be (100, nbin)
+            while for nbasis = 1 and nz = 1 the shape will be (nbin), the
+            same as CPU mode.
 
     Raises:
         ValueError: if edges are outside the range of x or if len(x) != len(y)
@@ -278,6 +224,11 @@ def trapz_rebin(x, y, xnew=None, edges=None):
         edges = centers2edges(xnew)
     else:
         edges = np.asarray(edges)
+
+    if (myz is not None and not use_gpu):
+        raise ValueError('redshifts only allowed in GPU mode')
+    if (use_gpu):
+        return trapz_rebin_batch_gpu(x, y, edges=edges, myz=myz)
 
     if edges[0] < x[0] or x[-1] < edges[-1]:
         raise ValueError('edges must be within input x range')
@@ -290,8 +241,10 @@ def trapz_rebin(x, y, xnew=None, edges=None):
 
 def trapz_rebin_batch_gpu(x, y, xnew=None, edges=None, myz=None):
     """Rebin y(x) flux density using trapezoidal integration between bin edges
-    GPU algorithm rebins in batch for all redshifts and bases and returns
-    3d array.
+    GPU algorithm can rebin in batch for multiple redshifts and bases and
+    returns 1-d, 2-d, or 3-d array (n redshifts x n bins x n basis) where
+    n basis is the optional second dimension of the y input array and
+    n redshifts is the length of the optional myz array.
 
     Notes:
         y is interpreted as a density, as is the output, e.g.
@@ -300,24 +253,44 @@ def trapz_rebin_batch_gpu(x, y, xnew=None, edges=None, myz=None):
         >>> y = np.ones(10)
         >>> trapz_rebin(x, y, edges=[0,2,4,6,8])  #- density still 1, not 2
         array([ 1.,  1.,  1.,  1.])
+        >>> y = np.ones((2,10)) #nbasis = 2
+        >>> y[1,:] = np.arange(10)
+        >>> rebin.trapz_rebin(x, y, edges=[0,2,4,6,8], use_gpu=True)
+        array([[1., 1.],
+               [1., 3.],
+               [1., 5.],
+               [1., 7.]])
+        >>> rebin.trapz_rebin(x, y, edges=[0,2,4,6,8], myz=[0,0.5],use_gpu=True)
+        array([[[1. , 1. ],
+                [1. , 3. ],
+                [1. , 5. ],
+                [1. , 7. ]],
+               [[1. , 0.5],
+                [1. , 1.5],
+                [1. , 2.5],
+                [1. , 3.5]]])
+
 
     Args:
-        x (array): input x values.
-        y (array): input y values (for all bases).
-        edges (array): (optional) new bin edges.
-        myz (array): redshifts
+        x (1-d array): input x values.
+        y (1-d or 2-d array): input y values (for all bases).
+        edges (1-d array): (optional) new bin edges.
+        myz (array): (optional) redshift array to rebin in batch, applying
+            redshifts on-the-fly to x
+
 
     Returns:
         cp.array: integrated results with shape (nz, nbin, nbasis)
             where nbin = len(results) = len(edges)-1
+            if nz or nbasis is 1, this dimension will be squeezed,
+            e.g. for nbasis = 1 and nz = 100, the shape will be (100, nbin)
+            while for nbasis = 1 and nz = 1 the shape will be (nbin).
 
     Raises:
         ValueError: if edges are outside the range of x or if len(x) != len(y)
 
     """
-    #Use global to import cupy here - it will not be needed to be imported
-    #in any other method
-    global cp
+    #import cupy here
     import cupy as cp
 
     if edges is None:
@@ -337,14 +310,16 @@ def trapz_rebin_batch_gpu(x, y, xnew=None, edges=None, myz=None):
     if (edges[0] < x[0]*(1+myz.max()) or edges[-1] > x[-1]*(1+myz.min())):
         raise ValueError('edges must be within input x range')
 
-    if (not np.allclose(x[-1]-x[-2], x[1]-x[0])):
-        #Template wavelengths are unevenly spaced - use special kernel
-        return trapz_rebin_batch_gpu_unevenly_spaced(x, y, edges, myz)
-
     if (len(y.shape) == 2):
         nbasis = y.shape[0]
     else:
         nbasis = 1
+
+    #Divide edges output wavelength array by (1+myz) to get 2d array
+    #of input wavelengths at each boundary in edges and
+    #use serachsorted to find index for each boundary
+    e2d = cp.array(edges/(1+myz[:,None]))
+    idx = cp.searchsorted(x, e2d, side='right').astype(np.int32)
 
     # Load CUDA kernel
     cp_module = cp.RawModule(code=cuda_source)
@@ -359,86 +334,22 @@ def trapz_rebin_batch_gpu(x, y, xnew=None, edges=None, myz=None):
     result = cp.empty((nz, nbin, nbasis), dtype=cp.float64)
 
     #Launch kernel and syncrhronize
-    batch_trapz_rebin_kernel((blocks,), (block_size,), (x, y, edges, myz, result, nz, nbin, nbasis, nt))
+    batch_trapz_rebin_kernel((blocks,), (block_size,), (x, y, edges, myz, idx, result, nz, nbin, nbasis, nt))
     #cp.cuda.Stream.null.synchronize()
 
     #Squeeze array and remove dims of 1
-    if (nz == 1 or nbasis == 1):
+    if (result.size == 1):
+        #Use flatten because squeeze results in array dim 0
+        result = result.flatten()
+    elif (nz == 1 or nbasis == 1):
         result = result.squeeze()
     return result
-
-def trapz_rebin_batch_gpu_unevenly_spaced(x, y, edges, myz):
-    """Rebin y(x) flux density using trapezoidal integration between bin edges
-    using GPU for templates with unevenly spaced wavelength arrays.
-
-    Notes:
-        y is interpreted as a density, as is the output, e.g.
-
-        >>> x = np.arange(10)
-        >>> y = np.ones(10)
-        >>> trapz_rebin(x, y, edges=[0,2,4,6,8])  #- density still 1, not 2
-        array([ 1.,  1.,  1.,  1.])
-
-    Args:
-        x (array): input x values.
-        y (array): input y values (for all bases).
-        edges (array): new bin edges.
-        myz (array): redshifts
-
-    Returns:
-        cp.array: integrated results with shape (nz, nbin, nbasis)
-            where nbin = len(results) = len(edges)-1
-
-    Raises:
-        ValueError: if edges are outside the range of x or if len(x) != len(y)
-
-    """
-
-    if (len(y.shape) == 2):
-        nbasis = y.shape[0]
-    else:
-        nbasis = 1
-
-    #Divide edges output wavelength array by (1+myz) to get 2d array
-    #of input wavelengths at each boundary in edges and
-    #use serachsorted to find index for each boundary
-    e2d = cp.array(edges/(1+myz[:,None]))
-    idx = cp.searchsorted(x, e2d, side='right').astype(np.int32)
-    # Load CUDA kernel
-    cp_module = cp.RawModule(code=cuda_source)
-    batch_trapz_rebin_uneven_kernel = cp_module.get_function('batch_trapz_rebin_uneven')
-
-    #Array sizes
-    nbin = cp.int32(len(edges)-1)
-    nz = cp.int32(len(myz))
-    n = nbin*nbasis*nz
-    nt = cp.int32(len(x))
-
-    blocks = (n+block_size-1)//block_size
-
-    #Create output array as empty
-    result = cp.empty((nz, nbin, nbasis), dtype=cp.float64)
-
-    if (x.dtype != cp.float64):
-        x = x.astype(cp.float64)
-    if (y.dtype != cp.float64):
-        y = y.astype(cp.float64)
-
-    #Launch kernel
-    batch_trapz_rebin_uneven_kernel((blocks,), (block_size,), (x, y, edges, myz, idx, result, nz, nbin, nbasis, nt))
-    #cp.cuda.Stream.null.synchronize()
-
-    #Squeeze array and remove dims of 1
-    if (nz == 1 or nbasis == 1):
-        result = result.squeeze()
-    return result
-
 
 def rebin_template(template, myz, dwave, use_gpu=False):
     """Rebin a template to a set of wavelengths.
 
-    Given a template and a single redshift, rebin the template to a set of
-    wavelength arrays.
+    Given a template and a single redshift - or an array of redshifts,
+    rebin the template to a set of wavelength arrays.
 
     Args:
         template (Template): the template object
@@ -458,7 +369,7 @@ def rebin_template(template, myz, dwave, use_gpu=False):
         #In GPU mode, rebin all z and all bases in batch in parallel
         #and return dict of 3-d CUPY arrays
         for hs, wave in dwave.items():
-            result[hs] = trapz_rebin_batch_gpu(template.wave, template.flux, xnew=wave, myz=myz)
+            result[hs] = trapz_rebin(template.wave, template.flux, xnew=wave, myz=myz, use_gpu=True)
     elif (type(myz) == np.ndarray):
         #If myz is numpy array, process all redshifts and all bases (one at
         #a time) and collect results in dict of 3-d numpy arrays

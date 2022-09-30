@@ -44,9 +44,11 @@ class TestUtils(unittest.TestCase):
         myz = np.arange(11)*0.1
 
         c = utils.transmission_Lyman(myz,x)
+        self.assertTrue(type(c) == np.ndarray)
         for i in range(len(myz)):
             a = utils.transmission_Lyman(myz[i], x)
             self.assertTrue(np.allclose(c[i], a))
+            self.assertTrue(type(a) == np.ndarray)
 
     def test_Lyman_transmission_GPU(self):
         '''Test the GPU version of Lyman transmission in batch versus
@@ -58,11 +60,14 @@ class TestUtils(unittest.TestCase):
         myz = np.arange(11)*0.1
 
         g = utils.transmission_Lyman(myz,x,use_gpu=True)
+        self.assertTrue(type(g) == cp.ndarray)
         c = utils.transmission_Lyman(myz,x)
+        self.assertTrue(type(c) == np.ndarray)
         self.assertTrue(np.allclose(c, g))
         for i in range(len(myz)):
             a = utils.transmission_Lyman(myz[i], x)
             self.assertTrue(np.allclose(g[i], a))
+            self.assertTrue(type(a) == np.ndarray)
 
 
 def test_suite():
