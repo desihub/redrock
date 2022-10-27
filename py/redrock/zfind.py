@@ -344,11 +344,21 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     else:
                         spectype, subtype = (fulltype, '')
                 else:
-                    spectype = [ el.split(':::')[0] for el in tmp['fulltype'] ]
-                    subtype = [ el.split(':::')[1] for el in tmp['fulltype'] ]
-                    tmp.remove_column('fulltype')
-                tmp['spectype'] = spectype
-                tmp['subtype'] = subtype
+                    # spectype = [ el.split(':::')[0] for el in tmp['fulltype'] ]
+                    # subtype = [ el.split(':::')[1] for el in tmp['fulltype'] ]
+                    
+                    spectype = [ el.split(':::')[0] for el in allresults[tid].keys() ]
+                    if spectype[0]=='GALAXY':
+                        subtype = ['']
+                    else:
+                        subtype = [ el.split(':::')[1] for el in allresults[tid].keys() ]
+                    #tmp.remove_column('fulltype')
+                #tmp['spectype'] = spectype
+                #tmp['subtype'] = subtype   
+                
+                tmp['spectype'] = spectype[0]
+                tmp['subtype'] = subtype[0]
+
 
                 tmp['ncoeff'] = tmp['coeff'].shape[1]
                 tzfit.append(tmp)
