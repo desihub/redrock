@@ -243,10 +243,10 @@ def transmission_Lyman(zObj,lObs, use_gpu=False):
     if (use_gpu):
         import cupy as cp
         tile = cp.tile
-        array = cp.array
+        asarray = cp.asarray
     else:
         tile = np.tile
-        array = np.array
+        asarray = np.asarray
 
     Lyman_series = constants.Lyman_series
     if (np.isscalar(zObj)):
@@ -259,7 +259,7 @@ def transmission_Lyman(zObj,lObs, use_gpu=False):
             #No need to perform any calculations in this case
             return None
         lObs = tile(lObs, (zObj.size, 1))
-        lRF = lObs/(1.+array(zObj)[:,None])
+        lRF = lObs/(1.+asarray(zObj)[:,None])
     T = np.ones_like(lRF)
     for l in list(Lyman_series.keys()):
         w      = lRF<Lyman_series[l]['line']

@@ -40,9 +40,14 @@ cuda_source = r'''
                 double yedge = 0;
                 double r = 0;
                 double ylo, yhi;
+
                 //ibasis, ibin, iz = index in 3d representation of output tb array
                 int ibasis = i % nbasis;
                 int ibin = (i % (nbasis*nbin)) / nbasis;
+                //*** Uncomment the two lines below to swap out dimensional order of output to (nz, nbasis, nbin)
+                //int ibin = i % nbin;
+                //int ibasis = (i % (nbasis*nbin)) / nbin; //do all bins for each basis first
+                //***
                 int iz = i / (nbasis*nbin);
                 //idx array is used rather than calculating the start and end
                 //indices of input wavelengths contributing to each output bin
@@ -119,7 +124,7 @@ def centers2edges(centers):
 # than numba on Intel haswell and KNL architectures.
 
 @numba.jit
-def _trapz_rebin(x, y, edges, results):
+def _trapz_rebin_1d(x, y, edges, results):
     '''
     Numba-friendly version of trapezoidal rebinning
 
@@ -170,9 +175,46 @@ def _trapz_rebin(x, y, edges, results):
 
     return
 
+@numba.jit
+def _trapz_rebin_batch(x, y, edges, myz, results, redshifted_x):
+    '''
+    Numba-friendly version of trapezoidal rebinning
+    for multiple bases and/or redshifts.  This is a wrapper to
+    call _trapz_rebin_1d multiple times.
+
+    See redrock.rebin.trapz_rebin() for input descriptions.
+    `results` is pre-allocated array of shape (nz, len(edges)-1, nbasis)
+    to keep results.
+    '''
+
+    #If myz is numpy array, process all redshifts and all bases (one at
+    #a time) and collect results in dict of 3-d numpy arrays
+    nz = len(myz)
+    nbasis = y.shape[0]
+    nx = len(x)
+
+    iz = 0 #index counter for redshifts
+    while iz < nz:
+        ##Numba does not handle vectorized multiplication so we need to
+        # use loop here to multiply by redshift
+        for i in range(nx):
+          redshifted_x[i] = x[i]*(1.+myz[iz])
+        ibasis = 0 #index counter for bases
+        while ibasis < nbasis:
+            ## * Uncomment the line below to change output shape * ##
+            ##_trapz_rebin_1d(redshifted_x, y[ibasis], edges, results[iz, ibasis])
+            _trapz_rebin_1d(redshifted_x, y[ibasis], edges, results[iz, :, ibasis])
+            ibasis += 1
+        iz += 1
+    return
+
+
 def trapz_rebin(x, y, xnew=None, edges=None, myz=None, use_gpu=False):
     """Rebin y(x) flux density using trapezoidal integration between bin edges
     Optionally use GPU helper method to rebin in batch, see trapz_rebin_batch_gpu
+    Note - current return array shape is (nz, nbins, nbasis).  Changing to
+    (nz, nbasis, nbins) would intuitively make sense but the former shape is
+    needed by zscan.  Flagging this for possible changes down the road.
 
     Notes:
         y is interpreted as a density, as is the output, e.g.
@@ -183,38 +225,51 @@ def trapz_rebin(x, y, xnew=None, edges=None, myz=None, use_gpu=False):
         array([ 1.,  1.,  1.,  1.])
         >>> y = np.ones((2,10)) #nbasis = 2
         >>> y[1,:] = np.arange(10)
-        >>> rebin.trapz_rebin(x, y, edges=[0,2,4,6,8], use_gpu=True) #nbasis=2, GPU mode
+        >>> trapz_rebin(x, y, edges=[0,2,4,6,8], use_gpu=True) #nbasis=2, GPU mode
         array([[1., 1.],
                [1., 3.],
                [1., 5.],
                [1., 7.]])
-        >>> rebin.trapz_rebin(x, y, edges=[0,2,4,6,8], myz=[0,0.5],use_gpu=True) #nbasis=2, multiple redshifts, GPU mode
-        array([[[1. , 1. ],
-                [1. , 3. ],
-                [1. , 5. ],
-                [1. , 7. ]],
-               [[1. , 0.5],
-                [1. , 1.5],
-                [1. , 2.5],
-                [1. , 3.5]]])
+        >>> trapz_rebin(x, y, edges=[0,2,4,6,8], myz=[0,0.5],use_gpu=True) #nbasis=2, multiple redshifts, GPU mode
+        array([[[1.        , 1.        ],
+                [1.        , 3.        ],
+                [1.        , 5.        ],
+                [1.        , 7.        ]],
+               [[1.        , 0.66666667],
+                [1.        , 2.        ],
+                [1.        , 3.33333333],
+                [1.        , 4.66666667]]])
+        >>> trapz_rebin(x, y, edges=[0,2,4,6,8], myz=[0.0,0.5], use_gpu=False) #nbasis=2, CPU mode
+        array([[[1.        , 1.        ],
+                [1.        , 3.        ],
+                [1.        , 5.        ],
+                [1.        , 7.        ]],
+               [[1.        , 0.66666667],
+                [1.        , 2.        ],
+                [1.        , 3.33333333],
+                [1.        , 4.66666667]]])
+
 
     Args:
         x (array): input x values.
-        y (1-d or 2-d array): input y values (GPU mode allows 2-d array
+        y (1-d or 2-d array): input y values (batch mode allows 2-d array
             with multiple bases). 
         edges (array): (optional) new bin edges.
-        myz (array): (optional) redshift array to rebin in batch on GPU,
+        myz (array): (optional) redshift array to rebin in batch,
             applying redshifts on-the-fly to x
-        use_gpu (boolean): whether or not to use GPU batch mode 
+        use_gpu (boolean): whether or not to use GPU algorithm 
 
     Returns:
         array: integrated results with len(results) = len(edges)-1
-            In GPU batch mode, returns cp.array with shape (nz, nbin, nbasis)
-            where nbin = len(results) = len(edges)-1
-            if nz or nbasis is 1, this dimension will be squeezed,
-            e.g. for nbasis = 1 and nz = 100, the shape will be (100, nbin)
-            while for nbasis = 1 and nz = 1 the shape will be (nbin), the
-            same as CPU mode.
+            In batch mode, returns np.array (use_gpu=False) or cp.array
+            (use_gpu=True) with shape (nz, nbin, nbasis) where
+            nbin = len(results) = len(edges)-1
+            if myz is None or myz is a scalar, the nz dimension will be
+            omitted.  If y is 1-d then the nbasis dimension will be omitted.
+            e.g. for 1-d y and nz = 100, the shape will be (100, nbin)
+            while for y with shape (1, n) the result will be (100, nbin, 1).
+            For 1-d input y and scalar or omitted myz, the shape will
+            be (nbin).
 
     Raises:
         ValueError: if edges are outside the range of x or if len(x) != len(y)
@@ -224,125 +279,133 @@ def trapz_rebin(x, y, xnew=None, edges=None, myz=None, use_gpu=False):
         edges = centers2edges(xnew)
     else:
         edges = np.asarray(edges)
+    nbins = len(edges)-1
 
-    if (myz is not None and not use_gpu):
-        raise ValueError('redshifts only allowed in GPU mode')
-    if (use_gpu):
-        return trapz_rebin_batch_gpu(x, y, edges=edges, myz=myz)
+    #Use these booleans to determine output array shape based on input
+    scalar_z = False
+    scalar_basis = False
 
-    if edges[0] < x[0] or x[-1] < edges[-1]:
+    if (myz is None):
+        myz = np.array([0], dtype=np.float64)
+        scalar_z = True
+    elif (np.isscalar(myz)):
+        myz = np.array([myz], dtype=np.float64)
+        scalar_z = True
+    myz = np.asarray(myz, dtype=np.float64)
+    nz = len(myz)
+
+    #Must multiply x by 1+z for comparison, only need to look at max/min cases
+    if (edges[0] < x[0]*(1+myz.max()) or edges[-1] > x[-1]*(1+myz.min())):
         raise ValueError('edges must be within input x range')
 
-    result = np.zeros(len(edges)-1, dtype=np.float64)
+    if (not use_gpu and scalar_z and len(y.shape) == 1):
+        #Special case, call _trapz_rebin_1d directly
+        result = np.zeros(nbins, dtype=np.float64)
+        _trapz_rebin_1d(x*(1.+myz[0]), y, edges, result)
+        return result
 
-    _trapz_rebin(x, y, edges, result)
+    if (len(y.shape) == 1):
+        scalar_basis = True #for output shape
+        y = y[None,:] #Set shape to (1,n) to be handled by _trapz_rebin_batch
+    nbasis = y.shape[0]
 
-    return result
+    #Compute output shape to match input
+    #Note * - change the shape if we switch back to (nz, nbasis, nbins)
+    result_shape = (nbins,)
+    if (not scalar_basis):
+        result_shape += (nbasis,)
+    if (not scalar_z):
+        result_shape = (nz,)+result_shape
 
-def trapz_rebin_batch_gpu(x, y, xnew=None, edges=None, myz=None):
+    if (use_gpu):
+        return _trapz_rebin_batch_gpu(x, y, edges=edges, myz=myz, result_shape=result_shape)
+    #On CPU, start with explicit dimensions of length 1 even if scalar_z
+    #or scalar_basis are True.
+    result = np.zeros((nz, nbins, nbasis), dtype=np.float64)
+    ## * Uncomment the below line to change the shape of output
+    #result = np.zeros((nz, nbasis, nbins), dtype=np.float64)
+
+    #Allocate empty array of same size as x for inner loop in
+    #_trapz_batch_rebin because numba cannot handle vectorized multiplication
+    #nor does it allow np.zeros or np.empty so we must allocate here and
+    #use a for loop to multiply by redshift.
+    redshifted_x = np.zeros(x.size, dtype=np.float64)
+    _trapz_rebin_batch(x, y, edges, myz, result, redshifted_x)
+    #Reshape array to final shape based on scalar_z and scalar_basis
+    #as we return.
+    return result.reshape(result_shape)
+
+def _trapz_rebin_batch_gpu(x, y, edges, myz, result_shape):
     """Rebin y(x) flux density using trapezoidal integration between bin edges
     GPU algorithm can rebin in batch for multiple redshifts and bases and
     returns 1-d, 2-d, or 3-d array (n redshifts x n bins x n basis) where
     n basis is the optional second dimension of the y input array and
     n redshifts is the length of the optional myz array.
 
-    Notes:
-        y is interpreted as a density, as is the output, e.g.
-
-        >>> x = np.arange(10)
-        >>> y = np.ones(10)
-        >>> trapz_rebin(x, y, edges=[0,2,4,6,8])  #- density still 1, not 2
-        array([ 1.,  1.,  1.,  1.])
-        >>> y = np.ones((2,10)) #nbasis = 2
-        >>> y[1,:] = np.arange(10)
-        >>> rebin.trapz_rebin(x, y, edges=[0,2,4,6,8], use_gpu=True)
-        array([[1., 1.],
-               [1., 3.],
-               [1., 5.],
-               [1., 7.]])
-        >>> rebin.trapz_rebin(x, y, edges=[0,2,4,6,8], myz=[0,0.5],use_gpu=True)
-        array([[[1. , 1. ],
-                [1. , 3. ],
-                [1. , 5. ],
-                [1. , 7. ]],
-               [[1. , 0.5],
-                [1. , 1.5],
-                [1. , 2.5],
-                [1. , 3.5]]])
-
-
     Args:
         x (1-d array): input x values.
         y (1-d or 2-d array): input y values (for all bases).
-        edges (1-d array): (optional) new bin edges.
-        myz (array): (optional) redshift array to rebin in batch, applying
+        edges (1-d array): new bin edges.
+        myz (array): redshift array to rebin in batch, applying
             redshifts on-the-fly to x
+        result_shape (tuple): output shape of results array - this is required
+            because for instance if an input scalar redshift or no redshift
+            was given to trapz_rebin, then the result shape should be
+            (nbin, nbasis) whereas if redshift array of length 1 was given
+            as input it should be (1, nbin, nbasis).  Similarly if the y
+            array given to trapz_rebin is 1-d, the basis dimension is omitted
+            but if it is 2-d with (1, n) shape, it will explicitly be 1. 
 
 
     Returns:
         cp.array: integrated results with shape (nz, nbin, nbasis)
             where nbin = len(results) = len(edges)-1
-            if nz or nbasis is 1, this dimension will be squeezed,
-            e.g. for nbasis = 1 and nz = 100, the shape will be (100, nbin)
-            while for nbasis = 1 and nz = 1 the shape will be (nbin).
-
-    Raises:
-        ValueError: if edges are outside the range of x or if len(x) != len(y)
+            if no input redshift is given to trapz_rebin or the redshift
+            is a scalar, the nz dimension will be omitted.  If the input
+            y given to trapz_rebin is 1-d then the nbasis dimension will
+            be omitted.
+            e.g. for 1-d input y and nz = 100, the shape will be (100, nbin)
+            while for y with shape (1, n) the result will be (100, nbin, 1).
+            For 1-d input y and scalar or omitted redshift, the shape will
+            be (nbin).
 
     """
     #import cupy here
     import cupy as cp
 
-    if edges is None:
-        edges = centers2edges(xnew)
-    else:
-        edges = np.asarray(edges)
-    edges = cp.array(edges, dtype=cp.float64)
-
-    if (myz is None):
-        myz = cp.array([0], dtype=cp.float64)
-    myz = cp.array(myz, dtype=cp.float64)
-
-    x = cp.array(x, dtype=cp.float64)
-    y = cp.array(y, dtype=cp.float64)
-
-    #Must multiply x by 1+z for comparison, only need to look at max/min cases
-    if (edges[0] < x[0]*(1+myz.max()) or edges[-1] > x[-1]*(1+myz.min())):
-        raise ValueError('edges must be within input x range')
-
-    if (len(y.shape) == 2):
-        nbasis = y.shape[0]
-    else:
-        nbasis = 1
+    edges = cp.asarray(edges, dtype=cp.float64)
+    #myz is already a numpy array - None and scalar cases handled in trapz_rebin
+    myz = cp.asarray(myz, dtype=cp.float64)
+    #Copy x and y to GPU
+    x = cp.asarray(x, dtype=cp.float64)
+    y = cp.asarray(y, dtype=cp.float64)
 
     #Divide edges output wavelength array by (1+myz) to get 2d array
     #of input wavelengths at each boundary in edges and
     #use serachsorted to find index for each boundary
-    e2d = cp.array(edges/(1+myz[:,None]))
+    e2d = cp.asarray(edges/(1+myz[:,None]))
     idx = cp.searchsorted(x, e2d, side='right').astype(np.int32)
 
     # Load CUDA kernel
     cp_module = cp.RawModule(code=cuda_source)
     batch_trapz_rebin_kernel = cp_module.get_function('batch_trapz_rebin')
 
+    #Array sizes
     nbin = cp.int32(len(edges)-1)
     nz = cp.int32(len(myz))
+    nbasis = cp.int32(y.shape[0])
     n = nbin*nbasis*nz
     nt = cp.int32(len(x))
+    if (result_shape is None):
+      result_shape = (nz, nbasis, nbin)
 
     blocks = (n+block_size-1)//block_size
-    result = cp.empty((nz, nbin, nbasis), dtype=cp.float64)
+    result = cp.empty(result_shape, dtype=cp.float64)
 
     #Launch kernel and syncrhronize
     batch_trapz_rebin_kernel((blocks,), (block_size,), (x, y, edges, myz, idx, result, nz, nbin, nbasis, nt))
     #cp.cuda.Stream.null.synchronize()
 
-    #Squeeze array and remove dims of 1
-    if (result.size == 1):
-        #Use flatten because squeeze results in array dim 0
-        result = result.flatten()
-    elif (nz == 1 or nbasis == 1):
-        result = result.squeeze()
     return result
 
 def rebin_template(template, myz, dwave, use_gpu=False):
@@ -356,6 +419,7 @@ def rebin_template(template, myz, dwave, use_gpu=False):
         myz (float or array of float): the redshift(s)
         dwave (dict): the keys are the "wavehash" and the values
             are a 1D array containing the wavelength grid.
+        use_gpu (bool): whether or not to use the GPU algorithm
 
     Returns:
         dict:  The rebinned template for every basis function and wavelength
@@ -365,24 +429,9 @@ def rebin_template(template, myz, dwave, use_gpu=False):
     """
     nbasis = template.flux.shape[0]  #- number of template basis vectors
     result = dict()
-    if (use_gpu):
-        #In GPU mode, rebin all z and all bases in batch in parallel
-        #and return dict of 3-d CUPY arrays
-        for hs, wave in dwave.items():
-            result[hs] = trapz_rebin(template.wave, template.flux, xnew=wave, myz=myz, use_gpu=True)
-    elif (type(myz) == np.ndarray):
-        #If myz is numpy array, process all redshifts and all bases (one at
-        #a time) and collect results in dict of 3-d numpy arrays
-        nz = len(myz)
-        result = { hs:np.empty((nz, len(wave), nbasis)) for hs, wave in dwave.items() }
-        for i, z in enumerate(myz):
-            x = (1.+z)*template.wave
-            for hs, wave in dwave.items():
-                for b in range(nbasis):
-                    result[hs][i,:,b] = trapz_rebin(x, template.flux[b], wave)
-    else:
-        #Legacy mode - a single redshift passed - return a dict with rebinned
-        #template for every basis for this one redshift.
-        result = { hs:np.array([ trapz_rebin((1.+myz)*template.wave, template.flux[b], wave) for b in range(nbasis) ]).transpose() for hs, wave in dwave.items() }
-    return result
+    #rebin all z and all bases in batch in parallel
+    #and return dict of 3-d numpy / cupy arrays 
+    for hs, wave in dwave.items():
+        result[hs] = trapz_rebin(template.wave, template.flux, xnew=wave, myz=myz, use_gpu=use_gpu)
 
+    return result

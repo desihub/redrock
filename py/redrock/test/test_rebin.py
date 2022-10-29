@@ -125,7 +125,7 @@ class TestRebin(unittest.TestCase):
         self.assertTrue(type(c) == np.ndarray)
 
     def test_gpu_trapzrebin_multidimensional(self):
-        '''Test that GPU version matches CPU in batch mode'''
+        '''Test that batch CPU and GPU matches CPU 1d version'''
         if (not cp_available):
             self.assertTrue(True)
             return
@@ -134,21 +134,31 @@ class TestRebin(unittest.TestCase):
         y = np.ones((2,10)) #nbasis = 2
         y[1,:] = np.arange(10)
         g = rebin.trapz_rebin(x, y, edges=[0,2,4,6,8], use_gpu=True) #nbasis=2, GPU mode
+        cbatch = rebin.trapz_rebin(x, y, edges=[0,2,4,6,8]) #nbasis = 2, CPU batch mode
         self.assertTrue(type(g) == cp.ndarray)
+        self.assertTrue(type(cbatch) == np.ndarray)
+        self.assertTrue(np.allclose(g, cbatch))
+        self.assertTrue(cbatch.shape == (4,2))
         for j in range(2):
             c = rebin.trapz_rebin(x, y[j,:], edges=[0,2,4,6,8]) #CPU mode
             self.assertTrue(np.allclose(g[:,j], c))
             self.assertTrue(type(c) == np.ndarray)
+            self.assertTrue(c.shape == (4,))
 
         #Now test 3d mode with multiple redshifts
         myz = np.linspace(0, 1, 11)
         g = rebin.trapz_rebin(x, y, edges=[0,2,4,6,8], myz=myz,use_gpu=True) #nbasis=2, multiple redshifts, GPU mode
+        cbatch = rebin.trapz_rebin(x, y, edges=[0,2,4,6,8], myz=myz) #nbasis = 2, multiple redshifts, CPU batch mode
         self.assertTrue(type(g) == cp.ndarray)
+        self.assertTrue(type(cbatch) == np.ndarray)
+        self.assertTrue(np.allclose(g, cbatch))
+        self.assertTrue(cbatch.shape == (11,4,2))
         for z in range(len(myz)):
             for j in range(2):
                 c = rebin.trapz_rebin(x*(1+myz[z]), y[j,:], edges=[0,2,4,6,8]) #CPU mode
                 self.assertTrue(np.allclose(g[z,:,j], c))
                 self.assertTrue(type(c) == np.ndarray)
+                self.assertTrue(c.shape == (4,))
 
 def test_suite():
     """Allows testing of only this module with the command::
