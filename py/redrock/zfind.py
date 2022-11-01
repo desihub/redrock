@@ -344,7 +344,6 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     else:
                         spectype, subtype = (fulltype, '')
                 else:
-                    else:
                     temp_list = [el.split(':::') for el in allresults[tid].keys()]
                     spectype = [el[0] for el in temp_list]
                     subtype = []
