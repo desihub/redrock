@@ -338,20 +338,10 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                 tmp = allresults[tid][fulltype]['zfit']
 
                 #- TODO: reconsider fragile parsing of fulltype
-                if archetypes is None:
-                    if fulltype.count(':::') > 0:
-                        spectype, subtype = fulltype.split(':::')
-                    else:
-                        spectype, subtype = (fulltype, '')
+                if fulltype.count(':::') > 0:
+                    spectype, subtype = fulltype.split(':::')
                 else:
-                    temp_list = [el.split(':::') for el in allresults[tid].keys()]
-                    spectype = [el[0] for el in temp_list]
-                    subtype = []
-                    for all_spec in temp_list:
-                        if len(all_spec)>1:
-                            subtype.append(all_spec[1])
-                        else:
-                            subtype.append('')
+                    spectype, subtype = (fulltype, '')
                
                 tmp['spectype'] = spectype
                 tmp['subtype'] = subtype
