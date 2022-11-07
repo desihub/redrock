@@ -76,8 +76,15 @@ def write_zscan(filename, zscan, zfit, clobber=False):
 
     for targetid in targetids:
         ii = np.where(zfit['targetid'] == targetid)[0]
+        # "fulltype" is a keyname in Archetypes files
+        #HDF5 conflicts with 'U23' string type, so defining a list and save them as dictionary in the final hdf5 file
+        #Therefore to read the content use: data = f["fulltype"]["TARGETID"]["fulltype"][()] and it should work
+        if "fulltype" in zfit[ii].dtype.names:
+            arch_dict = {} # dictionary that will save archetypes "fulltype" information
+            arch_dict['fulltype'] = zfit[ii]['fulltype'].tolist()
+            fx['fulltype/{}/fulltype'.format(targetid)] = np.string_(arch_dict)
+            zfit[ii].remove_columns(['fulltype']) #removing this column from the table
         fx['zfit/{}/zfit'.format(targetid)] = zfit[ii].as_array()
-        #- TODO: fx['zfit/{}/model']
 
     fx.close()
     os.rename(tempfile, filename)
