@@ -21,6 +21,10 @@ from .zwarning import ZWarningMask as ZW
 
 from .utils import transmission_Lyman
 
+from .zscan import *
+
+import cupy as cp
+
 def get_dv(z, zref):
     """Returns velocity difference in km/s for two redshifts
 
@@ -107,7 +111,7 @@ def minfit(x, y):
     return (x0, xerr, y0, zwarn)
 
 
-def fitz(zchi2, redshifts, spectra, template, nminima=3, archetype=None):
+def fitz(zchi2, redshifts, spectra, template, nminima=3, archetype=None, use_gpu=False):
     """Refines redshift measurement around up to nminima minima.
 
     TODO:
@@ -120,6 +124,7 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3, archetype=None):
             grids.
         template (Template): the template for this fit.
         nminima (int): the number of minima to consider.
+        use_gpu (bool): use GPU or not
 
     Returns:
         Table: the fit parameters for the minima.
@@ -141,8 +146,14 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3, archetype=None):
         legendre = { hs:np.array([scipy.special.legendre(i)( (w-wave_min)/(wave_max-wave_min)*2.-1. ) for i in range(deg_legendre)]) for hs, w in dwave.items() }
 
     (weights, flux, wflux) = spectral_data(spectra)
+    if (use_gpu):
+        #Copy arrays to GPU
+        weights = cp.asarray(weights)
+        flux = cp.asarray(flux)
+        wflux = cp.asarray(wflux)
 
     results = list()
+    nz = 15
 
     for imin in find_minima(zchi2):
         if len(results) == nminima:
@@ -158,33 +169,42 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3, archetype=None):
         #- Sample more finely around the minimum
         ilo = max(0, imin-1)
         ihi = min(imin+1, len(zchi2)-1)
-        zz = np.linspace(redshifts[ilo], redshifts[ihi], 15)
-        nz = len(zz)
+        zz = np.linspace(redshifts[ilo], redshifts[ihi], nz)
 
         zzchi2 = np.zeros(nz, dtype=np.float64)
         zzcoeff = np.zeros((nz, nbasis), dtype=np.float64)
 
-        for i, z in enumerate(zz):
-            binned = rebin_template(template, z, dwave)
-            for k in list(dwave.keys()):
-                T = transmission_Lyman(z,dwave[k])
-                for vect in range(binned[k].shape[1]):
-                    binned[k][:,vect] *= T
-            zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux,
-                wflux, binned)
+        #Use batch mode for rebin_template, transmission_Lyman, and calc_zchi2
+        binned = rebin_template(template, zz, dwave, use_gpu=use_gpu)
+        # Correct spectra for Lyman-series
+        for k in list(dwave.keys()):
+            #New algorithm accepts all z as an array and returns T, a 2-d
+            # matrix (nz, nlambda) as a cupy or numpy array
+            T = transmission_Lyman(zz,dwave[k], use_gpu=use_gpu)
+            if (T is None):
+                #Return value of None means that wavelenght regime
+                #does not overlap Lyman transmission - continue here
+                continue
+            #Vectorize multiplication
+            binned[k] *= T[:,:,None]
+        (zzchi2, zzcoeff) = calc_zchi2_batch_v3(spectra, binned, weights, flux, wflux, nz, nbasis, use_gpu=use_gpu)
 
         #- fit parabola to 3 points around minimum
         i = min(max(np.argmin(zzchi2),1), len(zz)-2)
         zmin, sigma, chi2min, zwarn = minfit(zz[i-1:i+2], zzchi2[i-1:i+2])
 
         try:
-            binned = rebin_template(template, zmin, dwave)
+            binned = rebin_template(template, np.array([zmin]), dwave, use_gpu=use_gpu)
             for k in list(dwave.keys()):
-                T = transmission_Lyman(zmin,dwave[k])
-                for vect in range(binned[k].shape[1]):
-                    binned[k][:,vect] *= T
-            coeff = calc_zchi2_one(spectra, weights, flux, wflux,
-                binned)[1]
+                T = transmission_Lyman(np.array([zmin]),dwave[k], use_gpu=use_gpu)
+                if (T is None):
+                    #Return value of None means that wavelenght regime
+                    #does not overlap Lyman transmission - continue here
+                    continue
+                #Vectorize multiplication
+                binned[k] *= T[:,:,None]
+            (chi2, coeff) = calc_zchi2_batch_v3(spectra, binned, weights, flux, wflux, 1, nbasis, use_gpu=use_gpu)
+            coeff = coeff[0,:]
         except ValueError as err:
             if zmin<redshifts[0] or redshifts[-1]<zmin:
                 #- beyond redshift range can be invalid for template

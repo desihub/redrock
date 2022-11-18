@@ -34,7 +34,7 @@ from .fitz import fitz, get_dv
 from .zwarning import ZWarningMask as ZW
 
 
-def _mp_fitz(chi2, target_data, t, nminima, qout, archetype):
+def _mp_fitz(chi2, target_data, t, nminima, qout, archetype, use_gpu):
     """Wrapper for multiprocessing version of fitz.
     """
     try:
@@ -44,7 +44,7 @@ def _mp_fitz(chi2, target_data, t, nminima, qout, archetype):
         results = list()
         for i, tg in enumerate(target_data):
             zfit = fitz(chi2[i], t.template.redshifts, tg.spectra,
-                t.template, nminima=nminima, archetype=archetype)
+                t.template, nminima=nminima, archetype=archetype, use_gpu=use_gpu)
             npix = 0
             for spc in tg.spectra:
                 npix += (spc.ivar > 0.).sum()
@@ -226,13 +226,12 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                 zfit = fitz(results[tg.id][ft]['zchi2'] \
                     + results[tg.id][ft]['penalty'],
                     t.template.redshifts, tg.spectra,
-                    t.template, nminima=nminima,archetype=archetype)
+                    t.template, nminima=nminima,archetype=archetype, use_gpu=use_gpu)
                 results[tg.id][ft]['zfit'] = zfit
                 results[tg.id][ft]['zfit']['npixels'] = 0
                 for spectrum in tg.spectra:
                     results[tg.id][ft]['zfit']['npixels'] += \
                         (spectrum.ivar>0.).sum()
-
         else:
             # Multiprocessing case.
             import multiprocessing as mp
@@ -255,7 +254,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     eff_chi2[i,:] = results[tg.id][ft]['zchi2'] \
                         + results[tg.id][ft]['penalty']
                 p = mp.Process(target=_mp_fitz, args=(eff_chi2,
-                    target_data, t, nminima, qout, archetype))
+                    target_data, t, nminima, qout, archetype, use_gpu))
                 procs.append(p)
                 p.start()
 

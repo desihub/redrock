@@ -452,7 +452,7 @@ def batch_dot_product_sparse(spectra, tdata, nz, use_gpu):
 
     if (use_gpu):
         #Use GPU to do dot products in batch
-        return batch_dot_product_sparse_gpu(spectra, tdata)
+        return _batch_dot_product_sparse_gpu(spectra, tdata)
 
     #Need to find shape of output array of batch dot product
     nrows = 0
@@ -476,7 +476,7 @@ def batch_dot_product_sparse(spectra, tdata, nz, use_gpu):
     return Tbs
 
 ###!!! NOTE - used in v2 and v3 algorithms
-def batch_dot_product_sparse_gpu(spectra, tdata):
+def _batch_dot_product_sparse_gpu(spectra, tdata):
     """GPU implementation.
     Calculate a batch dot product of the 3 sparse matrices in spectra
     with every template in tdata.  A CUDA kernel replicates the functionality
@@ -512,9 +512,9 @@ def batch_dot_product_sparse_gpu(spectra, tdata):
         #Allocate CUPY arrays and calculate number of blocks to use.
         n = tdata[key].size
         blocks = (n+block_size-1)//block_size
-        Rcsr_values = cp.array(s.Rcsr.data, cp.float64)
-        Rcsr_cols = cp.array(s.Rcsr.indices, cp.int32)
-        Rcsr_indptr = cp.array(s.Rcsr.indptr, cp.int32)
+        Rcsr_values = cp.asarray(s.Rcsr.data, cp.float64)
+        Rcsr_cols = cp.asarray(s.Rcsr.indices, cp.int32)
+        Rcsr_indptr = cp.asarray(s.Rcsr.indptr, cp.int32)
         curr_tb = cp.empty((nt, ncols, nbasis))
         #Launch kernel and syncrhronize
         batch_dot_product_sparse_kernel((blocks,), (block_size,), (Rcsr_values, Rcsr_cols, Rcsr_indptr, tdata[key], curr_tb, nrows, ncols, nbasis, nt))
@@ -677,7 +677,7 @@ def calc_batch_dot_product_3d2d(Tbs, zc, use_gpu):
     """
 
     if (use_gpu):
-        return calc_batch_dot_product_3d2d_gpu(Tbs, zc)
+        return _calc_batch_dot_product_3d2d_gpu(Tbs, zc)
 
     #Get array dims to reshape model array to 2d
     nz = zc.shape[0]
@@ -687,7 +687,7 @@ def calc_batch_dot_product_3d2d(Tbs, zc, use_gpu):
 
 
 ###!!! NOTE - used in v2 and v3 algorithms
-def calc_batch_dot_product_3d2d_gpu(Tbs, zc):
+def _calc_batch_dot_product_3d2d_gpu(Tbs, zc):
     """GPU implementation.
     Calculate a batch dot product of the 3d array Tbs with the 2d
     array zc.  The 3-d array shape is A x B x C and the 2-d array
@@ -821,6 +821,10 @@ def calc_zchi2_batch_v2(Tbs, weights, flux, wflux, nz, nbasis, use_gpu):
     """
 
     zchi2 = np.zeros(nz)
+    if (weights.sum() == 0):
+        zchi2[:] = 9e99
+        zcoeff = np.zeros((nz, nbasis))
+        return (zchi2, zcoeff)
     if (use_gpu):
         ###!!! NOTE - there are 3 different options for calculating the
         ###    M and y arrays -
@@ -937,9 +941,9 @@ def calc_zchi2_v2(target_ids, target_data, dtemplate, progress=None, use_gpu=Fal
             continue
         if (use_gpu):
             #Convert to cp.arrays
-            weights = cp.array(weights)
-            flux = cp.array(flux)
-            wflux = cp.array(wflux)
+            weights = cp.asarray(weights)
+            flux = cp.asarray(flux)
+            wflux = cp.asarray(wflux)
 
         # Solving for template fit coefficients for all redshifts.
         # We use the pre-interpolated templates for each
@@ -978,9 +982,9 @@ def calc_zchi2_batch_v3(spectra, tdata, weights, flux, wflux, nz, nbasis, use_gp
     template data that is already on the correct grid.
 
     Args:
-        Tbs (array): the stacked output from all 3 filters from
-            batch_dot_product_sparse, for all redshift templates
-            (nt x nrows x nbasis)
+        spectra (list): list of Spectrum objects.
+        tdata (dict): dictionary of interpolated template values for each
+            wavehash - arrays are 3d (nz x nlambda x nbasis)
         weights (array): concatenated spectral weights (ivar).
         flux (array): concatenated flux values.
         wflux (array): concatenated weighted flux values.
@@ -994,6 +998,10 @@ def calc_zchi2_batch_v3(spectra, tdata, weights, flux, wflux, nz, nbasis, use_gp
 
     """
     zchi2 = np.zeros(nz)
+    if (weights.sum() == 0):
+        zchi2[:] = 9e99
+        zcoeff = np.zeros((nz, nbasis))
+        return (zchi2, zcoeff)
     if (use_gpu):
         global cp
         import cupy as cp
@@ -1155,9 +1163,9 @@ def calc_zchi2_v3(target_ids, target_data, dtemplate, progress=None, use_gpu=Fal
             continue
         if (use_gpu):
             #Copy data to CUPY arrays
-            weights = cp.array(weights)
-            flux = cp.array(flux)
-            wflux = cp.array(wflux)
+            weights = cp.asarray(weights)
+            flux = cp.asarray(flux)
+            wflux = cp.asarray(wflux)
 
         # Solving for template fit coefficients for all redshifts.
         # We use the pre-interpolated templates for each
@@ -1212,7 +1220,7 @@ def calc_zchi2_gpu(target_ids, target_data, dtemplate, progress=None):
     if dtemplate.template.template_type == 'GALAXY':
         isOII = (3724 <= dtemplate.template.wave) & \
             (dtemplate.template.wave <= 3733)
-        OIItemplate = cp.array(dtemplate.template.flux[:,isOII].T)
+        OIItemplate = cp.asarray(dtemplate.template.flux[:,isOII].T)
 
     ## Redshifted templates are now already in format needed - dict of 3d
     # arrays (CUPY or numpy).
@@ -1226,9 +1234,9 @@ def calc_zchi2_gpu(target_ids, target_data, dtemplate, progress=None):
             if dtemplate.comm is None:
                 progress.put(1)
             continue
-        weights = cp.array(weights)
-        flux = cp.array(flux)
-        wflux = cp.array(wflux)
+        weights = cp.asarray(weights)
+        flux = cp.asarray(flux)
+        wflux = cp.asarray(wflux)
 
         # Solving for template fit coefficients for all redshifts.
         # We use the pre-interpolated templates for each
@@ -1239,7 +1247,7 @@ def calc_zchi2_gpu(target_ids, target_data, dtemplate, progress=None):
             R = cupyx.scipy.sparse.csr_matrix(s.Rcsr).toarray()
             Tbs.append(cp.einsum('mn,jnk->jmk', R, tdata[key]))
         Tbs = cp.concatenate(Tbs, axis=1)
-        cp.cuda.Stream.null.synchronize()
+        #cp.cuda.Stream.null.synchronize()
         zchi2[j] = _zchi2_batch(Tbs, weights, flux, wflux, zcoeff[j])
 
         #- Penalize chi2 for negative [OII] flux; ad-hoc
@@ -1315,9 +1323,9 @@ def calc_zchi2_gpu_new(target_ids, target_data, dtemplate, progress=None):
                 progress.put(1)
             zchi2[j,:] = 9e99
             continue
-        weights = cp.array(weights)
-        flux = cp.array(flux)
-        wflux = cp.array(wflux)
+        weights = cp.asarray(weights)
+        flux = cp.asarray(flux)
+        wflux = cp.asarray(wflux)
 
         # Solving for template fit coefficients for all redshifts.
         # We use the pre-interpolated templates for each
@@ -1334,9 +1342,9 @@ def calc_zchi2_gpu_new(target_ids, target_data, dtemplate, progress=None):
             if (modes[0] == 0):
                 n = tdata[key].size
                 blocks = (n+block_size-1)//block_size
-                Rcsr_values = cp.array(s.Rcsr.data, cp.float64)
-                Rcsr_cols = cp.array(s.Rcsr.indices, cp.int32)
-                Rcsr_indptr = cp.array(s.Rcsr.indptr, cp.int32)
+                Rcsr_values = cp.asarray(s.Rcsr.data, cp.float64)
+                Rcsr_cols = cp.asarray(s.Rcsr.indices, cp.int32)
+                Rcsr_indptr = cp.asarray(s.Rcsr.indptr, cp.int32)
                 #Array dimensions
                 nrows = cp.int32(s.Rcsr.shape[1])
                 ncols = cp.int32(s.Rcsr.shape[0])
