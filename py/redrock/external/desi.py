@@ -555,7 +555,7 @@ def rrdesi(options=None, comm=None):
 
     parser.add_argument("--archetypes", type=str, default=None,
         required=False,
-        help="archetype file or directory for final redshift comparison")
+        help="archetype directory containing all files for final redshift comparison")
 
     parser.add_argument("-d", "--details", type=str, default=None,
         required=False, help="output file for full redrock fit details")
