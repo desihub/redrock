@@ -312,7 +312,7 @@ def rrboss(options=None, comm=None):
         required=False, help="template file or directory")
 
     parser.add_argument("--archetypes", type=str, default=None,
-        required=False, help="archetype file or directory for final redshift comparisons")
+        required=False, help="archetype directory containing all file for final redshift comparisons")
 
     parser.add_argument("-o", "--output", type=str, default=None,
         required=False, help="output file")
