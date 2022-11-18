@@ -23,7 +23,13 @@ from .utils import transmission_Lyman
 
 from .zscan import *
 
-import cupy as cp
+try:
+    import cupy as cp
+    import cupyx.scipy
+    import cupyx
+    cupy_available = cp.is_available()
+except ImportError:
+    cupy_available = False
 
 def get_dv(z, zref):
     """Returns velocity difference in km/s for two redshifts
