@@ -85,8 +85,9 @@ def write_zscan(filename, zscan, zfit, clobber=False):
             fx['fulltype/{}/fulltype'.format(targetid)] = np.string_(arch_dict)
             temp_zf = Table(zfit[ii])# convert into astropy table
             temp_zf.remove_column('fulltype') #removing this column from the table
-
-        fx['zfit/{}/zfit'.format(targetid)] = temp_zf.as_array()
+            fx['zfit/{}/zfit'.format(targetid)] = temp_zf.as_array()
+        else:
+            fx['zfit/{}/zfit'.format(targetid)] = zfit[ii].as_array()
 
     fx.close()
     os.rename(tempfile, filename)
