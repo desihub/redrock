@@ -73,7 +73,6 @@ def spectral_data(spectra):
             redshift chi^2 fits.
 
     """
-
     weights = np.concatenate([ s.ivar for s in spectra ])
     flux = np.concatenate([ s.flux for s in spectra ])
     wflux = weights * flux
@@ -149,7 +148,6 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
         OIItemplate = dtemplate.template.flux[:,isOII].T
 
     for j in range(ntargets):
-        
         (weights, flux, wflux) = spectral_data(target_data[j].spectra)
 
         # Loop over redshifts, solving for template fit
