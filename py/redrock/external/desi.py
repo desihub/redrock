@@ -215,7 +215,7 @@ class DistTargetsDESI(DistTargets):
                     input_coadded = False
                     tmpfmap = encode_table(Table(hdus["FIBERMAP"].data,
                         copy=True).as_array())
-                    #assert 'COADD_NUMEXP' not in tmpfmap.dtype.names
+                    assert 'COADD_NUMEXP' not in tmpfmap.dtype.names
 
                     if np.all(tmpfmap['TILEID'] == tmpfmap['TILEID'][0]):
                         onetile = True
