@@ -119,7 +119,15 @@ def _rebalance_after_scan(targets, results):
         flattened_targets = [t for sl in lopsided_targets for t in sl]
         # Split targets into approximately equal lengths sublists
         ix = np.array_split(np.arange(len(flattened_targets)), len(lopsided_targets))
-        dist_targets = [flattened_targets[i[0]:i[0] + len(i)] for i in ix]
+        #dist_targets = [flattened_targets[i[0]:i[0] + len(i)] for i in ix]
+        #Less elegantly create a list of lists, appending empty lists where
+        #len(targets) == 0 in the case of MPI ranks > ntargets
+        dist_targets = []
+        for i in ix:
+            if len(i) == 0:
+                dist_targets.append([])
+            else:
+                dist_targets.append(flattened_targets[i[0]:i[0] + len(i)])
         # Merge list of result dictionaries
         results = {k: v for d in results for k, v in d.items()}
         # Split results using rebalanced target lists
