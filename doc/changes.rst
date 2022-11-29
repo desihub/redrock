@@ -2,7 +2,7 @@
 redrock Change Log
 ==================
 
-0.16.0 (unreleased)
+0.16.1 (unreleased)
 -------------------
 
 * No changes yet.
