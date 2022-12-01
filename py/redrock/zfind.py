@@ -354,7 +354,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     tzfit2[k].append(tzfit[i][k])
                 tzfit2[k] = np.vstack(tzfit2[k])
                 if (tzfit2[k].shape[1] == 1):
-                    tzfit2[k] = tzfit2[k].squeeze()
+                    tzfit2[k] = tzfit2[k].flatten()
             tzfit = tzfit2
 
             #tzfit.sort('chi2')
