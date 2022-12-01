@@ -33,6 +33,21 @@ from .fitz import fitz, get_dv
 
 from .zwarning import ZWarningMask as ZW
 
+def sort_dict_by_col(d, colname):
+    """Sort a dict of np.ndarrays by one key.
+    Replacement for astropy.Table.sort
+    """
+    if (not colname in d):
+        raise KeyError('Key '+str(colname)+' is not in dictionary')
+    if (type(d[colname]) is not np.ndarray):
+        raise ValueError('Column '+str(colname)+' is not an np.array')
+    idx = d[colname].argsort(0).flatten()
+    for k in d.keys():
+        if (type(d[k]) is not np.ndarray):
+            raise ValueError('Column '+str(k)+' is not an np.array')
+        d[k] = d[k][idx]
+    return
+
 
 def _mp_fitz(chi2, target_data, t, nminima, qout, archetype, use_gpu):
     """Wrapper for multiprocessing version of fitz.
@@ -45,10 +60,7 @@ def _mp_fitz(chi2, target_data, t, nminima, qout, archetype, use_gpu):
         for i, tg in enumerate(target_data):
             zfit = fitz(chi2[i], t.template.redshifts, tg.spectra,
                 t.template, nminima=nminima, archetype=archetype, use_gpu=use_gpu)
-            npix = 0
-            for spc in tg.spectra:
-                npix += (spc.ivar > 0.).sum()
-            results.append( (tg.id, zfit, npix) )
+            results.append( (tg.id, zfit) )
         qout.put(results)
     except:
         exc_type, exc_value, exc_traceback = sys.exc_info()
@@ -228,10 +240,6 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     t.template.redshifts, tg.spectra,
                     t.template, nminima=nminima,archetype=archetype, use_gpu=use_gpu)
                 results[tg.id][ft]['zfit'] = zfit
-                results[tg.id][ft]['zfit']['npixels'] = 0
-                for spectrum in tg.spectra:
-                    results[tg.id][ft]['zfit']['npixels'] += \
-                        (spectrum.ivar>0.).sum()
         else:
             # Multiprocessing case.
             import multiprocessing as mp
@@ -265,7 +273,6 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                 res = qout.get()
                 for rs in res:
                     results[rs[0]][ft]['zfit'] = rs[1]
-                    results[rs[0]][ft]['zfit']['npixels'] = rs[2]
 
         elapsed(start, "    Finished in", comm=targets.comm)
     elapsed(start_findbest, "Finding best redshift", comm=targets.comm)
@@ -314,10 +321,17 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     spectype = [ el.split(':::')[0] for el in tmp['fulltype'] ]
                     subtype = [ el.split(':::')[1] for el in tmp['fulltype'] ]
                     tmp.remove_column('fulltype')
-                tmp['spectype'] = spectype
-                tmp['subtype'] = subtype
 
-                tmp['ncoeff'] = tmp['coeff'].shape[1]
+                #tmp['spectype'] = spectype
+                #tmp['subtype'] = subtype
+                #Have to create arrays of correct length since using dict of
+                #np arrays instead of astropy Table
+                l = len(tmp['chi2'])
+                tmp['spectype'] = np.array([spectype]*l).reshape((l, 1))
+                tmp['subtype'] = np.array([subtype]*l).reshape((l, 1))
+
+                #tmp['ncoeff'] = tmp['coeff'].shape[1]
+                tmp['ncoeff'] = np.array([tmp['coeff'].shape[1]]*l).reshape((l, 1))
                 tzfit.append(tmp)
                 del allresults[tid][fulltype]['zfit']
 
@@ -325,13 +339,34 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             for tmp in tzfit:
                 if tmp['coeff'].shape[1] < maxncoeff:
                     n = maxncoeff - tmp['coeff'].shape[1]
-                    c = np.append(tmp['coeff'], np.zeros((len(tmp), n)), axis=1)
-                    tmp.replace_column('coeff', c)
+                    nx = tmp['coeff'].shape[0]
+                    c = np.append(tmp['coeff'], np.zeros((nx, n)), axis=1)
+                    tmp['coeff'] = c
+                    #c = np.append(tmp['coeff'], np.zeros((len(tmp), n)), axis=1)
+                    #tmp.replace_column('coeff', c)
 
-            tzfit = astropy.table.vstack(tzfit)
-            tzfit.sort('chi2')
-            tzfit['targetid'] = tid
-            tzfit['znum'] = np.arange(len(tzfit))
+            #tzfit = astropy.table.vstack(tzfit)
+            ## Equivalent of astropy.table.vstack(tzfit) - vstack each array
+            tzfit2 = dict()
+            for k in tzfit[0].keys():
+                tzfit2[k] = list()
+                for i in range(len(tzfit)):
+                    tzfit2[k].append(tzfit[i][k])
+                tzfit2[k] = np.vstack(tzfit2[k])
+                if (tzfit2[k].shape[1] == 1):
+                    tzfit2[k] = tzfit2[k].squeeze()
+            tzfit = tzfit2
+
+            #tzfit.sort('chi2')
+            #Use helper method to sort by chi2 column
+            sort_dict_by_col(tzfit, 'chi2')
+            #tzfit['targetid'] = tid
+            #tzfit['znum'] = np.arange(len(tzfit))
+            #Have to create arrays of correct length since using dict of
+            #np arrays instead of astropy Table
+            l = len(tzfit['chi2'])
+            tzfit['targetid'] = np.array([tid]*l)
+            tzfit['znum'] = np.arange(l)
             tzfit['zwarn'][ tzfit['npixels']==0 ] |= ZW.NODATA
             tzfit['zwarn'][ (tzfit['npixels']<10*tzfit['ncoeff']) ] |= \
                 ZW.LITTLE_COVERAGE
@@ -343,8 +378,10 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             ii = (tzfit['deltachi2'] < constants.min_deltachi2)
             tzfit['zwarn'][ii] |= ZW.SMALL_DELTA_CHI2
 
-            for i in range(len(tzfit)-1):
-                noti = (np.arange(len(tzfit))!=i)
+            #for i in range(len(tzfit)-1):
+            for i in range(l-1):
+                #noti = (np.arange(len(tzfit))!=i)
+                noti = (np.arange(l)!=i)
                 alldeltachi2 = np.absolute(tzfit['chi2'][noti]-tzfit['chi2'][i])
                 alldv = np.absolute(get_dv(z=tzfit['z'][noti],
                     zref=tzfit['z'][i]))
@@ -360,15 +397,23 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             for spectype in np.unique(tzfit['spectype']):
                 ii = np.where(tzfit['spectype'] == spectype)[0]
                 iikeep.extend(ii[0:nminima])
-            if len(iikeep) < len(tzfit):
-                tzfit = tzfit[iikeep]
+            #if len(iikeep) < len(tzfit):
+            if (len(iikeep) < l):
+                for k in tzfit.keys():
+                    tzfit[k] = tzfit[k][iikeep]
+                #tzfit = tzfit[iikeep]
                 #- grouping by spectype could get chi2 out of order; resort
-                tzfit.sort('chi2')
+                sort_dict_by_col(tzfit, 'chi2')
+                #tzfit.sort('chi2')
 
-            tzfit['znum'] = np.arange(len(tzfit))
+            #tzfit['znum'] = np.arange(len(tzfit))
+            #Length may have changed
+            l = len(tzfit['chi2'])
+            tzfit['znum'] = np.arange(l)
 
             # Store
-            allzfit.append(tzfit)
+            # Here convert to astropy table
+            allzfit.append(astropy.table.Table(tzfit))
 
         allzfit = astropy.table.vstack(allzfit)
 

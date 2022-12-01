@@ -220,13 +220,18 @@ class DistTemplatePiece(object):
         self.data = data
 
 
-def _mp_rebin_template(template, dwave, zlist, qout, use_gpu=False):
+def _mp_rebin_template(template, dwave, zlist, qout, iproc, use_gpu):
     """Function for multiprocessing version of rebinning.
+    With rebinning now done in batch mode, use process index, iproc
+    to keep track of order of redshifts instead of keying dict by individual
+    redshifts.
     """
     try:
         #New signature and return type for rebin_template 8/16/22 CW
         results = rebin_template(template, zlist, dwave, use_gpu=use_gpu)
-        qout.put(results)
+        #Wrap in dict keyed by process index so redshifts can be
+        #reassembled in correct order
+        qout.put({ iproc: results })
     except:
         exc_type, exc_value, exc_traceback = sys.exc_info()
         lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
@@ -300,29 +305,29 @@ class DistTemplate(object):
             import multiprocessing as mp
 
             qout = mp.Queue()
+            #Split myz to various mp procs
             work = np.array_split(myz, mp_procs)
             procs = list()
             for i in range(mp_procs):
                 p = mp.Process(target=_mp_rebin_template,
-                    args=(self._template, self._dwave, work[i], qout))
-                #p = mp.Process(target=_mp_rebin_template,
-                #    args=(self._template, self._dwave, myz, qout, use_gpu))
+                    args=(self._template, self._dwave, work[i], qout, i, use_gpu))
                 procs.append(p)
                 p.start()
 
             # Extract the output into a single dictionary
-            # First create a list and append each proc's results
-            # Then use np.vstack to combine into a dict of
-            # three 3-d arrays
+            # First create a dictionary keyed by process number to keep
+            # redshifts in order.
             results = dict()
             data = dict()
             for i in range(mp_procs):
                 res = qout.get()
-                for key in res:
-                    if (not key in data):
-                        data[key] = list()
-                    data[key].append(res[key])
-            for key in data:
+                results.update(res)
+            # Then use np.vstack to combine into a dict of
+            # three 3-d arrays
+            for key in results[0]:
+                data[key] = list()
+                for i in range(mp_procs):
+                    data[key].append(results[i][key])
                 data[key] = np.vstack(data[key])
 
         # Correct spectra for Lyman-series

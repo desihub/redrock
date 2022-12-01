@@ -15,21 +15,11 @@ from . import constants
 
 from .rebin import rebin_template
 
-from .zscan import calc_zchi2_one, spectral_data
+from .zscan import calc_zchi2_one, spectral_data, calc_zchi2_batch_v3
 
 from .zwarning import ZWarningMask as ZW
 
 from .utils import transmission_Lyman
-
-from .zscan import *
-
-try:
-    import cupy as cp
-    import cupyx.scipy
-    import cupyx
-    cupy_available = cp.is_available()
-except ImportError:
-    cupy_available = False
 
 def get_dv(z, zref):
     """Returns velocity difference in km/s for two redshifts
@@ -137,6 +127,9 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3, archetype=None, use_gpu
 
     """
     assert len(zchi2) == len(redshifts)
+    #Import cupy locally if using GPU
+    if (use_gpu):
+        import cupy as cp
 
     nbasis = template.nbasis
 
@@ -159,6 +152,8 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3, archetype=None, use_gpu
         wflux = cp.asarray(wflux)
 
     results = list()
+    #Define nz here instead of hard-coding length 15 and then defining nz as
+    #length of zz list
     nz = 15
 
     for imin in find_minima(zchi2):
@@ -259,10 +254,29 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3, archetype=None, use_gpu
     ii = np.argsort([tmp['chi2'] for tmp in results])
     results = [results[i] for i in ii]
 
-    #- Convert list of dicts -> Table
-    from astropy.table import Table
-    results = Table(results)
-
     assert len(results) > 0
+    #- Convert list of dicts -> Table
+    #from astropy.table import Table
+    #results = Table(results)
+
+    # astropy Table is really slow, Finalizing is 8x faster
+    # using dict of np arrays
+
+    #Move npixels summation here from zfind.py
+    for i in range(len(results)):
+        results[i]['npixels'] = 0
+        for s in spectra:
+            results[i]['npixels'] += (s.ivar>0.).sum()
+    #Create dict here.  np.vstack essentially does the same thing
+    #as putting in an astropy Table -> results is converted from
+    #a list of dicts of scalars and 1d arrays to a single dict
+    #with 1d and 2d np arrays.
+    tmp = dict()
+    for k in results[0].keys():
+        tmp[k] = list()
+        for i in range(len(results)):
+            tmp[k].append(results[i][k])
+        tmp[k] = np.vstack(tmp[k])
+    results = tmp
 
     return results
