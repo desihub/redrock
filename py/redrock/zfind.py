@@ -256,15 +256,27 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
         results = read_zscan_redrock(chi2_scan)
     elapsed(start_zscan, "Scanning redshifts", comm=targets.comm)
 
+    if (use_gpu):
+        #If using GPU, copy template flux and wave arrays to cupy objects
+        #on the GPU once here so it is not copied every iteration of
+        #rebinning below
+        import cupy as cp
+        for t in templates:
+            t.template.wave = cp.asarray(t.template.wave)
+            t.template.flux = cp.asarray(t.template.flux)
+
+    # Note: rebalancing no longer needs to be done now that following steps
+    # have been GPU-ized - CW 12/22
     # Note: GPU zscan accommodates lopsided distribution of targets but this
     # is not great for the following steps that have not been GPU-ified yet.
     # Rebalance targets and results before proceeded.
-    if hasattr(targets, 'is_lopsided') and targets.is_lopsided and targets.comm is not None:
-        start_rebalance = elapsed(None, "", comm=targets.comm)
-        local_targets, results = _rebalance_after_scan(targets, results)
-        elapsed(start_rebalance, "Rebalancing targets", comm=targets.comm)
-    else:
-        local_targets = targets.local()
+    #if hasattr(targets, 'is_lopsided') and targets.is_lopsided and targets.comm is not None:
+    #    start_rebalance = elapsed(None, "", comm=targets.comm)
+    #    local_targets, results = _rebalance_after_scan(targets, results)
+    #    elapsed(start_rebalance, "Rebalancing targets", comm=targets.comm)
+    #else:
+    #    local_targets = targets.local()
+    local_targets = targets.local()
 
     # Apply redshift prior
     if not priors is None:
