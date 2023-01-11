@@ -101,11 +101,13 @@ class TestZScan(unittest.TestCase):
     def test_calc_deltachi2(self):
         chi2 = np.array([1.0, 2.0, 4.0, 8.0])
         z = np.array([3.0, 3.1, 3.2, 3.3])
-        dchi2 = calc_deltachi2(chi2, z)
+        zwarn = np.array([0, 0, 0, 0])
+        dchi2, setwarn = calc_deltachi2(chi2, z, zwarn)
         self.assertTrue(np.all(dchi2 == np.array([1, 2, 4, 0.0])), dchi2)
 
         z = np.array([3.0, 3.0, 4.0, 4.0])
-        dchi2 = calc_deltachi2(chi2, z)
+        dchi2, setwarn = calc_deltachi2(chi2, z, zwarn)
+        zwarn = np.array([0, 0, 0, 0])
         self.assertTrue(np.all(dchi2 == np.array([3, 2, 0.0, 0.0])), dchi2)
 
     def test_parallel_zscan(self):
