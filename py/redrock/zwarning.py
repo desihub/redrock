@@ -47,3 +47,10 @@ class ZWarningMask(object):
         isort = np.argsort([x[1] for x in flagmask])
         flagmask = [flagmask[i] for i in isort]
         return flagmask
+
+#- mask of zwarn values that indicate bad individual template fits
+badfit_mask = ZWarningMask.NEGATIVE_MODEL
+badfit_mask |= ZWarningMask.MANY_OUTLIERS
+badfit_mask |= ZWarningMask.Z_FITLIMIT
+badfit_mask |= ZWarningMask.NEGATIVE_EMISSION
+badfit_mask |= ZWarningMask.BAD_MINFIT

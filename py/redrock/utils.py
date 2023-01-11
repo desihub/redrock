@@ -258,6 +258,9 @@ def transmission_Lyman(zObj,lObs, use_gpu=False):
             #Return None if wavelength range doesn't overlap with Lyman series
             #No need to perform any calculations in this case
             return None
+        if (not use_gpu and type(zObj) != np.ndarray):
+            #Cupy array passed??
+            zObj = zObj.get()
         lObs = tile(lObs, (zObj.size, 1))
         lRF = lObs/(1.+asarray(zObj)[:,None])
     T = np.ones_like(lRF)
@@ -266,5 +269,7 @@ def transmission_Lyman(zObj,lObs, use_gpu=False):
         zpix   = lObs[w]/Lyman_series[l]['line']-1.
         tauEff = Lyman_series[l]['A']*(1.+zpix)**Lyman_series[l]['B']
         T[w]  *= np.exp(-tauEff)
+    if (np.isscalar(zObj) and use_gpu):
+        T = asarray(T)
 
     return T
