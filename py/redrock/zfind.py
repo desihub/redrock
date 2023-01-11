@@ -146,7 +146,15 @@ def _rebalance_after_scan(targets, results):
         flattened_targets = [t for sl in lopsided_targets for t in sl]
         # Split targets into approximately equal lengths sublists
         ix = np.array_split(np.arange(len(flattened_targets)), len(lopsided_targets))
-        dist_targets = [flattened_targets[i[0]:i[0] + len(i)] for i in ix]
+        #dist_targets = [flattened_targets[i[0]:i[0] + len(i)] for i in ix]
+        #Less elegantly create a list of lists, appending empty lists where
+        #len(targets) == 0 in the case of MPI ranks > ntargets
+        dist_targets = []
+        for i in ix:
+            if len(i) == 0:
+                dist_targets.append([])
+            else:
+                dist_targets.append(flattened_targets[i[0]:i[0] + len(i)])
         # Merge list of result dictionaries
         results = {k: v for d in results for k, v in d.items()}
         # Split results using rebalanced target lists
@@ -187,7 +195,6 @@ def sort_zfit_dict(zfit):
     zfit['__badfit__'] = (zfit['zwarn'] & badfit_mask) != 0
     sort_dict_by_cols(zfit, ('__badfit__', 'chi2'))
     zfit.pop('__badfit__')
-
 
 def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=None, chi2_scan=None, use_gpu=False):
     """Compute all redshift fits for the local set of targets and collect.
@@ -432,6 +439,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             tzfit['targetid'] = np.array([tid]*l)
             if archetypes:
                 tzfit['zwarn'][ tzfit['coeff'][:,0]<=0. ] |= ZW.NEGATIVE_MODEL
+
             tzfit['zwarn'][ tzfit['npixels']==0 ] |= ZW.NODATA
             tzfit['zwarn'][ (tzfit['npixels']<10*tzfit['ncoeff']) ] |= \
                 ZW.LITTLE_COVERAGE
@@ -446,6 +454,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             for spectype in np.unique(tzfit['spectype']):
                 ii = np.where(tzfit['spectype'] == spectype)[0]
                 iikeep.extend(ii[0:nminima])
+
             if (len(iikeep) < l):
                 for k in tzfit.keys():
                     tzfit[k] = tzfit[k][iikeep]

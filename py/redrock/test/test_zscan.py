@@ -11,7 +11,7 @@ import numpy.testing as nt
 from ..targets import DistTargetsCopy
 from ..templates import DistTemplate
 from ..zscan import calc_zchi2_targets
-from ..zfind import zfind, calc_deltachi2
+from ..zfind import zfind
 
 from . import util
 

@@ -98,6 +98,10 @@ def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
     hx.append(fits.convenience.table_to_hdu(tsnr2))
 
     outfile = os.path.expandvars(outfile)
+    outdir = os.path.dirname(os.path.abspath(outfile))
+    if not os.path.exists(outdir):
+        os.makedirs(outdir)
+
     tempfile = outfile + '.tmp'
     hx.writeto(tempfile, overwrite=True)
     os.rename(tempfile, outfile)
