@@ -161,6 +161,29 @@ cuda_source = r'''
         }
 '''
 
+#This is used by original CPU algorithm
+#It is called by archeypes so keep for now
+def _zchi2_one(Tb, weights, flux, wflux, zcoeff):
+    """Calculate a single chi2.
+
+    For one redshift and a set of spectral data, compute the chi2 for template
+    data that is already on the correct grid.
+    """
+
+    M = Tb.T.dot(np.multiply(weights[:,None], Tb))
+    y = Tb.T.dot(wflux)
+
+    try:
+        zcoeff[:] = np.linalg.solve(M, y)
+    except np.linalg.LinAlgError:
+        return 9e99
+
+    model = Tb.dot(zcoeff)
+
+    zchi2 = np.dot( (flux - model)**2, weights )
+
+    return zchi2
+
 def spectral_data(spectra):
     """Compute concatenated spectral data products.
 
@@ -180,6 +203,8 @@ def spectral_data(spectra):
     wflux = weights * flux
     return (weights, flux, wflux)
 
+#This is used by original CPU algorithm
+#It is called by archeypes so keep for now
 def calc_zchi2_one(spectra, weights, flux, wflux, tdata):
     """Calculate a single chi2.
 
@@ -489,7 +514,32 @@ def calc_batch_dot_product_3d3d_gpu(a, b, transpose_a=False):
     #cp.cuda.Stream.null.synchronize()
     return all_M
 
-def calc_zchi2_batch_v3(spectra, tdata, weights, flux, wflux, nz, nbasis, use_gpu):
+###!!! NOTE - this is a helper method that can be refactored if v2 is chosen.
+###    It results because the signature of calc_zchi2_batch_v3 which is used
+###    in the fine redshift scan is different than calc_zchi2_batch_v2 in that
+###    the dot product Tbs needs to be calculated first before calling
+###    calc_zchi2_batch_v2.
+def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, use_gpu):
+    """Calculate a batch of chi2.
+    For many redshifts and a set of spectral data, compute the chi2 for
+    template data that is already on the correct grid.
+
+    Args:
+        spectra (list): list of Spectrum objects.
+        tdata (dict): dictionary of interpolated template values for each
+            wavehash - arrays are 3d (nz x nlambda x nbasis)
+        weights (array): concatenated spectral weights (ivar).
+        flux (array): concatenated flux values.
+        wflux (array): concatenated weighted flux values.
+        nz (int): number of templates
+        nbasis (int): nbasis
+        use_gpu (bool): use GPU or not
+
+    Returns:
+        zchi2 (array): array with one element per redshift for this target
+        zcoeff (array): array of best fit template coefficients
+
+    """
     # Use helper method batch_dot_product_sparse to create dot products
     # of all three spectra for this target with all templates
     Tbs = batch_dot_product_sparse(spectra, tdata, nz, use_gpu)
@@ -497,15 +547,14 @@ def calc_zchi2_batch_v3(spectra, tdata, weights, flux, wflux, nz, nbasis, use_gp
         #Free memory on consumer grade GPUs with low resources
         mpool = cp.get_default_memory_pool()
         mpool.free_all_blocks()
-    return calc_zchi2_batch(Tbs, weights, flux, wflux, nz, nbasis, use_gpu)
+    return calc_zchi2_batch_v2(Tbs, weights, flux, wflux, nz, nbasis, use_gpu)
 
 
 ###!!! NOTE - this is called in the v2 algorithm
 ###    In this version, everything is done in batch on both GPU and CPU
 ###    E.g. we calculate M and y for all templates and store them in
 ###    3d and 2d arrays respetively, then do a linalg.solve for each one...
-### TO BE REMOVED ###
-def calc_zchi2_batch(Tbs, weights, flux, wflux, nz, nbasis, use_gpu):
+def calc_zchi2_batch_v2(Tbs, weights, flux, wflux, nz, nbasis, use_gpu):
     """Calculate a batch of chi2.
     For many redshifts and a set of spectral data, compute the chi2 for
     template data that is already on the correct grid.
@@ -600,7 +649,6 @@ def calc_zchi2_batch(Tbs, weights, flux, wflux, nz, nbasis, use_gpu):
 ###    In this version, everything is done in batch on both GPU and CPU
 ###    E.g. we calculate M and y for all templates and store them in
 ###    3d and 2d arrays respetively, then do a linalg.solve for each one...
-### TO BE REMOVED ###
 def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False):
     """Calculate chi2 vs. redshift for a given PCA template.
 
@@ -678,7 +726,7 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
             #Free memory on consumer grade GPUs with low resources
             mpool = cp.get_default_memory_pool()
             mpool.free_all_blocks()
-        (zchi2[j,:], zcoeff[j,:,:]) = calc_zchi2_batch(Tbs, weights, flux, wflux, nz, nbasis, use_gpu)
+        (zchi2[j,:], zcoeff[j,:,:]) = calc_zchi2_batch_v2(Tbs, weights, flux, wflux, nz, nbasis, use_gpu)
 
         #Free data from GPU
         del Tbs
