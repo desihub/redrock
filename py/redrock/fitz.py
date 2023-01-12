@@ -15,7 +15,7 @@ from . import constants
 
 from .rebin import rebin_template
 
-from .zscan import calc_zchi2_one, spectral_data, calc_zchi2_batch_v3
+from .zscan import calc_zchi2_one, spectral_data, calc_zchi2_batch
 
 from .zwarning import ZWarningMask as ZW
 
@@ -188,7 +188,7 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3, archetype=None, use_gpu
                 continue
             #Vectorize multiplication
             binned[k] *= T[:,:,None]
-        (zzchi2, zzcoeff) = calc_zchi2_batch_v3(spectra, binned, weights, flux, wflux, nz, nbasis, use_gpu=use_gpu)
+        (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, binned, weights, flux, wflux, nz, nbasis, use_gpu=use_gpu)
 
         #- fit parabola to 3 points around minimum
         i = min(max(np.argmin(zzchi2),1), len(zz)-2)
@@ -204,7 +204,7 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3, archetype=None, use_gpu
                     continue
                 #Vectorize multiplication
                 binned[k] *= T[:,:,None]
-            (chi2, coeff) = calc_zchi2_batch_v3(spectra, binned, weights, flux, wflux, 1, nbasis, use_gpu=use_gpu)
+            (chi2, coeff) = calc_zchi2_batch(spectra, binned, weights, flux, wflux, 1, nbasis, use_gpu=use_gpu)
             coeff = coeff[0,:]
         except ValueError as err:
             if zmin<redshifts[0] or redshifts[-1]<zmin:
