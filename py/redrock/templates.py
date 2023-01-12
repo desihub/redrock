@@ -16,7 +16,6 @@ from .utils import native_endian, elapsed, transmission_Lyman
 
 from .rebin import rebin_template, trapz_rebin
 
-
 class Template(object):
     """A spectral Template PCA object.
 
@@ -221,15 +220,18 @@ class DistTemplatePiece(object):
         self.data = data
 
 
-def _mp_rebin_template(template, dwave, zlist, qout):
+def _mp_rebin_template(template, dwave, zlist, qout, iproc, use_gpu):
     """Function for multiprocessing version of rebinning.
+    With rebinning now done in batch mode, use process index, iproc
+    to keep track of order of redshifts instead of keying dict by individual
+    redshifts.
     """
     try:
-        results = dict()
-        for z in zlist:
-            binned = rebin_template(template, z, dwave)
-            results[z] = binned
-        qout.put(results)
+        #New signature and return type for rebin_template 8/16/22 CW
+        results = rebin_template(template, zlist, dwave, use_gpu=use_gpu)
+        #Wrap in dict keyed by process index so redshifts can be
+        #reassembled in correct order
+        qout.put({ iproc: results })
     except:
         exc_type, exc_value, exc_traceback = sys.exc_info()
         lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
@@ -254,9 +256,14 @@ class DistTemplate(object):
         mp_procs (int): if not using MPI, restrict the number of
             multiprocesses to this.
         comm (mpi4py.MPI.Comm): (optional) the MPI communicator.
+        use_gpu (bool): (optional) If this process uses GPU
+        gpu_mode (bool): (optional) If ANY process uses GPU - the reason
+            we need both is that in GPU mode, the rebinning of all redshifts
+            is done on all GPUs (redundantly but much faster than using
+            MPI allgather) and no redshifts are done on any CPU only proc.
 
     """
-    def __init__(self, template, dwave, mp_procs=1, comm=None):
+    def __init__(self, template, dwave, mp_procs=1, comm=None, use_gpu=False, gpu_mode=False):
         self._comm = comm
         self._template = template
         self._dwave = dwave
@@ -267,13 +274,22 @@ class DistTemplate(object):
             self._comm_rank = self._comm.rank
             self._comm_size = self._comm.size
 
-        self._distredshifts = np.array_split(self._template.redshifts,
-            self._comm_size)
-
-        myz = self._distredshifts[self._comm_rank]
-        nz = len(myz)
-
-        data = list()
+        if (gpu_mode):
+            #If ANY process is in GPU mode, distribute all redshifts to every
+            #GPU process and no redshifts to any CPU process
+            if (use_gpu):
+                myz = self._template.redshifts
+            else:
+                #Create empty _piece
+                myz = np.array([])
+                data = dict()
+                self._piece = DistTemplatePiece(self._comm_rank, myz, data)
+                return
+        else:
+            #Distribute among CPU processes
+            self._distredshifts = np.array_split(self._template.redshifts,
+                self._comm_size)
+            myz = self._distredshifts[self._comm_rank]
 
         # In the case of not using MPI (comm == None), one process is rebinning
         # all the templates.  In that scenario, use multiprocessing
@@ -281,39 +297,51 @@ class DistTemplate(object):
 
         if self._comm is not None:
             # MPI case- compute our local redshifts
-            for z in myz:
-                binned = rebin_template(self._template, z, self._dwave)
-                data.append(binned)
+            # This will rebin template for all z on either GPU or CPU and
+            # return a dict of three 3-d arrays (nz x nlambda x nbasis)
+            data = rebin_template(self._template, myz, self._dwave, use_gpu=use_gpu)
         else:
             # We don't have MPI, so use multiprocessing
             import multiprocessing as mp
 
             qout = mp.Queue()
+            #Split myz to various mp procs
             work = np.array_split(myz, mp_procs)
             procs = list()
             for i in range(mp_procs):
                 p = mp.Process(target=_mp_rebin_template,
-                    args=(self._template, self._dwave, work[i], qout))
+                    args=(self._template, self._dwave, work[i], qout, i, use_gpu))
                 procs.append(p)
                 p.start()
 
-            # Extract the output into a single list
+            # Extract the output into a single dictionary
+            # First create a dictionary keyed by process number to keep
+            # redshifts in order.
             results = dict()
+            data = dict()
             for i in range(mp_procs):
                 res = qout.get()
                 results.update(res)
-            for z in myz:
-                data.append(results[z])
+            # Then use np.vstack to combine into a dict of
+            # three 3-d arrays
+            for key in results[0]:
+                data[key] = list()
+                for i in range(mp_procs):
+                    data[key].append(results[i][key])
+                data[key] = np.vstack(data[key])
 
         # Correct spectra for Lyman-series
-        for i, z in enumerate(myz):
-            for k in list(self._dwave.keys()):
-                T = transmission_Lyman(z,self._dwave[k])
-                for vect in range(data[i][k].shape[1]):
-                    data[i][k][:,vect] *= T
-
+        for k in list(self._dwave.keys()):
+            #New algorithm accepts all z as an array and returns T, a 2-d
+            # matrix (nz, nlambda) as a cupy or numpy array
+            T = transmission_Lyman(myz,self._dwave[k], use_gpu=use_gpu)
+            if (T is None):
+                #Return value of None means that wavelenght regime
+                #does not overlap Lyman transmission - continue here
+                continue
+            #Vectorize multiplication
+            data[k] *= T[:,:,None]
         self._piece = DistTemplatePiece(self._comm_rank, myz, data)
-
 
     @property
     def comm(self):
@@ -399,8 +427,11 @@ class ReDistTemplate(DistTemplate):
         comm (mpi4py.MPI.Comm): (optional) the MPI communicator.
 
     """
-    def __init__(self, template, dwave, mp_procs=1, comm=None):
-        super().__init__(template, dwave, mp_procs=mp_procs, comm=comm)
+    def __init__(self, template, dwave, mp_procs=1, comm=None, use_gpu=False, gpu_mode=False):
+        super().__init__(template, dwave, mp_procs=mp_procs, comm=comm, use_gpu=use_gpu, gpu_mode=gpu_mode)
+        ### This class is now Deprecated as allgather is no longer used.
+        # Each GPU process now rebins all z.
+        return
         if comm is not None:
             data = [e for s in comm.allgather(self.local.data) for e in s]
             self._piece = DistTemplatePiece(0, self.template.redshifts, data)
@@ -421,7 +452,7 @@ class ReDistTemplate(DistTemplate):
         return True
 
 
-def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1, redistribute=False):
+def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1, redistribute=False, use_gpu=False, gpu_mode=False):
     """Read and distribute templates from disk.
 
     This reads one or more template files from disk and distributes them among
@@ -492,15 +523,21 @@ def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1, redistribu
     timer = elapsed(timer, "Read and broadcast of {} templates"\
         .format(len(template_files)), comm=comm)
 
+    if (use_gpu):
+        import cupy as cp
+        c = cp.ones(1)
+    # Take this timer out of if (use_gpu) block - for reference it hangs
+    # entire code if only some procs call it
+    timer = elapsed(timer, "Creating GPU context", comm=comm)
+
     # Compute the interpolated templates in a distributed way with every
     # process generating a slice of the redshift range.
-
     dtemplates = list()
     for t in template_data:
         if redistribute:
-            dtemplate = ReDistTemplate(t, dwave, mp_procs=mp_procs, comm=comm)
+            dtemplate = ReDistTemplate(t, dwave, mp_procs=mp_procs, comm=comm, use_gpu=use_gpu, gpu_mode=gpu_mode)
         else:
-            dtemplate = DistTemplate(t, dwave, mp_procs=mp_procs, comm=comm)
+            dtemplate = DistTemplate(t, dwave, mp_procs=mp_procs, comm=comm, use_gpu=use_gpu, gpu_mode=gpu_mode)
         dtemplates.append(dtemplate)
 
     timer = elapsed(timer, "Rebinning templates", comm=comm)

@@ -34,8 +34,39 @@ from .fitz import fitz, get_dv
 from .zwarning import ZWarningMask as ZW
 from .zwarning import badfit_mask
 
+def sort_dict_by_col(d, colname):
+    """Sort a dict of np.ndarrays by one key.
+    Replacement for astropy.Table.sort
+    """
+    if (not colname in d):
+        raise KeyError('Key '+str(colname)+' is not in dictionary')
+    for k in d.keys():
+        if (type(d[k]) is not np.ndarray):
+            raise ValueError('Column '+str(k)+' is not an np.array')
+    idx = d[colname].argsort(0).flatten()
+    for k in d.keys():
+        d[k] = d[k][idx]
+    return
 
-def _mp_fitz(chi2, target_data, t, nminima, qout, archetype):
+def sort_dict_by_cols(d, colnames):
+    """Sort a dict of np.ndarrays by one key.
+    Replacement for astropy.Table.sort
+    """
+    for c in colnames:
+        if (not c in d):
+            raise KeyError('Key '+str(c)+' is not in dictionary')
+    for k in d.keys():
+        if (type(d[k]) is not np.ndarray):
+            raise ValueError('Column '+str(k)+' is not an np.array')
+    valsToSort = ()
+    for c in colnames:
+        valsToSort += (d[c],)
+    idx = np.lexsort(valsToSort, axis=0).flatten()
+    for k in d.keys():
+        d[k] = d[k][idx]
+    return
+
+def _mp_fitz(chi2, target_data, t, nminima, qout, archetype, use_gpu):
     """Wrapper for multiprocessing version of fitz.
     """
     try:
@@ -45,11 +76,8 @@ def _mp_fitz(chi2, target_data, t, nminima, qout, archetype):
         results = list()
         for i, tg in enumerate(target_data):
             zfit = fitz(chi2[i], t.template.redshifts, tg.spectra,
-                t.template, nminima=nminima, archetype=archetype)
-            npix = 0
-            for spc in tg.spectra:
-                npix += (spc.ivar > 0.).sum()
-            results.append( (tg.id, zfit, npix) )
+                t.template, nminima=nminima, archetype=archetype, use_gpu=use_gpu)
+            results.append( (tg.id, zfit) )
         qout.put(results)
     except:
         exc_type, exc_value, exc_traceback = sys.exc_info()
@@ -105,7 +133,6 @@ def calc_deltachi2(chi2, z, zwarn, dvlimit=constants.max_velo_diff):
 
     return deltachi2, setzwarn
 
-
 def _rebalance_after_scan(targets, results):
     """Helper for rebalancing targets and results after lopsided zscan
     """
@@ -154,6 +181,20 @@ def sort_zfit(zfit):
     zfit['__badfit__'] = (zfit['zwarn'] & badfit_mask) != 0
     zfit.sort( ('__badfit__', 'chi2') )
     zfit.remove_column('__badfit__')
+
+def sort_zfit_dict(zfit):
+    """
+    Sorts zfit dict by goodness of fit, using 'zwarn' and 'chi2' columns
+
+    Args:
+        zfit: dict of numpy arrays with columns 'zwarn' and 'chi2'
+
+    Modifies zfit in-place by sorting it
+    """
+
+    zfit['__badfit__'] = (zfit['zwarn'] & badfit_mask) != 0
+    sort_dict_by_cols(zfit, ('__badfit__', 'chi2'))
+    zfit.pop('__badfit__')
 
 def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=None, chi2_scan=None, use_gpu=False):
     """Compute all redshift fits for the local set of targets and collect.
@@ -222,15 +263,27 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
         results = read_zscan_redrock(chi2_scan)
     elapsed(start_zscan, "Scanning redshifts", comm=targets.comm)
 
+    if (use_gpu):
+        #If using GPU, copy template flux and wave arrays to cupy objects
+        #on the GPU once here so it is not copied every iteration of
+        #rebinning below
+        import cupy as cp
+        for t in templates:
+            t.template.wave = cp.asarray(t.template.wave)
+            t.template.flux = cp.asarray(t.template.flux)
+
+    # Note: rebalancing no longer needs to be done now that following steps
+    # have been GPU-ized - CW 12/22
     # Note: GPU zscan accommodates lopsided distribution of targets but this
     # is not great for the following steps that have not been GPU-ified yet.
     # Rebalance targets and results before proceeded.
-    if hasattr(targets, 'is_lopsided') and targets.is_lopsided and targets.comm is not None:
-        start_rebalance = elapsed(None, "", comm=targets.comm)
-        local_targets, results = _rebalance_after_scan(targets, results)
-        elapsed(start_rebalance, "Rebalancing targets", comm=targets.comm)
-    else:
-        local_targets = targets.local()
+    #if hasattr(targets, 'is_lopsided') and targets.is_lopsided and targets.comm is not None:
+    #    start_rebalance = elapsed(None, "", comm=targets.comm)
+    #    local_targets, results = _rebalance_after_scan(targets, results)
+    #    elapsed(start_rebalance, "Rebalancing targets", comm=targets.comm)
+    #else:
+    #    local_targets = targets.local()
+    local_targets = targets.local()
 
     # Apply redshift prior
     if not priors is None:
@@ -266,13 +319,8 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                 zfit = fitz(results[tg.id][ft]['zchi2'] \
                     + results[tg.id][ft]['penalty'],
                     t.template.redshifts, tg.spectra,
-                    t.template, nminima=nminima,archetype=archetype)
+                    t.template, nminima=nminima,archetype=archetype, use_gpu=use_gpu)
                 results[tg.id][ft]['zfit'] = zfit
-                results[tg.id][ft]['zfit']['npixels'] = 0
-                for spectrum in tg.spectra:
-                    results[tg.id][ft]['zfit']['npixels'] += \
-                        (spectrum.ivar>0.).sum()
-
         else:
             # Multiprocessing case.
             import multiprocessing as mp
@@ -295,7 +343,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     eff_chi2[i,:] = results[tg.id][ft]['zchi2'] \
                         + results[tg.id][ft]['penalty']
                 p = mp.Process(target=_mp_fitz, args=(eff_chi2,
-                    target_data, t, nminima, qout, archetype))
+                    target_data, t, nminima, qout, archetype, use_gpu))
                 procs.append(p)
                 p.start()
 
@@ -306,7 +354,6 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                 res = qout.get()
                 for rs in res:
                     results[rs[0]][ft]['zfit'] = rs[1]
-                    results[rs[0]][ft]['zfit']['npixels'] = rs[2]
 
         elapsed(start, "    Finished in", comm=targets.comm)
     elapsed(start_findbest, "Finding best redshift", comm=targets.comm)
@@ -355,10 +402,14 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     spectype = [ el.split(':::')[0] for el in tmp['fulltype'] ]
                     subtype = [ el.split(':::')[1] for el in tmp['fulltype'] ]
                     tmp.remove_column('fulltype')
-                tmp['spectype'] = spectype
-                tmp['subtype'] = subtype
 
-                tmp['ncoeff'] = tmp['coeff'].shape[1]
+                #Have to create arrays of correct length since using dict of
+                #np arrays instead of astropy Table
+                l = len(tmp['chi2'])
+                tmp['spectype'] = np.array([spectype]*l).reshape((l, 1))
+                tmp['subtype'] = np.array([subtype]*l).reshape((l, 1))
+
+                tmp['ncoeff'] = np.array([tmp['coeff'].shape[1]]*l).reshape((l, 1))
                 tzfit.append(tmp)
                 del allresults[tid][fulltype]['zfit']
 
@@ -366,11 +417,26 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             for tmp in tzfit:
                 if tmp['coeff'].shape[1] < maxncoeff:
                     n = maxncoeff - tmp['coeff'].shape[1]
-                    c = np.append(tmp['coeff'], np.zeros((len(tmp), n)), axis=1)
-                    tmp.replace_column('coeff', c)
+                    nx = tmp['coeff'].shape[0]
+                    c = np.append(tmp['coeff'], np.zeros((nx, n)), axis=1)
+                    tmp['coeff'] = c
 
-            tzfit = astropy.table.vstack(tzfit)
-            tzfit['targetid'] = tid
+            #tzfit = astropy.table.vstack(tzfit)
+            ## Equivalent of astropy.table.vstack(tzfit) - vstack each array
+            tzfit2 = dict()
+            for k in tzfit[0].keys():
+                tzfit2[k] = list()
+                for i in range(len(tzfit)):
+                    tzfit2[k].append(tzfit[i][k])
+                tzfit2[k] = np.vstack(tzfit2[k])
+                if (tzfit2[k].shape[1] == 1):
+                    tzfit2[k] = tzfit2[k].flatten()
+            tzfit = tzfit2
+
+            #Have to create arrays of correct length since using dict of
+            #np arrays instead of astropy Table
+            l = len(tzfit['chi2'])
+            tzfit['targetid'] = np.array([tid]*l)
             if archetypes:
                 tzfit['zwarn'][ tzfit['coeff'][:,0]<=0. ] |= ZW.NEGATIVE_MODEL
 
@@ -379,7 +445,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                 ZW.LITTLE_COVERAGE
 
             #- Sort by badfit zwarn bits and chi2
-            sort_zfit(tzfit)
+            sort_zfit_dict(tzfit)
 
             # Trim down cases of multiple subtypes for a single type (e.g.
             # STARs) tzfit is already sorted by chi2, so keep first nminima of
@@ -388,13 +454,16 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             for spectype in np.unique(tzfit['spectype']):
                 ii = np.where(tzfit['spectype'] == spectype)[0]
                 iikeep.extend(ii[0:nminima])
-            if len(iikeep) < len(tzfit):
-                tzfit = tzfit[iikeep]
-                #- grouping by spectype could get chi2 out of order so re-sort
-                sort_zfit(tzfit)
 
-            #- Add ranking column 'znum'
-            tzfit['znum'] = np.arange(len(tzfit))
+            if (len(iikeep) < l):
+                for k in tzfit.keys():
+                    tzfit[k] = tzfit[k][iikeep]
+                #- grouping by spectype could get chi2 out of order; resort
+                sort_zfit_dict(tzfit)
+
+            #Length may have changed
+            l = len(tzfit['chi2'])
+            tzfit['znum'] = np.arange(l)
 
             #- calc deltachi2 and set ZW.SMALL_DELTA_CHI2 flag
             deltachi2, setzwarn = calc_deltachi2(
@@ -403,7 +472,8 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             tzfit['zwarn'][setzwarn] |= ZW.SMALL_DELTA_CHI2
 
             # Store
-            allzfit.append(tzfit)
+            # Here convert to astropy table
+            allzfit.append(astropy.table.Table(tzfit))
 
         allzfit = astropy.table.vstack(allzfit)
 

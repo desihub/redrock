@@ -216,26 +216,60 @@ def distribute_work(nproc, ids, weights=None, capacities=None):
     return dist
 
 
-def transmission_Lyman(zObj,lObs):
+def transmission_Lyman(zObj,lObs, use_gpu=False):
     """Calculate the transmitted flux fraction from the Lyman series
     This returns the transmitted flux fraction:
     1 -> everything is transmitted (medium is transparent)
     0 -> nothing is transmitted (medium is opaque)
-    Args:
-        zObj (float): Redshift of object
-        lObs (array of float): wavelength grid
-    Returns:
-        array of float: transmitted flux fraction
-    """
 
-    lRF = lObs/(1.+zObj)
-    T   = np.ones(lObs.size)
+    This method will handle 3 options:
+    1 -> For GPU mode, zObj is an array of all z for a template and the return
+    value will be a cupy array (nz x nlambda)
+    2-> In CPU mode, it can auto-detect if zObj is a numpy array and if so,
+    again, all z will be processed as a vector and the return value
+    will be a numpy array (nz x nlambda)
+    3-> For legacy, it is still supported to pass zObj as a float and
+    in this case, the return value will be a 1-d numpy array (nlambda).
+
+    Args:
+        zObj (float or array of float): Redshift(s) of object
+        lObs (array of float): wavelength grid
+        use_gpu (boolean): whether to use CUPY
+    Returns:
+        array of float: transmitted flux fraction (nlambda in case of
+        scalar input; nz x nlambda in case of array input)
+
+    """
+    if (use_gpu):
+        import cupy as cp
+        tile = cp.tile
+        asarray = cp.asarray
+    else:
+        tile = np.tile
+        asarray = np.asarray
 
     Lyman_series = constants.Lyman_series
+    if (np.isscalar(zObj)):
+        #zObj is a float
+        lRF = lObs/(1.+zObj)
+    else:
+        #This is an array of float
+        if (lObs.min()/(1+zObj.max()) > Lyman_series['Lya']['line']):
+            #Return None if wavelength range doesn't overlap with Lyman series
+            #No need to perform any calculations in this case
+            return None
+        if (not use_gpu and type(zObj) != np.ndarray):
+            #Cupy array passed??
+            zObj = zObj.get()
+        lObs = tile(lObs, (zObj.size, 1))
+        lRF = lObs/(1.+asarray(zObj)[:,None])
+    T = np.ones_like(lRF)
     for l in list(Lyman_series.keys()):
         w      = lRF<Lyman_series[l]['line']
         zpix   = lObs[w]/Lyman_series[l]['line']-1.
         tauEff = Lyman_series[l]['A']*(1.+zpix)**Lyman_series[l]['B']
         T[w]  *= np.exp(-tauEff)
+    if (np.isscalar(zObj) and use_gpu):
+        T = asarray(T)
 
     return T

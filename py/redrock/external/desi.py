@@ -735,7 +735,10 @@ def rrdesi(options=None, comm=None):
         ncpu_procs = comm_size - ngpu_procs
         if ngpu_procs > 0 and ncpu_procs > 0:
             # On Perlmutter, 1:15 seems like a good ratio
-            capacities = [1 if is_gpu_proc else 1.0/15 for is_gpu_proc in gpu_proc_flags]
+            #capacities = [1 if is_gpu_proc else 1.0/15 for is_gpu_proc in gpu_proc_flags]
+            #With new GPU implementation of zscan, use 1:10000 so that only GPU-enabled
+            #procs get allocated targets
+            capacities = [1 if is_gpu_proc else 1.0/10000 for is_gpu_proc in gpu_proc_flags]
         else:
             capacities = None
 
@@ -776,8 +779,9 @@ def rrdesi(options=None, comm=None):
             .format(len(targets.all_target_ids)), comm=comm)
 
         # Read the template data
+        # Pass both use_gpu (this proc) and args.gpu (if any proc is using GPU)
         dtemplates = load_dist_templates(dwave, templates=args.templates,
-            comm=comm, mp_procs=mpprocs, redistribute=redistribute_templates)
+            comm=comm, mp_procs=mpprocs, redistribute=redistribute_templates, use_gpu=use_gpu, gpu_mode=args.gpu)
 
         # Compute the redshifts, including both the coarse scan and the
         # refinement.  This function only returns data on the rank 0 process.

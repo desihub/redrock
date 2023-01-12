@@ -11,9 +11,16 @@ import numpy.testing as nt
 from ..targets import DistTargetsCopy
 from ..templates import DistTemplate
 from ..zscan import calc_zchi2_targets
-from ..zfind import zfind
+from ..zfind import zfind, calc_deltachi2
 
 from . import util
+
+cp_available = False
+try:
+    import cupy as cp
+    cp_available = True
+except Exception:
+    cp_available = False
 
 #- Return a normalized sampled Gaussian (no integration, just sampling)
 def norm_gauss(x, sigma):
@@ -91,6 +98,18 @@ class TestZScan(unittest.TestCase):
         self.assertLess(zx1['zerr'], 0.002)
         self.assertLess(zx2['zerr'], 0.002)
 
+    def test_calc_deltachi2(self):
+        chi2 = np.array([1.0, 2.0, 4.0, 8.0])
+        z = np.array([3.0, 3.1, 3.2, 3.3])
+        zwarn = np.array([0, 0, 0, 0])
+        dchi2, setwarn = calc_deltachi2(chi2, z, zwarn)
+        self.assertTrue(np.all(dchi2 == np.array([1, 2, 4, 0.0])), dchi2)
+
+        z = np.array([3.0, 3.0, 4.0, 4.0])
+        dchi2, setwarn = calc_deltachi2(chi2, z, zwarn)
+        zwarn = np.array([0, 0, 0, 0])
+        self.assertTrue(np.all(dchi2 == np.array([3, 2, 0.0, 0.0])), dchi2)
+
     def test_parallel_zscan(self):
         z1 = 0.2
         z2 = 0.25
@@ -120,6 +139,37 @@ class TestZScan(unittest.TestCase):
             self.assertTrue(np.all(resa['zchi2'] == resb['zchi2']))
             self.assertTrue(np.all(resa['zcoeff'] == resb['zcoeff']))
 
+    def test_gpu_zscan(self):
+        if (not cp_available):
+            self.assertTrue(True)
+            return
+        z1 = 0.2
+        z2 = 0.25
+        seed = np.random.randint(2**31)
+        print('GPU TEST: Using random seed {}'.format(seed))
+        np.random.seed(seed)
+
+        t1 = util.get_target(z1); t1.id = 111
+        t2 = util.get_target(z2); t2.id = 222
+        dtarg = DistTargetsCopy([t1, t2])
+
+        # Get the dictionary of wavelength grids
+        dwave = dtarg.wavegrids()
+
+        # Construct the distributed template.
+        template = util.get_template(redshifts=np.linspace(0.15, 0.3, 50))
+        dtemp = DistTemplate(template, dwave)
+
+        results_a = calc_zchi2_targets(dtarg, [ dtemp ], use_gpu=False)
+        results_b = calc_zchi2_targets(dtarg, [ dtemp ], use_gpu=True)
+
+        for tg in dtarg.local():
+            resa = results_a[tg.id][template.full_type]
+            resb = results_b[tg.id][template.full_type]
+            self.assertEqual(resa['zchi2'].shape, resb['zchi2'].shape)
+            self.assertEqual(resa['zcoeff'].shape, resb['zcoeff'].shape)
+            self.assertTrue(np.allclose(resa['zchi2'], resb['zchi2']))
+            self.assertTrue(np.allclose(resa['zcoeff'], resb['zcoeff']))
 
     def test_subtype(self):
         z1 = 0.0
