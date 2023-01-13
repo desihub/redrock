@@ -4,7 +4,7 @@ from io import BytesIO
 import numpy as np
 from astropy.table import Table
 
-from ..zfind import zfind, sort_zfit, calc_deltachi2
+from ..zfind import zfind, sort_zfit, calc_deltachi2, sort_zfit_dict, sort_dict_by_cols
 from .. zwarning import ZWarningMask as ZW
 
 class TestZFind(unittest.TestCase):
@@ -27,7 +27,6 @@ class TestZFind(unittest.TestCase):
                 3  0     10   0
                 """), format='ascii')
         sort_zfit(zfit)
-        self.assertEqual(zfit.colnames, ['id', 'zwarn', 'chi2', 'rank'])
         self.assertEqual(list(zfit['rank']), list(range(len(zfit))))
 
         #- zwarn Z_FITLIMIT=32 moves id=3 to the end, even with good chi2
@@ -79,7 +78,65 @@ class TestZFind(unittest.TestCase):
                 3  288   10   2
                 """), format='ascii')
         sort_zfit(zfit)
+        self.assertEqual(zfit.keys(), ['id', 'zwarn', 'chi2', 'rank'])
         self.assertEqual(list(zfit['rank']), list(range(len(zfit))))
+
+    def test_sort_zfit_dict(self):
+
+        #- rank by chi2 since zwarn=0 for everyone
+        zfit = dict()
+        zfit['id'] = np.array([1,2,3])
+        zfit['zwarn'] = np.array([0,0,0])
+        zfit['chi2'] = np.array([30,20,10])
+        zfit['rank'] =np.array([2,1,0])
+        sort_zfit_dict(zfit)
+        self.assertEqual(list(zfit['rank']), list(range(len(zfit['rank']))))
+
+        #- zwarn Z_FITLIMIT=32 moves id=3 to the end, even with good chi2
+        zfit = dict()
+        zfit['id'] = np.array([1,2,3])
+        zfit['zwarn'] = np.array([0,0,32])
+        zfit['chi2'] = np.array([30,20,10])
+        zfit['rank'] =np.array([1,0,2])
+        sort_zfit_dict(zfit)
+        self.assertEqual(list(zfit['rank']), list(range(len(zfit['rank']))))
+
+        #- also test other specific bad bits
+        for bad in (ZW.NEGATIVE_MODEL,
+                    ZW.MANY_OUTLIERS,
+                    ZW.Z_FITLIMIT,
+                    ZW.NEGATIVE_EMISSION,
+                    ZW.BAD_MINFIT):
+            zfit['zwarn'][2] = bad
+            sort_zfit_dict(zfit)
+            self.assertEqual(list(zfit['rank']), list(range(len(zfit['rank']))))
+
+        #- zwarn BAD_MINFIT=1024 moves id=3 to the end, even with good chi2
+        zfit = dict()
+        zfit['id'] = np.array([1,2,3])
+        zfit['zwarn'] = np.array([0,0,1024])
+        zfit['chi2'] = np.array([30,20,10])
+        zfit['rank'] =np.array([1,0,2])
+        sort_zfit_dict(zfit)
+        self.assertEqual(list(zfit['rank']), list(range(len(zfit['rank']))))
+
+        #- zwarn BAD_TARGET=256 is ok (not about this single fit)
+        zfit = dict()
+        zfit['id'] = np.array([1,2,3])
+        zfit['zwarn'] = np.array([0,0,256])
+        zfit['chi2'] = np.array([30,20,10])
+        zfit['rank'] =np.array([2,1,0])
+        sort_zfit_dict(zfit)
+        self.assertEqual(list(zfit['rank']), list(range(len(zfit['rank']))))
+
+        #- test mix of zwarn bits
+        zfit = dict()
+        zfit['id'] = np.array([1,2,3])
+        zfit['zwarn'] = np.array([0,256,288])
+        zfit['chi2'] = np.array([30,20,10])
+        zfit['rank'] =np.array([1,0,2])
+        sort_zfit_dict(zfit)
+        self.assertEqual(list(zfit['rank']), list(range(len(zfit['rank']))))
 
     def test_calc_deltachi2(self):
 
@@ -108,6 +165,17 @@ class TestZFind(unittest.TestCase):
         dchi2, setzwarn = calc_deltachi2(chi2, z, zwarn)
         self.assertTrue(np.all(dchi2 == np.array([19, 18, 20, 0.0])), dchi2)
         self.assertTrue(np.all(setzwarn == np.array([False,True,False,False])))
+
+    def test_sort_dict_by_cols(self):
+        d = dict()
+        d['chi2'] = np.array([10.0, 3.0, 1.0, 5.0, 20.0]) #some chi2
+        d['zwarn'] = np.array([0, 4, 0, 1, 0]) #some warning flags
+        d['z'] = np.array([2.0, 5.0, 1.0, 4.0, 3.0])
+        #Sort by zwarn first and then chi2
+        sort_dict_by_cols(d, ('zwarn', 'chi2'), sort_first_column_first=True)
+        #output z should be in ascending order
+        self.assertTrue(np.allclose(d['z'], np.array([1.0, 2.0, 3.0, 4.0, 5.0])))
+
 
 def test_suite():
     """Allows testing of only this module with the command::
