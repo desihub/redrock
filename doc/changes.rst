@@ -2,13 +2,20 @@
 redrock Change Log
 ==================
 
-0.17.0 (unreleased)
+0.17.1 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.17.0 (2023-01-12)
 -------------------
 
 * Major refactor to expand GPU support; 2x faster on GPUs, 25% faster on CPUs.
-  Also fixes support for files with more than 1k input targets (PR `#211`_).
+  Also fixes support for files with more than 1k input targets
+  (PR `#211`_, `#225`_).
 
 .. _`#211`: https://github.com/desihub/redrock/pull/211
+.. _`#225`: https://github.com/desihub/redrock/pull/225
 
 0.16.0 (2022-08-08)
 -------------------
