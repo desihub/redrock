@@ -48,9 +48,18 @@ def sort_dict_by_col(d, colname):
         d[k] = d[k][idx]
     return
 
-def sort_dict_by_cols(d, colnames):
-    """Sort a dict of np.ndarrays by one key.
+def sort_dict_by_cols(d, colnames, sort_first_column_first = True):
+    """Sort a dict of np.ndarrays by multiple keys
     Replacement for astropy.Table.sort
+
+    Args:
+        d : a dictionary
+        colnames : a tuple or list of column names
+        sort_first_column_first : boolean - np.lexsort((a,b)) will sort by b
+            first and then sort by a.  This is the opposite of
+            astropy.Table.sort behavior.  Setting this to true will ensure
+            that sort_dict_by_cols(d, ('a','b')) will result in sorting by a
+            first and then b.
     """
     for c in colnames:
         if (not c in d):
@@ -61,6 +70,9 @@ def sort_dict_by_cols(d, colnames):
     valsToSort = ()
     for c in colnames:
         valsToSort += (d[c],)
+    if (sort_first_column_first):
+        #Reverse order of valsToSort
+        valsToSort = valsToSort[::-1]
     idx = np.lexsort(valsToSort, axis=0).flatten()
     for k in d.keys():
         d[k] = d[k][idx]
@@ -193,7 +205,7 @@ def sort_zfit_dict(zfit):
     """
 
     zfit['__badfit__'] = (zfit['zwarn'] & badfit_mask) != 0
-    sort_dict_by_cols(zfit, ('__badfit__', 'chi2'))
+    sort_dict_by_cols(zfit, ('__badfit__', 'chi2'), sort_first_column_first=True)
     zfit.pop('__badfit__')
 
 def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=None, chi2_scan=None, use_gpu=False):
