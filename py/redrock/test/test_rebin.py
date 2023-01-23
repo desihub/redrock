@@ -4,7 +4,7 @@ import numpy as np
 cp_available = False
 try:
     import cupy as cp
-    cp_available = True
+    cp_available = cp.is_available()
 except Exception:
     cp_available = False
 
@@ -85,11 +85,9 @@ class TestRebin(unittest.TestCase):
         self.assertTrue(np.allclose(yy[0:2], 2/np.pi, atol=5e-4))
         self.assertTrue(np.allclose(yy[2:4], -2/np.pi, atol=5e-4))
 
+    @unittest.skipUnless(cp_available, "Skipping test_gpu_trapzrebin because no GPU found.")
     def test_gpu_trapzrebin(self):
         '''Test that GPU version matches CPU for constant flux density at various binnings'''
-        if (not cp_available):
-            self.assertTrue(True)
-            return
         nx = 10
         x = np.arange(nx)*1.1
         y = np.ones(nx)
@@ -110,11 +108,9 @@ class TestRebin(unittest.TestCase):
             self.assertTrue(np.allclose(yy, 1.0), msg=str(yy))
             self.assertTrue(type(yy) == cp.ndarray)
 
+    @unittest.skipUnless(cp_available, "Skipping test_gpu_trapzrebin_uneven because no GPU found.")
     def test_gpu_trapzrebin_uneven(self):
         '''test rebinning unevenly spaced x for GPU vs CPU'''
-        if (not cp_available):
-            self.assertTrue(True)
-            return
         x = np.linspace(0, 10, 100)**2
         y = np.sqrt(x)
         edges = np.linspace(0,100,21)
@@ -124,11 +120,9 @@ class TestRebin(unittest.TestCase):
         self.assertTrue(type(g) == cp.ndarray)
         self.assertTrue(type(c) == np.ndarray)
 
+    @unittest.skipUnless(cp_available, "Skipping test_gpu_trapzrebin_multidimensional because no GPU found.")
     def test_gpu_trapzrebin_multidimensional(self):
         '''Test that batch CPU and GPU matches CPU 1d version'''
-        if (not cp_available):
-            self.assertTrue(True)
-            return
         #First test multiple bases, no redshifts
         x = np.arange(10)
         y = np.ones((2,10)) #nbasis = 2

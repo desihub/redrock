@@ -3,7 +3,7 @@ import numpy as np
 cp_available = False
 try:
     import cupy as cp
-    cp_available = True
+    cp_available = cp.is_available() 
 except Exception:
     cp_available = False
 
@@ -50,12 +50,10 @@ class TestUtils(unittest.TestCase):
             self.assertTrue(np.allclose(c[i], a))
             self.assertTrue(type(a) == np.ndarray)
 
+    @unittest.skipUnless(cp_available, "Skipping test_Lyman_transmission_GPU because no GPU found.")
     def test_Lyman_transmission_GPU(self):
         '''Test the GPU version of Lyman transmission in batch versus
         both the 2D mode and the legacy 1D mode'''
-        if (not cp_available):
-            self.assertTrue(True)
-            return
         x = np.arange(300)+800.
         myz = np.arange(11)*0.1
 
