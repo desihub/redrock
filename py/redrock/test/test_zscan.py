@@ -18,7 +18,7 @@ from . import util
 cp_available = False
 try:
     import cupy as cp
-    cp_available = True
+    cp_available = cp.is_available()
 except Exception:
     cp_available = False
 
@@ -139,10 +139,8 @@ class TestZScan(unittest.TestCase):
             self.assertTrue(np.all(resa['zchi2'] == resb['zchi2']))
             self.assertTrue(np.all(resa['zcoeff'] == resb['zcoeff']))
 
+    @unittest.skipUnless(cp_available, "Skipping test_gpu_zscan because no GPU found.")
     def test_gpu_zscan(self):
-        if (not cp_available):
-            self.assertTrue(True)
-            return
         z1 = 0.2
         z2 = 0.25
         seed = np.random.randint(2**31)
