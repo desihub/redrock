@@ -1,4 +1,7 @@
 """
+redrock.templates
+=================
+
 Classes and functions for templates.
 """
 

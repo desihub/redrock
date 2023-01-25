@@ -1,4 +1,7 @@
 """
+redrock.utils
+=============
+
 Redrock utility functions.
 """
 

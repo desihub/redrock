@@ -1,4 +1,7 @@
 """
+redrock.archetypes
+==================
+
 Classes and functions for archetypes.
 """
 
