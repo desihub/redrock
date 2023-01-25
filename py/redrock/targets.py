@@ -1,4 +1,7 @@
 """
+redrock.targets
+===============
+
 Classes and functions for targets and their spectra.
 """
 

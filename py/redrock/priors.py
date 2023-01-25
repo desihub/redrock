@@ -1,4 +1,7 @@
 """
+redrock.priors
+==============
+
 Classes and functions for priors.
 """
 
@@ -8,13 +11,16 @@ import numpy as np
 
 class Priors():
     """Class to store all different redshift priors.
+
     Args:
         filename (str): the path to the redshift prior file.
-        The file should have at least one HDU with
-        EXTNAME='PRIORS', composed of:
-            TARGETID: the id of the object
-            Z: the mean of the prior
-            SIGMA: the sigma (in dz) for the prior
+
+    Note:
+        The file should have at least one HDU with EXTNAME='PRIORS', composed of:
+
+        * TARGETID: the id of the object
+        * Z: the mean of the prior
+        * SIGMA: the sigma (in dz) for the prior
     """
     def __init__(self, filename):
 
@@ -82,30 +88,34 @@ class Priors():
     @staticmethod
     def tophat(z, z0, s0):
         """Return a tophat prior of mean z0 and width s0 on the grid z.
-           Warning :
-                * np.NaN <= np.NaN -> False
-                * np.NaN <=/>= 0.0  -> False
-                * np.inf >= 0.0 -> True
-                * np.inf >= np.inf -> True
-           Conclusion:
-               * We need to use np.Nan value and not 1e10 value outside the prior to avoid
-                 the case where they are only one or two minima in the tophat
-                 since otherwise the second/third minima will be selected outside the prior
-               * Cannot use np.inf value for that since np.inf <= np.inf is True ...
-               * Need to had np.inf value in the left and right of the tophat in the case where
-               the minima is the first or the last point !
+
         Args:
             z : redshift grid
             z0 : mean
             s0 : width
+
         Returns:
             prior values on the redshift grid.
+
+        Warning:
+            * np.NaN <= np.NaN -> False
+            * np.NaN <=/>= 0.0  -> False
+            * np.inf >= 0.0 -> True
+            * np.inf >= np.inf -> True
+
+        Todo:
+            * We need to use np.Nan value and not 1e10 value outside the prior to avoid
+              the case where they are only one or two minima in the tophat
+              since otherwise the second/third minima will be selected outside the prior
+            * Cannot use np.inf value for that since np.inf <= np.inf is True ...
+            * Need to had np.inf value in the left and right of the tophat in the case where
+              the minima is the first or the last point !
         """
-        
+
         prior = np.where(np.abs(z - z0) < s0/2, 0., np.NaN)
- 
+
         index_left, index_right = np.argwhere(prior>=0.0)[0], np.argwhere(prior>=0.0)[-1]
-    
+
         if index_left == 0:
             prior[index_left] = np.inf
         else:

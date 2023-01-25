@@ -1,4 +1,7 @@
 """
+redrock.results
+===============
+
 Functions for reading and writing full redrock results to HDF5.
 """
 

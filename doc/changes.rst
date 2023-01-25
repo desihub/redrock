@@ -5,7 +5,9 @@ redrock Change Log
 0.17.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Update API documentation for completeness (PR `#229`_).
+
+.. _`#229`: https://github.com/desihub/redrock/pull/229
 
 0.17.0 (2023-01-12)
 -------------------

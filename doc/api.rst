@@ -17,6 +17,9 @@ If you're loading a module here, and don't see some functions, try adding the
 .. automodule:: redrock
     :members:
 
+.. automodule:: redrock.archetypes
+    :members:
+
 .. automodule:: redrock.constants
     :members:
 
@@ -33,6 +36,9 @@ If you're loading a module here, and don't see some functions, try adding the
     :members:
 
 .. automodule:: redrock.plotspec
+    :members:
+
+.. automodule:: redrock.priors
     :members:
 
 .. automodule:: redrock.rebin
