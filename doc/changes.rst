@@ -5,7 +5,7 @@ redrock Change Log
 0.17.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Update API documentation for completeness.
 
 0.17.0 (2023-01-12)
 -------------------
