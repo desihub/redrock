@@ -295,7 +295,7 @@ class DistTemplate(object):
         # all the templates.  In that scenario, use multiprocessing
         # workers to do the rebinning.
 
-        if self._comm is not None:
+        if self._comm is not None or mp_procs == 1:
             # MPI case- compute our local redshifts
             # This will rebin template for all z on either GPU or CPU and
             # return a dict of three 3-d arrays (nz x nlambda x nbasis)
@@ -328,6 +328,8 @@ class DistTemplate(object):
                 data[key] = list()
                 for i in range(mp_procs):
                     data[key].append(results[i][key])
+                #Ok to leave this np.vstack because GPU code doesn't enter
+                #this if block since it requires mp_procs == 1
                 data[key] = np.vstack(data[key])
 
         # Correct spectra for Lyman-series

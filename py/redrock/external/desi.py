@@ -731,6 +731,12 @@ def rrdesi(options=None, comm=None):
             gpu_proc_flags = comm.allgather(use_gpu)
         else:
             gpu_proc_flags = [use_gpu, ]
+            if (mpprocs > 1):
+                #Force mpprocs == 1 for multiprocessing mode with GPU
+                print("WARNING:  using GPU mode without MPI requires --mp 1")
+                print("WARNING:  Overriding {} multiprocesses to force this.".format(mpprocs))
+                print("WARNING:  Running with 1 process.")
+                mpprocs = 1
         ngpu_procs = sum(gpu_proc_flags)
         ncpu_procs = comm_size - ngpu_procs
         if ngpu_procs > 0 and ncpu_procs > 0:

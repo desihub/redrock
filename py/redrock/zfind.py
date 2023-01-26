@@ -325,7 +325,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
         # Here we have another parallelization choice between MPI and
         # multiprocessing.
 
-        if targets.comm is not None:
+        if targets.comm is not None or mp_procs == 1:
             # MPI case.  Every process just works with its local targets.
             for tg in local_targets:
                 zfit = fitz(results[tg.id][ft]['zchi2'] \
