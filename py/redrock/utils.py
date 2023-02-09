@@ -256,6 +256,9 @@ def transmission_Lyman(zObj,lObs, use_gpu=False):
         #zObj is a float
         lRF = lObs/(1.+zObj)
     else:
+        if (len(zObj) == 0):
+            #Empty z array
+            return np.ones((0, len(lObs)), dtype=np.float64)
         #This is an array of float
         if (lObs.min()/(1+zObj.max()) > Lyman_series['Lya']['line']):
             #Return None if wavelength range doesn't overlap with Lyman series
