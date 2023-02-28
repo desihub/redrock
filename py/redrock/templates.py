@@ -298,40 +298,12 @@ class DistTemplate(object):
         # all the templates.  In that scenario, use multiprocessing
         # workers to do the rebinning.
 
-        if self._comm is not None:
-            # MPI case- compute our local redshifts
-            # This will rebin template for all z on either GPU or CPU and
-            # return a dict of three 3-d arrays (nz x nlambda x nbasis)
-            data = rebin_template(self._template, myz, self._dwave, use_gpu=use_gpu)
-        else:
-            # We don't have MPI, so use multiprocessing
-            import multiprocessing as mp
-
-            qout = mp.Queue()
-            #Split myz to various mp procs
-            work = np.array_split(myz, mp_procs)
-            procs = list()
-            for i in range(mp_procs):
-                p = mp.Process(target=_mp_rebin_template,
-                    args=(self._template, self._dwave, work[i], qout, i, use_gpu))
-                procs.append(p)
-                p.start()
-
-            # Extract the output into a single dictionary
-            # First create a dictionary keyed by process number to keep
-            # redshifts in order.
-            results = dict()
-            data = dict()
-            for i in range(mp_procs):
-                res = qout.get()
-                results.update(res)
-            # Then use np.vstack to combine into a dict of
-            # three 3-d arrays
-            for key in results[0]:
-                data[key] = list()
-                for i in range(mp_procs):
-                    data[key].append(results[i][key])
-                data[key] = np.vstack(data[key])
+        # Removed MPI vs multiprocessing branch - CW 2/8/23
+        # faster to just call rebin_template on one proc without using mp.Queue
+        # compute our local redshifts
+        # This will rebin template for all z on either GPU or CPU and
+        # return a dict of three 3-d arrays (nz x nlambda x nbasis)
+        data = rebin_template(self._template, myz, self._dwave, use_gpu=use_gpu)
 
         # Correct spectra for Lyman-series
         for k in list(self._dwave.keys()):
