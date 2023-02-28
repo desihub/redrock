@@ -293,6 +293,9 @@ def trapz_rebin(x, y, xnew=None, edges=None, myz=None, use_gpu=False):
         scalar_z = True
     myz = np.asarray(myz, dtype=np.float64)
     nz = len(myz)
+    if (nz == 0):
+        #Empty myz array
+        return np.zeros((0,nbins, 1), dtype=np.float64)
 
     #Must multiply x by 1+z for comparison, only need to look at max/min cases
     if (edges[0] < x[0]*(1+myz.max()) or edges[-1] > x[-1]*(1+myz.min())):

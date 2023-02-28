@@ -830,7 +830,7 @@ def calc_zchi2_targets(targets, templates, mp_procs=1, use_gpu=False):
             #have 0 targets.  Set done to true in these cases so it skips the
             #while loop - this saves ~2s on 500 targets on 64 CPU / 4 GPU
             #and no need to call calc_zchi2 on empty target list
-            if (len(targets.local_target_ids()) == 0):
+            if (use_gpu and len(targets.local_target_ids()) == 0):
                 done = True
             while not done:
                 # Compute the fit for our current redshift slice.
