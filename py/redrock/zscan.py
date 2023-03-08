@@ -160,7 +160,7 @@ cuda_source = r'''
 
 #This is used by original CPU algorithm
 #It is called by archeypes so keep for now
-def _zchi2_one(Tb, weights, flux, wflux, zcoeff):
+def _zchi2_one(Tb, weights, flux, wflux, zcoeff, solve_matrices_algorithm="PCA"):
     """Calculate a single chi2.
 
     For one redshift and a set of spectral data, compute the chi2 for template
@@ -171,8 +171,10 @@ def _zchi2_one(Tb, weights, flux, wflux, zcoeff):
     y = Tb.T.dot(wflux)
 
     try:
-        zcoeff[:] = np.linalg.solve(M, y)
+        zcoeff[:] = solve_matrices(M, y, solve_algorithm=solve_matrices_algorithm, use_gpu=False)
     except np.linalg.LinAlgError:
+        return 9e99
+    except NotImplementedError:
         return 9e99
 
     model = Tb.dot(zcoeff)
@@ -497,7 +499,7 @@ def calc_batch_dot_product_3d3d_gpu(a, b, transpose_a=False):
 ###    templates are looped over on the CPU.  The operations performed
 ###    are very obviously analagous though and should be highly
 ###    maintainable.  The main difference is the extra loop on the CPU version
-def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, use_gpu):
+def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, solve_matrices_algorithm="PCA", use_gpu=False):
     """Calculate a batch of chi2.
     For many redshifts and a set of spectral data, compute the chi2 for
     template data that is already on the correct grid.
@@ -574,9 +576,16 @@ def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, use_gpu):
         #all_M = calc_batch_dot_product_3d3d_gpu(cp.ascontiguousarray(Tbs.swapaxes(-2, -1)), (weights[None, :, None] * Tbs))
         #all_y = (Tbs.swapaxes(-2, -1) @ wflux)
 
-        #3) Use cupy linalg.solve to solve for zcoeff in batch for all_M and
-        #all_y.  There is no Error thrown by cupy's version.
-        zcoeff = cp.linalg.solve(all_M, all_y)
+        #3) Use new helper method solve_matrices to use appropriate method
+        #for this template to solve for zcoeff in batch for all_M and all_y.
+        #There is no Error thrown by cupy's version of linalg.solve so just
+        #need to catch NotImplementedError.
+        try:
+            zcoeff = solve_matrices(all_M, all_y, solve_algorithm=solve_matrices_algorithm, use_gpu=True)
+        except NotImplementedError:
+            zchi2[:] = 9e99
+            zcoeff = np.zeros((nz, nbasis))
+            return (zchi2, zcoeff)
 
         #4) calc_batch_dot_product_3d2d will compute the dot product
         #of Tbs and zcoeff for all templates in parallel.
@@ -613,11 +622,15 @@ def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, use_gpu):
             M = Tb.T.dot(np.multiply(weights[:,None], Tb))
             y = Tb.T.dot(wflux)
 
-            #3) Use numpy linalg.solve to solve for zcoeff for each M, y
-            #LinAlgError must be caught
+            #3) Use new helper method solve_matrices to use appropriate method
+            #for this template to solve for zcoeff for each M, y.
+            #Catch LinAlgError and NotImplementedError
             try:
-                zcoeff[i,:] = np.linalg.solve(M, y)
+                zcoeff[i,:] = solve_matrices(M, y, solve_algorithm=solve_matrices_algorithm, use_gpu=False)
             except np.linalg.LinAlgError:
+                zchi2[i] = 9e99
+                continue
+            except NotImplementedError:
                 zchi2[i] = 9e99
                 continue
 
@@ -706,7 +719,7 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
 
         # Use helper method calc_zchi2_batch to calculate zchi2 and zcoeff
         # for all templates for all three spectra for this target
-        (zchi2[j,:], zcoeff[j,:,:]) = calc_zchi2_batch(target_data[j].spectra, tdata, weights, flux, wflux, nz, nbasis, use_gpu)
+        (zchi2[j,:], zcoeff[j,:,:]) = calc_zchi2_batch(target_data[j].spectra, tdata, weights, flux, wflux, nz, nbasis, dtemplate.template.solve_matrices_algorithm, use_gpu)
 
         #- Penalize chi2 for negative [OII] flux; ad-hoc
         if dtemplate.template.template_type == 'GALAXY':
@@ -931,3 +944,43 @@ def calc_zchi2_targets(targets, templates, mp_procs=1, use_gpu=False):
 
     return results
 
+def solve_matrices(M, y, solve_algorithm="PCA", use_gpu=False):
+    """Solve the matrix equation y = M*x for the unknown x using the
+    specified algorithm.  The default is to use PCA via numpy or cupy
+    linalg.solve.  But non-negative matrix factorization (NMF) and other
+    algorithms may be integrated here and selected based on the template.
+
+    Args:
+        M (array): 2d array on CPU; 3d array on GPU for all redshifts
+        y (array): 1d array on CPU; 2d array on GPU for all redshifts
+        solve_algorithm (string): which algorithm to use
+        use_gpu (bool): use GPU or not
+
+    Returns:
+        x (array): solution to y = M*x
+            (1-d array on CPU, 2-d array on GPU)
+
+    Raises:
+        LinAlgError is passed up if raised by np.linalg.solve
+        NotImplementedError if algorithm is not implemented or undefined
+
+    """
+
+    if solve_algorithm == "PCA":
+        #Use PCA via linalg.solve in either numpy or cupy
+        if (use_gpu):
+            #Use cupy linalg.solve to solve for zcoeff in batch for all_M and
+            #all_y where all_M and all_y are 3d and 2d arrays representing
+            #M and y at every redshift bin for the given template.
+            #There is no Error thrown by cupy's version.
+            return cp.linalg.solve(M, y)
+        else:
+            #Use numpy linalg.solve which throws exception
+            try:
+                return np.linalg.solve(M, y)
+            except np.linalg.LinAlgError:
+                raise
+    elif solve_algorithm == "NMF":
+        raise NotImplementedError("NMF is not yet implemented.")
+    else:
+        raise NotImplementedError("The solve_algorithm "+solve_algorithm+" is not implemented.")

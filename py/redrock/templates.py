@@ -141,6 +141,18 @@ class Template(object):
     def redshifts(self):
         return self._redshifts
 
+    @property
+    def solve_matrices_algorithm(self):
+        """Return a string representing the algorithm to be used in
+        zscan.solve_matrices.  Possible values are:
+        PCA
+        NMF
+        Logic can be added here to select a default algorithm based on header
+        keywords etc so that different templates seamlessly use different
+        algorithms.
+        """
+        return "PCA"
+
 
     def eval(self, coeff, wave, z):
         """Return template for given coefficients, wavelengths, and redshift
