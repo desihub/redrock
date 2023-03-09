@@ -25,7 +25,7 @@ from desispec.coaddition import coadd_fibermap
 from desispec.specscore import compute_coadd_tsnr_scores
 from desispec.maskbits import fibermask
 
-from ..utils import elapsed, get_mp, distribute_work
+from ..utils import elapsed, get_mp, distribute_work, getGPUCountMPI
 
 from ..targets import (Spectrum, Target, DistTargets)
 
@@ -721,9 +721,17 @@ def rrdesi(options=None, comm=None):
     # GPU configuration
     if args.gpu:
         # Determine which processes will use a GPU
-        max_gpuprocs = comm_size
         if args.max_gpuprocs is not None:
             max_gpuprocs = args.max_gpuprocs
+        else:
+            #Check actual number of GPUs available
+            if (comm is not None):
+                #Use custom method that checks PCI ids for MPI
+                max_gpuprocs = getGPUCountMPI(comm)
+            else:
+                #cupy getDeviceCount works for non MPI
+                import cupy
+                max_gpuprocs = cupy.cuda.runtime.getDeviceCount()
         use_gpu = comm_rank < max_gpuprocs
 
         # Determine cpu/gpu process capacities for target distribution

@@ -279,3 +279,34 @@ def transmission_Lyman(zObj,lObs, use_gpu=False):
         T = asarray(T)
 
     return T
+
+def getGPUCountMPI(comm):
+    """Determine the number of GPUs available when running in MPI mode
+
+    In MPI mode, cupy.cuda.runtime.getDeviceCount() always returns 1 so
+    this method determines the actual number of GPUs.
+
+    Args:
+        comm: the MPI communicator
+
+    Returns:
+        int: the number of GPUs
+    """
+    #First check /proc because this is fast
+    if os.access('/proc/driver/nvidia/gpus/', os.F_OK):
+        return len(os.listdir('/proc/driver/nvidia/gpus/'))
+    #Now gather device IDs which is slow
+    if comm.rank == 0:
+        print("WARNING:  --max-gpuprocs option was not specified")
+        print("WARNING:  Cannot find /proc/driver/nvidia/gpus/")
+        print("WARNING:  Finding number of devices by gathering PCI Bus ids")
+    import cupy
+    #Get this device's PCI id
+    n = cupy.cuda.runtime.getDevice()
+    pci_id = cupy.cuda.runtime.deviceGetPCIBusId(n)
+    #Gather and remove duplicates
+    pci_id_list = comm.allgather(pci_id)
+    pci_id_list = list(set(pci_id_list))
+    if comm.rank == 0:
+        print("WARNING:  Found {:d} GPUs".format(len(pci_id_list)))
+    return len(pci_id_list)
