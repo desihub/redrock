@@ -145,6 +145,7 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3, archetype=None, use_gpu
         legendre = { hs:np.array([scipy.special.legendre(i)( (w-wave_min)/(wave_max-wave_min)*2.-1. ) for i in range(deg_legendre)]) for hs, w in dwave.items() }
 
     (weights, flux, wflux) = spectral_data(spectra)
+     
     if (use_gpu):
         #Copy arrays to GPU
         weights = cp.asarray(weights)
