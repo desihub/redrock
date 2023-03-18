@@ -169,7 +169,7 @@ def _zchi2_one(Tb, weights, flux, wflux, zcoeff, solve_matrices_algorithm="PCA")
 
     M = Tb.T.dot(np.multiply(weights[:,None], Tb))
     y = Tb.T.dot(wflux)
-
+ 
     try:
         zcoeff[:] = solve_matrices(M, y, solve_algorithm=solve_matrices_algorithm, use_gpu=False)
     except np.linalg.LinAlgError:
@@ -230,7 +230,7 @@ def calc_zchi2_one(spectra, weights, flux, wflux, tdata):
             nbasis = tdata[key].shape[1]
             #print("using ",nbasis," basis vectors", flush=True)
         Tb.append(s.Rcsr.dot(tdata[key]))
-    Tb = np.vstack(Tb)
+    Tb = np.vstack(Tb) 
     zcoeff = np.zeros(nbasis, dtype=np.float64)
     zchi2 = _zchi2_one(Tb, weights, flux, wflux, zcoeff)
 

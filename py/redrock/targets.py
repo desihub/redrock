@@ -194,7 +194,7 @@ class Target(object):
 
             flux=np.array(flux)
             ivar=np.array(ivar)
-
+        
             if len(grad)>1 and cosmics_nsig > 0 :
                 # detect outliers by comparing spectra
                 grad=np.array(grad)
@@ -228,7 +228,6 @@ class Target(object):
 
             spc = Spectrum(wave, flux, weights, R, Rcsr)
             coadd.append(spc)
-
         # swap the coadds into place.
         self.spectra = coadd
         return
