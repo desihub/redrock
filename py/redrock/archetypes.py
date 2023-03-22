@@ -19,8 +19,8 @@ from .rebin import trapz_rebin
 from .utils import transmission_Lyman
 
 from .nearest_neighbours import return_N_nearest_archetypes_from_synthetic_spectra
-from .nearest_neighbours import synthetic_galaxy_data_read
 from .nearest_neighbours import return_galaxy_archetype_properties
+from .nearest_neighbours import params_for_all_galaxies
 
 ## Loading some global data once as it will be used many times
 archetype_galaxies = params_for_all_galaxies() ## Dictionary for ELG, LRG, BGS
