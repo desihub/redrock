@@ -126,7 +126,7 @@ class Archetype():
             zzchi2 = np.zeros(n_nbh, dtype=np.float64)
             zzcoeff = np.zeros((n_nbh, nleg+1), dtype=np.float64)
             spectype = self._full_type[iBest].split(':::')[0] #redrock best subtype
-            if subtype=='GALAXY':
+            if spectype=='GALAXY':
                 new_arch, gal_inds = return_N_nearest_archetypes_from_synthetic_spectra(arch_id=iBest, archetype_data=rrarchs_params, gal_data=archetype_galaxies[subtype], n_nbh=n_nbh, ret_wave=False)
                 for i in range(n_nbh):
                     binned = {hs:trapz_rebin(self.wave*(1.+z), new_arch[i], wave) for hs, wave in dwave.items()}
