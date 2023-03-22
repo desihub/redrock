@@ -688,10 +688,10 @@ def rrdesi(options=None, comm=None):
                     sys.exit(1)
         
         if args.nearest_nbh:
-            if os.path.isfile(archetypes):
-                file_check = archetypes
-            if os.path.isdir(archetypes):
-                file_check = archetypes+'rrarchetype-galaxy.fits'
+            if os.path.isfile(args.archetypes):
+                file_check = args.archetypes
+            if os.path.isdir(args.archetypes):
+                file_check = args.archetypes+'rrarchetype-galaxy.fits'
             try:
                 fits.open(file_check)[2].data ## HDU2 of galaxy-archetype must contain properties
             except IndexError:
@@ -699,7 +699,7 @@ def rrdesi(options=None, comm=None):
                 sys.exit(1)
             print('Archetype with galaxy properties is provided\n')
             print('Nearest neighbour approach is provided, so will apply the N-nearest neighbour approach on Redrock\n')
-            print('%d nearest neighbours will be used...\n'%(n_nbh))
+            print('%d nearest neighbours will be used...\n'%(args.n_nbh))
 
     targetids = None
     if args.targetids is not None:
