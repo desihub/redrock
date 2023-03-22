@@ -125,8 +125,8 @@ class Archetype():
             ### Applying nearest neighbour method based on artifical galaxies with known physical properties
             zzchi2 = np.zeros(n_nbh, dtype=np.float64)
             zzcoeff = np.zeros((n_nbh, nleg+1), dtype=np.float64)
-            subtype = self._full_type[iBest].split(':::')[0] #redrock best subtype
-            if subtype in ['ELG', 'LRG', 'BGS']:
+            spectype = self._full_type[iBest].split(':::')[0] #redrock best subtype
+            if subtype=='GALAXY':
                 new_arch, gal_inds = return_N_nearest_archetypes_from_synthetic_spectra(arch_id=iBest, archetype_data=rrarchs_params, gal_data=archetype_galaxies[subtype], n_nbh=n_nbh, ret_wave=False)
                 for i in range(n_nbh):
                     binned = {hs:trapz_rebin(self.wave*(1.+z), new_arch[i], wave) for hs, wave in dwave.items()}
@@ -135,7 +135,7 @@ class Archetype():
                     zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux, wflux, tdata)
                 i_new_Best = np.argmin(zzchi2) # new archetype
                 gal_id = gal_inds[i_new_Best]
-                new_fulltype = '%s_%d'%(subtype, gal_id)
+                new_fulltype = 'GALAXY:::%s_%d'%(subtype, gal_id) #same as Redrock format
                 chi2, coeff, fulltype = zzchi2[i_new_Best], zzcoeff[i_new_Best], new_fulltype
             else:
                 # For QSOs and Stars
@@ -152,7 +152,7 @@ class Archetype():
             tdata = { hs:np.append(binned[hs][:,None],legendre[hs].transpose(), axis=1 ) for hs, wave in dwave.items() }
             zzchi2, zzcoeff = calc_zchi2_one(spectra, weights, flux, wflux, tdata)
             chi2, coeff, fulltype =  zzchi2, zzcoeff, self._full_type[iBest]
-        import pdb;pdb.set_trace()
+        
         return chi2, coeff, fulltype
 
 
