@@ -702,7 +702,7 @@ def rrdesi(options=None, comm=None):
             print('Nearest neighbour approach is provided, so will apply the N-nearest neighbour approach on Redrock\n')
             print('%d nearest neighbours will be used...\n'%(args.n_nbh))
             print('===================\n')
-            import pdb;pdb.set_trace()
+            
     
     targetids = None
     if args.targetids is not None:
