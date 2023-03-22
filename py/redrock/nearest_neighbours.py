@@ -25,7 +25,7 @@ def synthetic_galaxy_data_read(gals):
     file_gals = '/global/cfs/cdirs/desi/users/abhijeet/synthetic_spectra/%s/%s_spectral_flux_rest_frame.fits'%(gals, gals)
     temp_gal_data = read_fits_data(file_gals, nhdu=2)
     all_gal_data['FLUX'] = fits.open(file_gals)[1].data
-    for key in temp_gal_data.dtype.names():
+    for key in temp_gal_data.dtype.names:
         all_gal_data[key] = temp_gal_data[key].data
     return all_gal_data
 
