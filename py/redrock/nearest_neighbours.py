@@ -93,7 +93,7 @@ def return_galaxy_archetype_properties(archetypes):
         filename = archetypes+'rrarchetype-galaxy.fits'
     data= read_fits_data(filename, nhdu=2)
     params = {}
-    for key in data.dtype.names():
+    for key in data.dtype.names:
         params[key] = data[key]
     return params
 
