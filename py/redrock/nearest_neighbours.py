@@ -42,9 +42,6 @@ def cartesian_dist(x_ref, Y, n_nearest):
         Y: [2d array], each row should be 3d coordinate of one object
         n_nearest: [int]: return n_nearest objects (theri indices)
     """
-    if isinstance(x_ref, list):
-        x_ref = np.array(x_ref)
-
     dist =  np.array([euclidean(x_ref, c) for c in Y])
     inds = np.argsort(dist)
     return dist, inds[0:n_nearest]
