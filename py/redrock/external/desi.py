@@ -558,9 +558,9 @@ def rrdesi(options=None, comm=None):
         help="archetype file or directory for final redshift comparison")
     
     parser.add_argument("--nearest_nbh", default=False, action="store_true",
-        required=False, help="Will not apply the nearest neighbour approach on archetypes")
+        required=False, help="Will apply the nearest neighbour approach on archetypes")
     
-    parser.add_argument("--n_nbh", type=int, default=9,
+    parser.add_argument("-n_nbh", type=int, default=9,
         required=False, help="if nearest_nbh True, N-nearest neighbours taken into account (default is 9)")
 
     parser.add_argument("-d", "--details", type=str, default=None,
