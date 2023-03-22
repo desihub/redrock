@@ -418,7 +418,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, nearest_nb
                 else:
                     spectype = [ el[0].split(':::')[0] for el in tmp['fulltype'] ]
                     subtype = [ el[0].split(':::')[1] for el in tmp['fulltype'] ]
-                    del tmp['fulltype' #it's a dictionary]
+                    del tmp['fulltype'] #it's a dictionary
                     l = len(tmp['chi2'])
                     tmp['spectype'] = np.array([spectype]).reshape((l, 1))
                     tmp['subtype'] = np.array([subtype]).reshape((l, 1))
