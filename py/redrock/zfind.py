@@ -412,21 +412,20 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, nearest_nb
                         spectype, subtype = fulltype.split(':::')
                     else:
                         spectype, subtype = (fulltype, '')
+                    l = len(tmp['chi2'])
+                    tmp['spectype'] = np.array([spectype]*l).reshape((l, 1))
+                    tmp['subtype'] = np.array([subtype]*l).reshape((l, 1))
                 else:
                     spectype = [ el[0].split(':::')[0] for el in tmp['fulltype'] ]
                     subtype = [ el[0].split(':::')[1] for el in tmp['fulltype'] ]
-                    del tmp['fulltype']
-                    #tmp.remove_column('fulltype')
+                    del tmp['fulltype' #it's a dictionary]
+                    l = len(tmp['chi2'])
+                    tmp['spectype'] = np.array([spectype]).reshape((l, 1))
+                    tmp['subtype'] = np.array([subtype]).reshape((l, 1))
 
                 #Have to create arrays of correct length since using dict of
                 #np arrays instead of astropy Table
-                l = len(tmp['chi2'])
-                #tmp['spectype'] = np.array([spectype]*l).reshape((l, 1))
-                #tmp['subtype'] = np.array([subtype]*l).reshape((l, 1))
-                tmp['spectype'] = np.array(l).reshape((l, 1))
-                tmp['subtype'] = np.array(l).reshape((l, 1))
                 tmp['ncoeff'] = np.array([tmp['coeff'].shape[1]]*l).reshape((l, 1))
-                import pdb;pdb.set_trace()
                 tzfit.append(tmp)
                 del allresults[tid][fulltype]['zfit']
 
