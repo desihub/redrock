@@ -4,6 +4,7 @@ import numpy as np
 from astropy.io import fits
 from scipy.spatial.distance import euclidean
 from numba import jit
+import os
 
 def read_fits_data(filename, nhdu):
     """
