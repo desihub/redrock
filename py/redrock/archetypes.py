@@ -136,14 +136,14 @@ class Archetype():
                 i_new_Best = np.argmin(zzchi2) # new archetype
                 gal_id = gal_inds[i_new_Best]
                 new_fulltype = 'GALAXY:::%s_%d'%(subtype, gal_id) #same as Redrock format
-                chi2, coeff, fulltype = zzchi2[i_new_Best], zzcoeff[i_new_Best], new_fulltype
+                chi2, coeff, fin_fulltype = zzchi2[i_new_Best], zzcoeff[i_new_Best], new_fulltype
             else:
                 # For QSOs and Stars
                 binned = self.rebin_template(iBest, z, dwave,trapz=True)
                 binned = { hs:trans[hs]*binned[hs] for hs, w in dwave.items() }
                 tdata = { hs:np.append(binned[hs][:,None],legendre[hs].transpose(), axis=1 ) for hs, wave in dwave.items() }
                 zzchi2, zzcoeff = calc_zchi2_one(spectra, weights, flux, wflux, tdata)
-                chi2, coeff, fulltype =  zzchi2, zzcoeff, self._full_type[iBest]
+                chi2, coeff, fin_fulltype =  zzchi2, zzcoeff, self._full_type[iBest]
 
         else:
             #Without New archetypes
@@ -151,9 +151,9 @@ class Archetype():
             binned = { hs:trans[hs]*binned[hs] for hs, w in dwave.items() }
             tdata = { hs:np.append(binned[hs][:,None],legendre[hs].transpose(), axis=1 ) for hs, wave in dwave.items() }
             zzchi2, zzcoeff = calc_zchi2_one(spectra, weights, flux, wflux, tdata)
-            chi2, coeff, fulltype =  zzchi2, zzcoeff, self._full_type[iBest]
+            chi2, coeff, fin_fulltype =  zzchi2, zzcoeff, self._full_type[iBest]
         
-        return chi2, coeff, fulltype
+        return chi2, coeff, fin_fulltype
 
 
 class All_archetypes():
