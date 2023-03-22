@@ -697,10 +697,13 @@ def rrdesi(options=None, comm=None):
             except IndexError:
                 print('ERROR: Archetype file does not contain a HDU with galaxy properties\n')
                 sys.exit(1)
+            print('\n=================\n')    
             print('Archetype with galaxy properties is provided\n')
             print('Nearest neighbour approach is provided, so will apply the N-nearest neighbour approach on Redrock\n')
             print('%d nearest neighbours will be used...\n'%(args.n_nbh))
-
+            print('===================\n')
+            import pdb;pdb.set_trace()
+    
     targetids = None
     if args.targetids is not None:
         targetids = [ int(x) for x in args.targetids.split(",") ]
