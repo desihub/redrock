@@ -1,7 +1,7 @@
 ## Best Archetype redshift estimateion based on Nearest neighbour approach on synthetic spectra approach
 
 import numpy as np
-from fits.io import fits
+from astropy.io import fits
 from scipy.spatial.distance import euclidean
 from numba import jit
 
