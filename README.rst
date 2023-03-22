@@ -32,6 +32,13 @@ To install::
 That will install the templates with the code.  Alternatively, the templates
 can be put elsewhere and set ``$RR_TEMPLATE_DIR`` to that location.
 
+Archetypes::
+
+    If want to run with --nearest_nbh option, the user must clone archetypes as:
+    git clone https://github.com/abhi0395/new-archetypes.git
+    Then run rrdesi --archetypes <archetype_dir> --nearest_nbh
+    Another required file is archetype file for galaxies that contain physical data and is stored at NERSC. If the rrdesi is run on NERSC, then the file would automatically be read. Otherwise there should be an io error. For help contact AbhijeetAnand@lbl.gov
+
 Running
 -------
 
