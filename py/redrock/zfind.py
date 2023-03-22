@@ -427,7 +427,10 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, nearest_nb
                 tmp['subtype'] = np.array([sp for sp in subtype]).reshape((l, 1))
                 #np.array([subtype]*l).reshape((l, 1))
                 
+                tmp['spectype'] = np.array(l).reshape((l, 1))
+                tmp['subtype'] = np.array(l).reshape((l, 1))
                 tmp['ncoeff'] = np.array([tmp['coeff'].shape[1]]*l).reshape((l, 1))
+                import pdb;pdb.set_trace()
                 tzfit.append(tmp)
                 del allresults[tid][fulltype]['zfit']
 
