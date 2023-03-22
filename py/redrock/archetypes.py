@@ -140,7 +140,7 @@ class Archetype():
             binned = { hs:trans[hs]*binned[hs] for hs, w in dwave.items() }
             tdata = { hs:np.append(binned[hs][:,None],legendre[hs].transpose(), axis=1 ) for hs, wave in dwave.items() }
             zzchi2, zzcoeff = calc_zchi2_one(spectra, weights, flux, wflux, tdata)
-	        chi2, coeff, fulltype =  zzchi2, zzcoeff, self._full_type[iBest]
+            chi2, coeff, fulltype =  zzchi2, zzcoeff, self._full_type[iBest]
         return chi2, coeff, fulltype
 
 
