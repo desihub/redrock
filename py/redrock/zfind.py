@@ -413,8 +413,8 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, nearest_nb
                     else:
                         spectype, subtype = (fulltype, '')
                 else:
-                    spectype = [ el.split(':::')[0] for el in tmp['fulltype'] ]
-                    subtype = [ el.split(':::')[1] for el in tmp['fulltype'] ]
+                    spectype = [ el[0].split(':::')[0] for el in tmp['fulltype'] ]
+                    subtype = [ el[0].split(':::')[1] for el in tmp['fulltype'] ]
                     tmp.remove_column('fulltype')
 
                 #Have to create arrays of correct length since using dict of
