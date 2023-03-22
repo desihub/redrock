@@ -24,7 +24,6 @@ from .nearest_neighbours import return_galaxy_archetype_properties
 
 ## Loading some global data once as it will be used many times
 archetype_galaxies = params_for_all_galaxies() ## Dictionary for ELG, LRG, BGS
-rrarchs_params = return_galaxy_archetype_properties() ## Dictionary of galaxy properties of archetypes
 
 class Archetype():
     """Class to store all different archetypes from the same spectype.
@@ -125,6 +124,7 @@ class Archetype():
             zzchi2 = np.zeros(n_nbh, dtype=np.float64)
             zzcoeff = np.zeros((n_nbh, nleg+1), dtype=np.float64)
             subtype = self._full_type[iBest].split('_')[0] #redrock best subtype
+            rrarchs_params = return_galaxy_archetype_properties(filename) ## Dictionary of galaxy properties of archetypes
             new_arch, gal_inds = return_N_nearest_archetypes_from_synthetic_spectra(arch_id=iBest, archetype_data=rrarchs_params, gal_data=archetype_galaxies[subtype], n_nbh=n_nbh, ret_wave=False)
             for i in range(n_nbh):
                 binned = {hs:trapz_rebin(self.wave*(1.+z), new_arch[i], wave) for hs, wave in dwave.items()}

@@ -79,14 +79,17 @@ def return_N_nearest_archetypes_from_synthetic_spectra(arch_id, archetype_data, 
         return arch_flux, ii
 
 
-def return_galaxy_archetype_properties():
+def return_galaxy_archetype_properties(archetypes):
 
     """ Returns a dictionary containing the physical properties of archetype galaxies
         generated from desisim by Abhijeet Anand, LBL, email: AbhijeetAnand@lbl.gov
         Returns: ['LOGMSTAR [M_sol]', 'LOGSSFR [yr^-1]', 'AV_ISM [mag]']
     """
 
-        filename = './new-archetypes/rrarchetype-galaxy.fits'
+        if os.path.isfile(archetypes):
+            filename = archetypes
+        if os.path.isdir(archetypes):
+            filename = archetypes+'rrarchetype-galaxy.fits'
         data= read_fits_data(filename, nhdu=2)
         params = {}
         for key in data.dtype.names():
