@@ -30,7 +30,7 @@ def synthetic_galaxy_data_read(gals):
         all_gal_data[key] = temp_gal_data[key].data
     return all_gal_data
 
-@jit(nopython=True)
+#@jit(nopython=True)
 def cartesian_dist(x_ref, Y, n_nearest):
 
     """
