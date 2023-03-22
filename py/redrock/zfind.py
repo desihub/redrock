@@ -413,8 +413,6 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, nearest_nb
                     else:
                         spectype, subtype = (fulltype, '')
                     nmin = len(tmp['chi2']) # defining dimension of array to save fulltype
-                    tmp['spectype'] = np.array([spectype]*l).reshape((l, 1))
-                    tmp['subtype'] = np.array([subtype]*l).reshape((l, 1))
                 else:
                     spectype = [ el[0].split(':::')[0] for el in tmp['fulltype'] ] #el is a list with one element (corresponding to each minima)
                     subtype = [ el[0].split(':::')[1] for el in tmp['fulltype'] ]
