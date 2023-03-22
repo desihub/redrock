@@ -125,7 +125,8 @@ class Archetype():
             ### Applying nearest neighbour method based on artifical galaxies with known physical properties
             zzchi2 = np.zeros(n_nbh, dtype=np.float64)
             zzcoeff = np.zeros((n_nbh, nleg+1), dtype=np.float64)
-            spectype = self._full_type[iBest].split(':::')[0] #redrock best subtype
+            spectype = self._full_type[iBest].split(':::')[0] #redrock best spectype
+            subtype = self._full_type[iBest].split(':::')[1].split('_') #redrock best subtype
             if spectype=='GALAXY':
                 new_arch, gal_inds = return_N_nearest_archetypes_from_synthetic_spectra(arch_id=iBest, archetype_data=rrarchs_params, gal_data=archetype_galaxies[subtype], n_nbh=n_nbh, ret_wave=False)
                 for i in range(n_nbh):
