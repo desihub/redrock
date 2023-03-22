@@ -42,3 +42,4 @@ MANIFEST
 
 # Mac OSX
 .DS_Store
+#./py/redrock/templates
