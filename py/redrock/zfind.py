@@ -421,12 +421,8 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, nearest_nb
                 #Have to create arrays of correct length since using dict of
                 #np arrays instead of astropy Table
                 l = len(tmp['chi2'])
-                import pdb;pdb.set_trace()
-                tmp['spectype'] = np.array([sp for sp in spectype]).reshape((l, 1))
-                #np.array([spectype]*l).reshape((l, 1))
-                tmp['subtype'] = np.array([sp for sp in subtype]).reshape((l, 1))
-                #np.array([subtype]*l).reshape((l, 1))
-                
+                #tmp['spectype'] = np.array([spectype]*l).reshape((l, 1))
+                #tmp['subtype'] = np.array([subtype]*l).reshape((l, 1))
                 tmp['spectype'] = np.array(l).reshape((l, 1))
                 tmp['subtype'] = np.array(l).reshape((l, 1))
                 tmp['ncoeff'] = np.array([tmp['coeff'].shape[1]]*l).reshape((l, 1))
