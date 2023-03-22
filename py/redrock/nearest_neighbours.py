@@ -68,7 +68,7 @@ def return_N_nearest_archetypes_from_synthetic_spectra(arch_id, archetype_data, 
     param_keys = ['LOGMSTAR [M_sol]', 'LOGSSFR [yr^-1]', 'AV_ISM [mag]']
     Y =  np.array([gal_data[key] for key in param_keys]).T  # parameters for synthetic galaxies (3d coordinates)
     Xref = np.array([archetype_data[key][arch_id] for key in param_keys]) # parameter for best fit redrock archetypes
-    dist, ii = cartesian_dist(x_ref=Xref, Y=Y, n_nbh=n_nbh)
+    dist, ii = cartesian_dist(x_ref=Xref, Y=Y, n_nearest=n_nbh)
     arch_flux = gal_data['FLUX'][ii]
     if ret_wave:
         lam0 = 1228.0701754386 #starting rest frame wavelength (same as PCA templates)
