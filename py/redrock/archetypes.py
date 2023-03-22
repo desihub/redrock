@@ -117,7 +117,6 @@ class Archetype():
             binned = { hs:trans[hs]*binned[hs] for hs, w in dwave.items() }
             tdata = { hs:np.append(binned[hs][:,None],legendre[hs].transpose(), axis=1 ) for hs, wave in dwave.items() }
             zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux, wflux, tdata)
-
         iBest = np.argmin(zzchi2)
         if nearest_nbh:
             ### Applying nearest neighbour method based on artifical galaxies with known physical properties
