@@ -67,7 +67,7 @@ def return_N_nearest_archetypes_from_synthetic_spectra(arch_id, archetype_data, 
     """
     param_keys = ['LOGMSTAR [M_sol]', 'LOGSSFR [yr^-1]', 'AV_ISM [mag]']
     Y =  np.array([gal_data[key] for key in param_keys]).T  # parameters for synthetic galaxies (3d coordinates)
-    Xref = np.array(list(archetype_data[param_keys][arch_id])) # parameter for best fit redrock archetypes
+    Xref = np.array([archetype_data[key][arch_id] for key in param_keys]) # parameter for best fit redrock archetypes
     import pdb;pdb.set_trace()
     dist, ii = cartesian_dist(x_ref=Xref, Y=Y, n_nbh=n_nbh)
     arch_flux = gal_data['FLUX'][ii]
