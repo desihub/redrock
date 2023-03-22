@@ -823,7 +823,7 @@ def rrdesi(options=None, comm=None):
 
         scandata, zfit = zfind(targets, dtemplates, mpprocs,
             nminima=args.nminima, archetypes=args.archetypes, 
-            nearest_nbh=args.nearest_nbh, n_nbh=args.n_nbh
+            nearest_nbh=args.nearest_nbh, n_nbh=args.n_nbh,
             priors=args.priors, chi2_scan=args.chi2_scan, use_gpu=use_gpu)
 
         stop = elapsed(start, "Computing redshifts", comm=comm)
