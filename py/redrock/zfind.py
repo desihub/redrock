@@ -78,7 +78,7 @@ def sort_dict_by_cols(d, colnames, sort_first_column_first = True):
         d[k] = d[k][idx]
     return
 
-def _mp_fitz(chi2, target_data, t, nminima, qout, archetype, use_gpu):
+def _mp_fitz(chi2, target_data, t, nminima, qout, archetype, nearest_nbh, n_nbh, use_gpu):
     """Wrapper for multiprocessing version of fitz.
     """
     try:
@@ -88,7 +88,7 @@ def _mp_fitz(chi2, target_data, t, nminima, qout, archetype, use_gpu):
         results = list()
         for i, tg in enumerate(target_data):
             zfit = fitz(chi2[i], t.template.redshifts, tg.spectra,
-                t.template, nminima=nminima, archetype=archetype, use_gpu=use_gpu)
+                t.template, nminima=nminima, archetype=archetype, nearest_nbh=nearest_nbh, n_nbh=n_nbh, use_gpu=use_gpu)
             results.append( (tg.id, zfit) )
         qout.put(results)
     except:
@@ -208,7 +208,7 @@ def sort_zfit_dict(zfit):
     sort_dict_by_cols(zfit, ('__badfit__', 'chi2'), sort_first_column_first=True)
     zfit.pop('__badfit__')
 
-def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=None, chi2_scan=None, use_gpu=False):
+def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, nearest_nbh=False, n_nbh=9, priors=None, chi2_scan=None, use_gpu=False):
     """Compute all redshift fits for the local set of targets and collect.
 
     Given targets and templates distributed across a set of MPI processes,
@@ -230,6 +230,8 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             Passed to fitz().
         archetypes (str, optional): file or directory containing archetypes
             to use for final fitz choice of best chi2 vs. z minimum.
+        nearest_nbh (bool), for applying nearest neighbour approach (default False)
+        n_nbh (int); if above true, then number of nearest neighbour to take into account
         priors (str, optional): file containing redshift priors
         chi2_scan (str, optional): file containing already computed chi2 scan
         use_gpu (bool, optional): use gpu for calc_zchi2
@@ -331,7 +333,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                 zfit = fitz(results[tg.id][ft]['zchi2'] \
                     + results[tg.id][ft]['penalty'],
                     t.template.redshifts, tg.spectra,
-                    t.template, nminima=nminima,archetype=archetype, use_gpu=use_gpu)
+                    t.template, nminima=nminima,archetype=archetype, nearest_nbh=nearest_nbh, n_nbh=n_nbh, use_gpu=use_gpu)
                 results[tg.id][ft]['zfit'] = zfit
         else:
             # Multiprocessing case.
@@ -355,7 +357,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     eff_chi2[i,:] = results[tg.id][ft]['zchi2'] \
                         + results[tg.id][ft]['penalty']
                 p = mp.Process(target=_mp_fitz, args=(eff_chi2,
-                    target_data, t, nminima, qout, archetype, use_gpu))
+                    target_data, t, nminima, qout, archetype, nearest_nbh, n_nbh, use_gpu))
                 procs.append(p)
                 p.start()
 

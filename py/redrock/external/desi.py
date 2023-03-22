@@ -556,6 +556,12 @@ def rrdesi(options=None, comm=None):
     parser.add_argument("--archetypes", type=str, default=None,
         required=False,
         help="archetype file or directory for final redshift comparison")
+    
+    parser.add_argument("--nearest_nbh", default=False, action="store_true",
+        required=False, help="Will not apply the nearest neighbour approach on archetypes")
+    
+    parser.add_argument("--n_nbh", type=int, default=9,
+        required=False, help="if nearest_nbh True, N-nearest neighbours taken into account (default is 9)")
 
     parser.add_argument("-d", "--details", type=str, default=None,
         required=False, help="output file for full redrock fit details")
@@ -680,7 +686,20 @@ def rrdesi(options=None, comm=None):
                     comm.Abort()
                 else:
                     sys.exit(1)
-
+        
+        if args.nearest_nbh:
+            if os.path.isfile(archetypes):
+                file_check = archetypes
+            if os.path.isdir(archetypes):
+                file_check = archetypes+'rrarchetype-galaxy.fits'
+            try:
+                fits.open(file_check)[2].data ## HDU2 of galaxy-archetype must contain properties
+            except IndexError:
+                print('ERROR: Archetype file does not contain a HDU with galaxy properties\n')
+                sys.exit(1)
+            print('Archetype with galaxy properties is provided\n')
+            print('Nearest neighbour approach is provided, so will apply the N-nearest neighbour approach on Redrock\n')
+            print('%d nearest neighbours will be used...\n'%(n_nbh))
 
     targetids = None
     if args.targetids is not None:
@@ -803,7 +822,8 @@ def rrdesi(options=None, comm=None):
         start = elapsed(None, "", comm=comm)
 
         scandata, zfit = zfind(targets, dtemplates, mpprocs,
-            nminima=args.nminima, archetypes=args.archetypes,
+            nminima=args.nminima, archetypes=args.archetypes, 
+            nearest_nbh=args.nearest_nbh, n_nbh=args.n_nbh
             priors=args.priors, chi2_scan=args.chi2_scan, use_gpu=use_gpu)
 
         stop = elapsed(start, "Computing redshifts", comm=comm)

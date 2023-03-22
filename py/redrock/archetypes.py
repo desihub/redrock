@@ -18,6 +18,13 @@ from .rebin import trapz_rebin
 
 from .utils import transmission_Lyman
 
+from .nearest_neighbours import return_N_nearest_archetypes_from_synthetic_spectra
+from .nearest_neighbours import synthetic_galaxy_data_read
+from .nearest_neighbours import return_galaxy_archetype_properties
+
+## Loading some global data once as it will be used many times
+archetype_galaxies = params_for_all_galaxies() ## Dictionary for ELG, LRG, BGS
+rrarchs_params = return_galaxy_archetype_properties() ## Dictionary of galaxy properties of archetypes
 
 class Archetype():
     """Class to store all different archetypes from the same spectype.
@@ -81,7 +88,8 @@ class Archetype():
 
         return flux
 
-    def get_best_archetype(self,spectra,weights,flux,wflux,dwave,z,legendre):
+
+    def get_best_archetype(self,spectra,weights,flux,wflux,dwave,z,legendre, nearest_nbh, n_nbh):
         """Get the best archetype for the given redshift and spectype.
 
         Args:
@@ -112,11 +120,28 @@ class Archetype():
             zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux, wflux, tdata)
 
         iBest = np.argmin(zzchi2)
-        binned = self.rebin_template(iBest, z, dwave,trapz=True)
-        binned = { hs:trans[hs]*binned[hs] for hs, w in dwave.items() }
-        tdata = { hs:np.append(binned[hs][:,None],legendre[hs].transpose(), axis=1 ) for hs, wave in dwave.items() }
-        zzchi2, zzcoeff = calc_zchi2_one(spectra, weights, flux, wflux, tdata)
-	return zzchi2, zzcoeff, self._full_type[iBest]
+        if nearest_nbh:
+            ### Applying nearest neighbour method based on artifical galaxies with known physical properties
+            zzchi2 = np.zeros(n_nbh, dtype=np.float64)
+            zzcoeff = np.zeros((n_nbh, nleg+1), dtype=np.float64)
+            subtype = self._full_type[iBest].split('_')[0] #redrock best subtype
+            new_arch, gal_inds = return_N_nearest_archetypes_from_synthetic_spectra(arch_id=iBest, archetype_data=rrarchs_params, gal_data=archetype_galaxies[subtype], n_nbh=n_nbh, ret_wave=False)
+            for i in range(n_nbh):
+                binned = {hs:trapz_rebin(self.wave*(1.+z), new_arch[i], wave) for hs, wave in dwave.items()}
+                binned = { hs:trans[hs]*binned[hs] for hs, w in dwave.items() }
+                tdata = {hs:np.append(binned[hs][:,None], legendre[hs].transpose(), axis=1 ) for hs in dwave.keys()}
+                zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux, wflux, tdata)
+            i_new_Best = np.argmin(zzchi2) # new archetype
+            gal_id = gal_inds[i_new_Best]
+            new_fulltype = '%s_%d'%(subtype, gal_id)
+            return zzchi2[i_new_Best], zzcoeff[i_new_Best], new_fulltype
+
+        else:
+            binned = self.rebin_template(iBest, z, dwave,trapz=True)
+            binned = { hs:trans[hs]*binned[hs] for hs, w in dwave.items() }
+            tdata = { hs:np.append(binned[hs][:,None],legendre[hs].transpose(), axis=1 ) for hs, wave in dwave.items() }
+            zzchi2, zzcoeff = calc_zchi2_one(spectra, weights, flux, wflux, tdata)
+	        return zzchi2, zzcoeff, self._full_type[iBest]
 
 
 class All_archetypes():
