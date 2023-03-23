@@ -129,6 +129,7 @@ class Archetype():
             subtype = self._full_type[iBest].split(':::')[1].split('_')[0] #redrock best subtype
             if spectype=='GALAXY':
                 new_arch, gal_inds = return_N_nearest_archetypes_from_synthetic_spectra(arch_id=iBest, archetype_data=rrarchs_params, gal_data=archetype_galaxies[subtype], n_nbh=n_nbh, ret_wave=False)
+                new_arch = new_arch.astype('float64') # to let it work with trapz_rebin and Numba
                 for i in range(n_nbh):
                     binned = {hs:trapz_rebin(self.wave*(1.+z), new_arch[i], wave) for hs, wave in dwave.items()}
                     binned = { hs:trans[hs]*binned[hs] for hs, w in dwave.items() }
