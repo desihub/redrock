@@ -110,6 +110,8 @@ class Template(object):
 
         self._nbasis = self.flux.shape[0]
         self._nwave = self.flux.shape[1]
+        self.minwave = self.wave[0]
+        self.maxwave = self.wave[-1]
 
 
     @property

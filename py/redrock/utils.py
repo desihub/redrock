@@ -252,6 +252,7 @@ def transmission_Lyman(zObj,lObs, use_gpu=False):
         asarray = np.asarray
 
     Lyman_series = constants.Lyman_series
+    min_wave = 0
     if (np.isscalar(zObj)):
         #zObj is a float
         lRF = lObs/(1.+zObj)
@@ -260,7 +261,9 @@ def transmission_Lyman(zObj,lObs, use_gpu=False):
             #Empty z array
             return np.ones((0, len(lObs)), dtype=np.float64)
         #This is an array of float
-        if (lObs.min()/(1+zObj.max()) > Lyman_series['Lya']['line']):
+        min_wave = lObs.min()/(1+zObj.max())
+        #if (lObs.min()/(1+zObj.max()) > Lyman_series['Lya']['line']):
+        if (min_wave > Lyman_series['Lya']['line']):
             #Return None if wavelength range doesn't overlap with Lyman series
             #No need to perform any calculations in this case
             return None
@@ -271,13 +274,14 @@ def transmission_Lyman(zObj,lObs, use_gpu=False):
         lRF = lObs/(1.+asarray(zObj)[:,None])
     T = np.ones_like(lRF)
     for l in list(Lyman_series.keys()):
+        if (min_wave > Lyman_series[l]['line']):
+            continue
         w      = lRF<Lyman_series[l]['line']
         zpix   = lObs[w]/Lyman_series[l]['line']-1.
         tauEff = Lyman_series[l]['A']*(1.+zpix)**Lyman_series[l]['B']
         T[w]  *= np.exp(-tauEff)
     if (np.isscalar(zObj) and use_gpu):
         T = asarray(T)
-
     return T
 
 def getGPUCountMPI(comm):

@@ -17,7 +17,7 @@ block_size = 512 #Default block size, should work on all modern nVidia GPUs
 # cuda_source contains raw CUDA kernels to be loaded as CUPY module
 cuda_source = r'''
         extern "C" {
-            __global__ void batch_trapz_rebin(const double* x, const double* y, const double* edges, const double* myz, const int* idx, double* result, int nz, int nbin, int nbasis, int nt) {
+            __global__ void batch_trapz_rebin(const double* x, const double* y, const double* edges, const double* myz, const long* idx, double* result, int nz, int nbin, int nbasis, int nt) {
                 // This kernel performs a trapezoidal rebinning for all
                 // redshifts and all bases of a template with either evenly
                 // or unevenly spaced input wavelength grid (QSOs).
@@ -209,7 +209,7 @@ def _trapz_rebin_batch(x, y, edges, myz, results, redshifted_x):
     return
 
 
-def trapz_rebin(x, y, xnew=None, edges=None, myz=None, use_gpu=False):
+def trapz_rebin(x, y, xnew=None, edges=None, myz=None, use_gpu=False, xmin=None, xmax=None):
     """Rebin y(x) flux density using trapezoidal integration between bin edges
     Optionally use GPU helper method to rebin in batch, see trapz_rebin_batch_gpu
     Note - current return array shape is (nz, nbins, nbasis).  Changing to
@@ -258,6 +258,14 @@ def trapz_rebin(x, y, xnew=None, edges=None, myz=None, use_gpu=False):
         myz (array): (optional) redshift array to rebin in batch,
             applying redshifts on-the-fly to x
         use_gpu (boolean): whether or not to use GPU algorithm 
+        xmin (float): (optional) minimum x-value - x[0] will be used if
+            omitted - this is useful to avoid GPU to CPU copying in the case
+            where x is a CuPy array and providing the scalar value results
+            in a large speed gain
+        xmax (float) (optional) maximum x-value - x[-1] will be used if
+            omitted - this is useful to avoid GPU to CPU copying in the case
+            where x is a CuPy array and providing the scalar value results
+            in a large speed gain
 
     Returns:
         array: integrated results with len(results) = len(edges)-1
@@ -280,6 +288,10 @@ def trapz_rebin(x, y, xnew=None, edges=None, myz=None, use_gpu=False):
     else:
         edges = np.asarray(edges)
     nbins = len(edges)-1
+    if xmin is None:
+        xmin = x[0]
+    if xmax is None:
+        xmax = x[-1]
 
     #Use these booleans to determine output array shape based on input
     scalar_z = False
@@ -298,8 +310,10 @@ def trapz_rebin(x, y, xnew=None, edges=None, myz=None, use_gpu=False):
         return np.zeros((0,nbins, 1), dtype=np.float64)
 
     #Must multiply x by 1+z for comparison, only need to look at max/min cases
-    if (edges[0] < x[0]*(1+myz.max()) or edges[-1] > x[-1]*(1+myz.min())):
+    #if (edges[0] < x[0]*(1+myz.max()) or edges[-1] > x[-1]*(1+myz.min())):
+    if (edges[0] < xmin*(1+myz.max()) or edges[-1] > xmax*(1+myz.min())):
         raise ValueError('edges must be within input x range')
+
 
     if (not use_gpu and scalar_z and len(y.shape) == 1):
         #Special case, call _trapz_rebin_1d directly
@@ -387,7 +401,7 @@ def _trapz_rebin_batch_gpu(x, y, edges, myz, result_shape):
     #of input wavelengths at each boundary in edges and
     #use serachsorted to find index for each boundary
     e2d = cp.asarray(edges/(1+myz[:,None]))
-    idx = cp.searchsorted(x, e2d, side='right').astype(np.int32)
+    idx = cp.searchsorted(x, e2d, side='right')#.astype(cp.int32)
 
     # Load CUDA kernel
     cp_module = cp.RawModule(code=cuda_source)
@@ -435,6 +449,6 @@ def rebin_template(template, myz, dwave, use_gpu=False):
     #rebin all z and all bases in batch in parallel
     #and return dict of 3-d numpy / cupy arrays 
     for hs, wave in dwave.items():
-        result[hs] = trapz_rebin(template.wave, template.flux, xnew=wave, myz=myz, use_gpu=use_gpu)
+        result[hs] = trapz_rebin(template.wave, template.flux, xnew=wave, myz=myz, use_gpu=use_gpu, xmin=template.minwave, xmax=template.maxwave)
 
     return result
