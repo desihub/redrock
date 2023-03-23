@@ -695,8 +695,12 @@ def rrdesi(options=None, comm=None):
             try:
                 fits.open(file_check)[2].data ## HDU2 of galaxy-archetype must contain properties
             except IndexError:
-                print('ERROR: Archetype file does not contain a HDU with galaxy properties\n')
-                sys.exit(1)
+                print('ERROR: Archetype file does not contain required HDU with galaxy properties\n')
+                sys.stdout.flush()
+                if comm is not None:
+                    comm.Abort()
+                else:
+                    sys.exit(1)
             print('\n=================\n')    
             print('Archetype with galaxy properties is provided\n')
             print('Nearest neighbour approach is provided, so will apply the N-nearest neighbour approach on Redrock\n')
