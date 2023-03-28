@@ -680,8 +680,13 @@ def rrdesi(options=None, comm=None):
                     comm.Abort()
                 else:
                     sys.exit(1)
-
-
+        
+        if args.archetypes is not None:
+            if os.path.exists(args.archetypes):
+                print('Archetype file exists..\n')
+            else:
+                raise IOError("ERROR: can't find archetypes_dir\n")
+                
     targetids = None
     if args.targetids is not None:
         targetids = [ int(x) for x in args.targetids.split(",") ]
