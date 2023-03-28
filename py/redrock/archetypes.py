@@ -34,7 +34,7 @@ class Archetype():
         h = fits.open(os.path.expandvars(filename), memmap=False)
 
         hdr = h['ARCHETYPES'].header
-        self.flux = np.asarray(h['ARCHETYPES'].data['ARCHETYPE']).astype('float64')
+        self.flux = np.asarray(h['ARCHETYPES'].data['ARCHETYPE']).astype('float64') # trapz_rebin only works with 'f8' arrays
         self._narch = self.flux.shape[0]
         self._nwave = self.flux.shape[1]
         self._rrtype = hdr['RRTYPE'].strip()
