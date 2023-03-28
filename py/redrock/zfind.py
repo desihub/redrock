@@ -411,17 +411,23 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     else:
                         spectype, subtype = (fulltype, '')
                 else:
-                    spectype = [ el.split(':::')[0] for el in tmp['fulltype'] ]
-                    subtype = [ el.split(':::')[1] for el in tmp['fulltype'] ]
-                    tmp.remove_column('fulltype')
+                    spectype = [ el[0].split(':::')[0] for el in tmp['fulltype'] ] #el is a list with one element (corresponding to each minima)
+                    subtype = [ el[0].split(':::')[1] for el in tmp['fulltype'] ]
+                    del tmp['fulltype'] #it's a dictionary
 
                 #Have to create arrays of correct length since using dict of
                 #np arrays instead of astropy Table
-                l = len(tmp['chi2'])
-                tmp['spectype'] = np.array([spectype]*l).reshape((l, 1))
-                tmp['subtype'] = np.array([subtype]*l).reshape((l, 1))
+                nmin = len(tmp['chi2'])
 
-                tmp['ncoeff'] = np.array([tmp['coeff'].shape[1]]*l).reshape((l, 1))
+                if np.isscalar(spectype):
+                    tmp['spectype'] = np.full((nmin, 1), spectype)
+                    tmp['subtype'] = np.full((nmin, 1), subtype)
+                else:
+                    assert len(spectype)==nmin
+                    tmp['spectype'] = np.array([spectype]).reshape((nmin, 1))
+                    tmp['subtype'] = np.array([subtype]).reshape((nmin, 1))
+                
+                tmp['ncoeff'] = np.array([tmp['coeff'].shape[1]]*nmin).reshape((nmin, 1))
                 tzfit.append(tmp)
                 del allresults[tid][fulltype]['zfit']
 
