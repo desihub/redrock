@@ -87,7 +87,7 @@ def _mp_fitz(chi2, target_data, t, nminima, qout, archetype, use_gpu):
             tg.sharedmem_unpack()
         results = list()
         for i, tg in enumerate(target_data):
-            zfit = fitz(chi2[i], t.template.redshifts, tg.spectra,
+            zfit = fitz(chi2[i], t.template.redshifts, tg,
                 t.template, nminima=nminima, archetype=archetype, use_gpu=use_gpu)
             results.append( (tg.id, zfit) )
         qout.put(results)
@@ -278,11 +278,12 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
     if (use_gpu):
         #If using GPU, copy template flux and wave arrays to cupy objects
         #on the GPU once here so it is not copied every iteration of
-        #rebinning below
+        #rebinning below.  Use gpuwave and gpuflux so as to not overwrite
+        #numpy arrays.
         import cupy as cp
         for t in templates:
-            t.template.wave = cp.asarray(t.template.wave)
-            t.template.flux = cp.asarray(t.template.flux)
+            t.template.gpuwave = cp.asarray(t.template.wave)
+            t.template.gpuflux = cp.asarray(t.template.flux)
 
     # Note: rebalancing no longer needs to be done now that following steps
     # have been GPU-ized - CW 12/22
@@ -330,7 +331,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             for tg in local_targets:
                 zfit = fitz(results[tg.id][ft]['zchi2'] \
                     + results[tg.id][ft]['penalty'],
-                    t.template.redshifts, tg.spectra,
+                    t.template.redshifts, tg,
                     t.template, nminima=nminima,archetype=archetype, use_gpu=use_gpu)
                 results[tg.id][ft]['zfit'] = zfit
         else:

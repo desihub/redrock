@@ -209,7 +209,7 @@ def _trapz_rebin_batch(x, y, edges, myz, results, redshifted_x):
     return
 
 
-def trapz_rebin(x, y, xnew=None, edges=None, myz=None, use_gpu=False, xmin=None, xmax=None):
+def trapz_rebin(x, y, xnew=None, edges=None, myz=None, use_gpu=False, xmin=None, xmax=None, edge_min=None, edge_max=None):
     """Rebin y(x) flux density using trapezoidal integration between bin edges
     Optionally use GPU helper method to rebin in batch, see trapz_rebin_batch_gpu
     Note - current return array shape is (nz, nbins, nbasis).  Changing to
@@ -258,14 +258,22 @@ def trapz_rebin(x, y, xnew=None, edges=None, myz=None, use_gpu=False, xmin=None,
         myz (array): (optional) redshift array to rebin in batch,
             applying redshifts on-the-fly to x
         use_gpu (boolean): whether or not to use GPU algorithm 
-        xmin (float): (optional) minimum x-value - x[0] will be used if
-            omitted - this is useful to avoid GPU to CPU copying in the case
-            where x is a CuPy array and providing the scalar value results
-            in a large speed gain
-        xmax (float) (optional) maximum x-value - x[-1] will be used if
-            omitted - this is useful to avoid GPU to CPU copying in the case
-            where x is a CuPy array and providing the scalar value results
-            in a large speed gain
+        xmin (float): (optional) minimum x-value - x[0]*(1+myz.max()) will be
+            used if omitted - this is useful to avoid GPU to CPU copying in
+            the case where x is a CuPy array and providing the scalar value
+            results in a large speed gain
+        xmax (float) (optional) maximum x-value - x[-1]*(1+myz.min()) will be
+            used if omitted - this is useful to avoid GPU to CPU copying in
+            the case where x is a CuPy array and providing the scalar value
+            results in a large speed gain
+        edge_min (float): (optional) minimum new bin edge - edges[0] will be
+            used if omitted - this is useful to avoid GPU to CPU copying in
+            the case where edges is precomputed on the GPU as a CuPy array
+            and providing the scalar value results in a large speed gain
+        edge_max (float): (optional) maximum new bin edge - edges[-1] will be
+            used if omitted - this is useful to avoid GPU to CPU copying in
+            the case where edges is precomputed on the GPU as a CuPy array
+            and providing the scalar value results in a large speed gain
 
     Returns:
         array: integrated results with len(results) = len(edges)-1
@@ -283,15 +291,17 @@ def trapz_rebin(x, y, xnew=None, edges=None, myz=None, use_gpu=False, xmin=None,
         ValueError: if edges are outside the range of x or if len(x) != len(y)
 
     """
+    import cupy as cp
     if edges is None:
         edges = centers2edges(xnew)
-    else:
+    elif type(edges) != cp.ndarray:
         edges = np.asarray(edges)
     nbins = len(edges)-1
-    if xmin is None:
-        xmin = x[0]
-    if xmax is None:
-        xmax = x[-1]
+    #Set edge_min and edge_max if not passed as input
+    if edge_min is None:
+        edge_min = edges[0]
+    if edge_max is None:
+        edge_max = edges[-1]
 
     #Use these booleans to determine output array shape based on input
     scalar_z = False
@@ -303,17 +313,25 @@ def trapz_rebin(x, y, xnew=None, edges=None, myz=None, use_gpu=False, xmin=None,
     elif (np.isscalar(myz)):
         myz = np.array([myz], dtype=np.float64)
         scalar_z = True
-    myz = np.asarray(myz, dtype=np.float64)
+    elif (type(myz) != cp.ndarray):
+        myz = np.asarray(myz, dtype=np.float64)
     nz = len(myz)
     if (nz == 0):
         #Empty myz array
         return np.zeros((0,nbins, 1), dtype=np.float64)
 
+    #Set xmin and xmax based on x and myz if not passed as input
     #Must multiply x by 1+z for comparison, only need to look at max/min cases
-    #if (edges[0] < x[0]*(1+myz.max()) or edges[-1] > x[-1]*(1+myz.min())):
-    if (edges[0] < xmin*(1+myz.max()) or edges[-1] > xmax*(1+myz.min())):
-        raise ValueError('edges must be within input x range')
+    if xmin is None:
+        xmin = x[0]*(1+myz.max())
+    if xmax is None:
+        xmax = x[-1]*(1+myz.min())
 
+    #Use edge_min, xmin, edge_max, and xmax for comparison - these are
+    #passed as scalars when x and edges are on GPU which results in
+    #large speed gain by minimizing GPU to CPU copying of single values
+    if (edge_min < xmin or edge_max > xmax):
+        raise ValueError('edges must be within input x range')
 
     if (not use_gpu and scalar_z and len(y.shape) == 1):
         #Special case, call _trapz_rebin_1d directly
@@ -400,7 +418,7 @@ def _trapz_rebin_batch_gpu(x, y, edges, myz, result_shape):
     #Divide edges output wavelength array by (1+myz) to get 2d array
     #of input wavelengths at each boundary in edges and
     #use serachsorted to find index for each boundary
-    e2d = cp.asarray(edges/(1+myz[:,None]))
+    e2d = edges/(1+myz[:,None])
     idx = cp.searchsorted(x, e2d, side='right')#.astype(cp.int32)
 
     # Load CUDA kernel
@@ -408,11 +426,11 @@ def _trapz_rebin_batch_gpu(x, y, edges, myz, result_shape):
     batch_trapz_rebin_kernel = cp_module.get_function('batch_trapz_rebin')
 
     #Array sizes
-    nbin = cp.int32(len(edges)-1)
-    nz = cp.int32(len(myz))
-    nbasis = cp.int32(y.shape[0])
+    nbin = len(edges)-1
+    nz = len(myz)
+    nbasis = y.shape[0]
     n = nbin*nbasis*nz
-    nt = cp.int32(len(x))
+    nt = len(x)
     if (result_shape is None):
       result_shape = (nz, nbasis, nbin)
 
@@ -425,18 +443,33 @@ def _trapz_rebin_batch_gpu(x, y, edges, myz, result_shape):
 
     return result
 
-def rebin_template(template, myz, dwave, use_gpu=False):
+def rebin_template(template, myz, dwave=None, dedges=None, use_gpu=False, xmin=None, xmax=None):
     """Rebin a template to a set of wavelengths.
 
     Given a template and a single redshift - or an array of redshifts,
     rebin the template to a set of wavelength arrays.
+    The wavelengths can be passed as centers (dwave) or edges (dedges)
+    of the wavelength bins.
 
     Args:
         template (Template): the template object
         myz (float or array of float): the redshift(s)
         dwave (dict): the keys are the "wavehash" and the values
             are a 1D array containing the wavelength grid.
+        dedges (dict): the keys are the "wavehash" and the values
+            can be either a 1D array containing the bin edges
+            of the wavelength grid (computed from centers2edges)
+            or a 3-element tuple with this 1D array as a CuPy array
+            and the min and max values as scalars in CPU memory.
         use_gpu (bool): whether or not to use the GPU algorithm
+        xmin (float): (optional) minimum x-value - x[0]*(1+myz.max()) will be
+            used if omitted - this is useful to avoid GPU to CPU copying in
+            the case where x is a CuPy array and providing the scalar value
+            results in a large speed gain
+        xmax (float) (optional) maximum x-value - x[-1]*(1+myz.min()) will be
+            used if omitted - this is useful to avoid GPU to CPU copying in
+            the case where x is a CuPy array and providing the scalar value
+            results in a large speed gain
 
     Returns:
         dict:  The rebinned template for every basis function and wavelength
@@ -446,9 +479,32 @@ def rebin_template(template, myz, dwave, use_gpu=False):
     """
     nbasis = template.flux.shape[0]  #- number of template basis vectors
     result = dict()
+    #calculate xmin and xmax if not given
+    if (xmin is None):
+        xmin = template.minwave*(1+myz.max())
+    if (xmax is None):
+        xmax = template.maxwave*(1+myz.min())
     #rebin all z and all bases in batch in parallel
     #and return dict of 3-d numpy / cupy arrays 
-    for hs, wave in dwave.items():
-        result[hs] = trapz_rebin(template.wave, template.flux, xnew=wave, myz=myz, use_gpu=use_gpu, xmin=template.minwave, xmax=template.maxwave)
-
+    if dwave is not None:
+        #Handle the case where dwave is passed
+        for hs, wave in dwave.items():
+            if (use_gpu and template.gpuwave is not None):
+                #Use gpuwave and gpuflux arrays already on GPU
+                result[hs] = trapz_rebin(template.gpuwave, template.gpuflux, xnew=wave, myz=myz, use_gpu=use_gpu, xmin=xmin, xmax=xmax)
+            else:
+                result[hs] = trapz_rebin(template.wave, template.flux, xnew=wave, myz=myz, use_gpu=use_gpu, xmin=xmin, xmax=xmax)
+    elif dedges is not None:
+        #Handle the case where dedges is passed because edges is already computed
+        minedge = None
+        maxedge = None
+        for hs, edges in dedges.items():
+            #Check if edges is a 1-d array or a tuple also containing scalar min/max values
+            if type(edges) is tuple:
+                (edges, minedge, maxedge) = edges
+            if (use_gpu and template.gpuwave is not None):
+                #Use gpuwave and gpuflux arrays already on GPU
+                result[hs] = trapz_rebin(template.gpuwave, template.gpuflux, edges=edges, myz=myz, use_gpu=use_gpu, xmin=xmin, xmax=xmax, edge_min=minedge, edge_max=maxedge)
+            else:
+                result[hs] = trapz_rebin(template.wave, template.flux, edges=edges, myz=myz, use_gpu=use_gpu, xmin=xmin, xmax=xmax, edge_min=minedge, edge_max=maxedge)
     return result

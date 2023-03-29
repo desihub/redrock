@@ -416,10 +416,10 @@ def _calc_batch_dot_product_3d2d_gpu(Tbs, zc):
     batch_dot_product_3d2d_kernel = cp_module.get_function('batch_dot_product_3d2d')
 
     #Array dims needed by CUDA:
-    nz = cp.int32(zc.shape[0])
+    nz = zc.shape[0]
     nrows = Tbs[0].shape[0]
     n = nrows * nz
-    nbasis = cp.int32(zc.shape[1])
+    nbasis = zc.shape[1]
 
     #Allocate CUPY array and calc blocks to be used
     blocks = (n+block_size-1)//block_size
@@ -612,6 +612,7 @@ def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, solve_mat
         zcoeff = np.zeros((nz, nbasis))
         #On the CPU, the templates are looped over and all operations
         #are performed on one template at a time.
+
         for i in range(nz):
             #1) dot_product_sparse_one will compute dot products of all
             #spectra with ONE template and return a 2D array of size
@@ -700,18 +701,20 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
     tdata = dtemplate.local.data
 
     for j in range(ntargets):
-        (weights, flux, wflux) = spectral_data(target_data[j].spectra)
+        if (use_gpu):
+            #Use new helper method gpu_spectral_data() that will copy to GPU
+            #on first access and recall data in subsequent calls instead of
+            #copying every time
+            (weights, flux, wflux) = target_data[j].gpu_spectral_data()
+        else:
+            #Use spectral_data() to get numpy arrays
+            (weights, flux, wflux) = spectral_data(target_data[j].spectra)
         if np.sum(weights) == 0:
             zchi2[j,:] = 9e99
             #Update progress for multiprocessing!!
             if dtemplate.comm is None and progress is not None:
                 progress.put(1)
             continue
-        if (use_gpu):
-            #Copy data to CUPY arrays
-            weights = cp.asarray(weights)
-            flux = cp.asarray(flux)
-            wflux = cp.asarray(wflux)
 
         # Solving for template fit coefficients for all redshifts.
         # We use the pre-interpolated templates for each
@@ -719,6 +722,7 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
 
         # Use helper method calc_zchi2_batch to calculate zchi2 and zcoeff
         # for all templates for all three spectra for this target
+
         (zchi2[j,:], zcoeff[j,:,:]) = calc_zchi2_batch(target_data[j].spectra, tdata, weights, flux, wflux, nz, nbasis, dtemplate.template.solve_matrices_algorithm, use_gpu)
 
         #- Penalize chi2 for negative [OII] flux; ad-hoc
