@@ -682,10 +682,18 @@ def rrdesi(options=None, comm=None):
                     sys.exit(1)
         
         if args.archetypes is not None:
-            if os.path.exists(args.archetypes):
-                print('Archetype file exists..\n')
+            if os.path.exists(args.archetypes) and os.access(args.archetypes, os.R_OK):
+                if os.listdir(args.archetypes):
+                    print('Archetype file/directory exists and readable and it is not empty..\n')
+                else:
+                    print('ERROR: Archetype file/directory is empty\n')
+                    sys.stdout.flush()
+                    if comm is not None:
+                        comm.Abort()
+                    else:
+                        sys.exit(1)
             else:
-                print("ERROR: can't find archetypes_dir\n")
+                print("ERROR: can't find archetypes_dir or it is unreadable\n")
                 sys.stdout.flush()
                 if comm is not None:
                     comm.Abort()
