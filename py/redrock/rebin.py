@@ -291,10 +291,14 @@ def trapz_rebin(x, y, xnew=None, edges=None, myz=None, use_gpu=False, xmin=None,
         ValueError: if edges are outside the range of x or if len(x) != len(y)
 
     """
-    import cupy as cp
+    if use_gpu:
+        import cupy as cp
     if edges is None:
         edges = centers2edges(xnew)
-    elif type(edges) != cp.ndarray:
+    elif use_gpu:
+        if type(edges) != cp.ndarray:
+            edges = np.asarray(edges)
+    else:
         edges = np.asarray(edges)
     nbins = len(edges)-1
     #Set edge_min and edge_max if not passed as input
@@ -313,7 +317,10 @@ def trapz_rebin(x, y, xnew=None, edges=None, myz=None, use_gpu=False, xmin=None,
     elif (np.isscalar(myz)):
         myz = np.array([myz], dtype=np.float64)
         scalar_z = True
-    elif (type(myz) != cp.ndarray):
+    elif (use_gpu):
+        if (type(myz) != cp.ndarray):
+            myz = np.asarray(myz, dtype=np.float64)
+    else:
         myz = np.asarray(myz, dtype=np.float64)
     nz = len(myz)
     if (nz == 0):
