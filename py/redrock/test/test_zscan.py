@@ -157,9 +157,11 @@ class TestZScan(unittest.TestCase):
         # Construct the distributed template.
         template = util.get_template(redshifts=np.linspace(0.15, 0.3, 50))
         dtemp = DistTemplate(template, dwave)
-
         results_a = calc_zchi2_targets(dtarg, [ dtemp ], use_gpu=False)
-        results_b = calc_zchi2_targets(dtarg, [ dtemp ], use_gpu=True)
+
+        #Construct a GPU template and calculate results
+        dtemp_gpu = DistTemplate(template, dwave, gpu_mode=True, use_gpu=True)
+        results_b = calc_zchi2_targets(dtarg, [ dtemp_gpu ], use_gpu=True)
 
         for tg in dtarg.local():
             resa = results_a[tg.id][template.full_type]
