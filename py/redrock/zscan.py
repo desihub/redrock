@@ -437,7 +437,7 @@ def _calc_batch_dot_product_3d2d_gpu(Tbs, zc):
 ###    seems to have a bug on Volta architecure GPUs.
 ###    This is the equivalent of M = a @ b
 ###    (Or if transpose_a is true, M = a.swapaxes(-2, -1) @ b)
-def calc_batch_dot_product_3d3d_gpu(a, b, transpose_a=False):
+def calc_batch_dot_product_3d3d_gpu(a, b, transpose_a=False, fullprecision=True):
     """GPU implementation.
     Calculate a batch dot product of the 3d array a with the 3d
     array b.  The 3-d array shape is A x B x C and the 2-d array
@@ -457,6 +457,14 @@ def calc_batch_dot_product_3d3d_gpu(a, b, transpose_a=False):
             (nz x nrows x nbasis)
         transpose_a (bool): Whether or not to transpose the a array
             before performing the dot product
+        fullprecision (bool): Whether or not to ensure reproducibly identical
+            results.  The context is that it can be faster to use many
+            parallel threads to compute a single output array element of the
+            dot product result, but due to floating point rounding issues,
+            the random order of the summation can change the result by
+            order 1e-16 (e.g. a+b+c != c+a+b).  When set to true, the
+            number of parallel threads is decreased to ensure reproducibility
+            at a trade-off of speed.
 
     Returns:
         M (array): the output of the dot product, (nz x ncols x ncols)
@@ -466,6 +474,7 @@ def calc_batch_dot_product_3d3d_gpu(a, b, transpose_a=False):
 
     #Use batch_dot_product_3d3d kernel to compute model array
     # Load CUDA kernel
+    import cupy as cp
     cp_module = cp.RawModule(code=cuda_source)
     batch_dot_product_3d3d_kernel = cp_module.get_function('batch_dot_product_3d3d')
 
@@ -479,9 +488,11 @@ def calc_batch_dot_product_3d3d_gpu(a, b, transpose_a=False):
         ncols = cp.int32(a.shape[1])
     transpose_a = cp.int32(transpose_a)
 
-    if (nz > 512):
+    if (fullprecision):
         nparallel = cp.int32(4)
-    else:
+    elif (nz <= 512):
+        #With smaller arrays, use more parallel threads in order to maximize
+        #parallelism and leverage the full resources of the GPU
         nparallel = cp.int32(64)
     #Create CUPY arrays and calculate number of blocks
     n = nz*ncols*ncols*nparallel
@@ -499,7 +510,7 @@ def calc_batch_dot_product_3d3d_gpu(a, b, transpose_a=False):
 ###    templates are looped over on the CPU.  The operations performed
 ###    are very obviously analagous though and should be highly
 ###    maintainable.  The main difference is the extra loop on the CPU version
-def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, solve_matrices_algorithm="PCA", use_gpu=False):
+def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, solve_matrices_algorithm="PCA", use_gpu=False, fullprecision=True):
     """Calculate a batch of chi2.
     For many redshifts and a set of spectral data, compute the chi2 for
     template data that is already on the correct grid.
@@ -514,6 +525,8 @@ def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, solve_mat
         nz (int): number of templates
         nbasis (int): nbasis
         use_gpu (bool): use GPU or not
+        fullprecision (bool): Whether or not to ensure reproducibly identical
+            results.  See calc_batch_dot_product_3d3d_gpu.
 
     Returns:
         zchi2 (array): array with one element per redshift for this target
@@ -568,7 +581,7 @@ def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, solve_mat
         ###!!! NOTE - uncomment the below line to run (B)
         #(all_M, all_y) = calc_M_y_batch(Tbs, weights, wflux, nz, nbasis)
         ###!!! NOTE - uncomment the 2 lines below to run (C)
-        all_M = calc_batch_dot_product_3d3d_gpu(Tbs, (weights[None, :, None] * Tbs), transpose_a=True)
+        all_M = calc_batch_dot_product_3d3d_gpu(Tbs, (weights[None, :, None] * Tbs), transpose_a=True, fullprecision=fullprecision)
         all_y = (Tbs.swapaxes(-2, -1) @ wflux)
         ###!!! NOTE - uncomment the 2 lines below to run an alternative
         ###    version of (C) that does the transpose on the CPU - this seems
@@ -723,7 +736,8 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
         # Use helper method calc_zchi2_batch to calculate zchi2 and zcoeff
         # for all templates for all three spectra for this target
 
-        (zchi2[j,:], zcoeff[j,:,:]) = calc_zchi2_batch(target_data[j].spectra, tdata, weights, flux, wflux, nz, nbasis, dtemplate.template.solve_matrices_algorithm, use_gpu)
+        # For coarse z scan, use fullprecision = False to maximize speed
+        (zchi2[j,:], zcoeff[j,:,:]) = calc_zchi2_batch(target_data[j].spectra, tdata, weights, flux, wflux, nz, nbasis, dtemplate.template.solve_matrices_algorithm, use_gpu, fullprecision=False)
 
         #- Penalize chi2 for negative [OII] flux; ad-hoc
         if dtemplate.template.template_type == 'GALAXY':
