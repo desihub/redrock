@@ -488,6 +488,7 @@ def calc_batch_dot_product_3d3d_gpu(a, b, transpose_a=False, fullprecision=True)
         ncols = cp.int32(a.shape[1])
     transpose_a = cp.int32(transpose_a)
 
+    nparallel = cp.int32(4)
     if (fullprecision):
         nparallel = cp.int32(4)
     elif (nz <= 512):
