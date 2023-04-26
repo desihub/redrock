@@ -107,7 +107,7 @@ def minfit(x, y):
     return (x0, xerr, y0, zwarn)
 
 
-def fitz(zchi2, redshifts, spectra, template, nminima=3, archetype=None, use_gpu=False):
+def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=False):
     """Refines redshift measurement around up to nminima minima.
 
     TODO:
@@ -116,8 +116,8 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3, archetype=None, use_gpu
     Args:
         zchi2 (array): chi^2 values for each redshift.
         redshifts (array): the redshift values.
-        spectra (list): list of Spectrum objects at different wavelengths
-            grids.
+        target (Target): the target for this fit which includes a list
+            of Spectrum objects at different wavelength grids.
         template (Template): the template for this fit.
         nminima (int): the number of minima to consider.
         use_gpu (bool): use GPU or not
@@ -132,6 +132,7 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3, archetype=None, use_gpu
         import cupy as cp
 
     nbasis = template.nbasis
+    spectra = target.spectra
 
     # Build dictionary of wavelength grids
     dwave = { s.wavehash:s.wave for s in spectra }
@@ -146,10 +147,13 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3, archetype=None, use_gpu
 
     (weights, flux, wflux) = spectral_data(spectra)
     if (use_gpu):
-        #Copy arrays to GPU
-        weights = cp.asarray(weights)
-        flux = cp.asarray(flux)
-        wflux = cp.asarray(wflux)
+        #Get CuPy arrays of weights, flux, wflux
+        #These are created on the first call of gpu_spectral_data() for a
+        #target and stored.  They are retrieved on subsequent calls.
+        (gpuweights, gpuflux, gpuwflux) = target.gpu_spectral_data()
+        # Build dictionaries of wavelength bin edges, min/max, and centers
+        gpuedges = { s.wavehash:(s.gpuedges, s.minedge, s.maxedge) for s in spectra }
+        gpudwave = { s.wavehash:s.gpuwave for s in spectra }
 
     results = list()
     #Define nz here instead of hard-coding length 15 and then defining nz as
@@ -171,12 +175,25 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3, archetype=None, use_gpu
         ilo = max(0, imin-1)
         ihi = min(imin+1, len(zchi2)-1)
         zz = np.linspace(redshifts[ilo], redshifts[ihi], nz)
+        if (use_gpu):
+            #Create a redshift grid on the GPU as well
+            gpuzz = cp.asarray(zz)
 
         zzchi2 = np.zeros(nz, dtype=np.float64)
         zzcoeff = np.zeros((nz, nbasis), dtype=np.float64)
 
+        #Calculate xmin and xmax from template and zz array on CPU and
+        #pass as scalars
+        xmin = template.minwave*(1+zz.max())
+        xmax = template.maxwave*(1+zz.min())
+
         #Use batch mode for rebin_template, transmission_Lyman, and calc_zchi2
-        binned = rebin_template(template, zz, dwave, use_gpu=use_gpu)
+        if (use_gpu):
+            #Use gpuedges already calculated and on GPU
+            binned = rebin_template(template, gpuzz, dedges=gpuedges, use_gpu=use_gpu, xmin=xmin, xmax=xmax)
+        else:
+            #Use numpy CPU arrays
+            binned = rebin_template(template, zz, dwave, use_gpu=use_gpu, xmin=xmin, xmax=xmax)
         # Correct spectra for Lyman-series
         for k in list(dwave.keys()):
             #New algorithm accepts all z as an array and returns T, a 2-d
@@ -188,23 +205,41 @@ def fitz(zchi2, redshifts, spectra, template, nminima=3, archetype=None, use_gpu
                 continue
             #Vectorize multiplication
             binned[k] *= T[:,:,None]
-        (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, binned, weights, flux, wflux, nz, nbasis, use_gpu=use_gpu)
+        if (use_gpu):
+            #Use gpu arrays for weights, flux, wflux
+            (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, binned, gpuweights, gpuflux, gpuwflux, nz, nbasis, use_gpu=use_gpu)
+        else:
+            #Use numpy CPU arrays for weights, flux, wflux 
+            (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, binned, weights, flux, wflux, nz, nbasis, use_gpu=use_gpu)
 
         #- fit parabola to 3 points around minimum
         i = min(max(np.argmin(zzchi2),1), len(zz)-2)
         zmin, sigma, chi2min, zwarn = minfit(zz[i-1:i+2], zzchi2[i-1:i+2])
 
         try:
-            binned = rebin_template(template, np.array([zmin]), dwave, use_gpu=use_gpu)
+            #Calculate xmin and xmax from template and pass as scalars 
+            xmin = template.minwave*(1+zmin)
+            ximax = template.maxwave*(1+zmin)
+            if (use_gpu):
+                #Use gpuedges already calculated and on GPU
+                binned = rebin_template(template, cp.array([zmin]), dedges=gpuedges, use_gpu=use_gpu, xmin=xmin, xmax=xmax)
+            else:
+                binned = rebin_template(template, np.array([zmin]), dwave, use_gpu=use_gpu, xmin=xmin, xmax=xmax)
             for k in list(dwave.keys()):
-                T = transmission_Lyman(np.array([zmin]),dwave[k], use_gpu=use_gpu)
+                if (use_gpu):
+                    #Copy binned[k] back to CPU to perform next steps on CPU
+                    #because faster with only 1 redshift
+                    binned[k] = binned[k].get()
+                #Use CPU always
+                T = transmission_Lyman(np.array([zmin]),dwave[k], use_gpu=False)
                 if (T is None):
                     #Return value of None means that wavelenght regime
                     #does not overlap Lyman transmission - continue here
                     continue
                 #Vectorize multiplication
                 binned[k] *= T[:,:,None]
-            (chi2, coeff) = calc_zchi2_batch(spectra, binned, weights, flux, wflux, 1, nbasis, use_gpu=use_gpu)
+            #Use CPU always with one redshift
+            (chi2, coeff) = calc_zchi2_batch(spectra, binned, weights, flux, wflux, 1, nbasis, use_gpu=False)
             coeff = coeff[0,:]
         except ValueError as err:
             if zmin<redshifts[0] or redshifts[-1]<zmin:

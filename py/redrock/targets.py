@@ -44,6 +44,35 @@ class Spectrum(object):
         else:
             self.wavehash = hash((len(wave), wave[0], wave[1], wave[-2], wave[-1]))
 
+        #It is much more efficient to calculate edges once if rebinning
+        #and copy to GPU and store here rather than doing this every time
+        self._gpuwave = None
+        self._gpuedges = None
+        #Min and max edges are stored as CPU scalars to avoid excessive
+        #GPU to CPU copying
+        self.minedge = None
+        self.maxedge = None
+
+    @property
+    def gpuwave(self):
+        if (self._gpuwave is None):
+            #Copy to GPU once
+            import cupy as cp
+            self._gpuwave = cp.asarray(self.wave)
+        return self._gpuwave
+
+    @property
+    def gpuedges(self):
+        if (self._gpuedges is None):
+            #Compute edges, minedge, and maxedge, and copy to GPU once
+            import cupy as cp
+            from .rebin import centers2edges
+            edges = centers2edges(self.wave)
+            self.minedge = edges[0]
+            self.maxedge = edges[-1]
+            self._gpuedges = cp.asarray(edges)
+        return self._gpuedges
+
     @property
     def Rcsr(self):
         if self._Rcsr is None:
@@ -130,6 +159,22 @@ class Target(object):
 
         if coadd:
             self.compute_coadd(cache_Rcsr=False, cosmics_nsig=cosmics_nsig)
+
+        #It is much more efficient to copy weights, flux, wflux to GPU once
+        #and store here rather than doing this every time
+        self.gpuweights = None
+        self.gpuflux = None
+        self.gpuwflux = None
+
+    def gpu_spectral_data(self):
+        if self.gpuweights is None:
+            #Assemble arrays and copy to GPU once
+            import cupy as cp
+            self.gpuweights = cp.concatenate([cp.asarray(s.ivar) for s in self.spectra])
+            self.gpuflux = cp.concatenate([cp.asarray(s.flux) for s in self.spectra])
+            self.gpuwflux = self.gpuweights * self.gpuflux
+        return (self.gpuweights, self.gpuflux, self.gpuwflux)
+
 
     ### @profile
     def compute_coadd(self, cache_Rcsr=False, cosmics_nsig=0.):

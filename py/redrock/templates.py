@@ -110,8 +110,13 @@ class Template(object):
 
         self._nbasis = self.flux.shape[0]
         self._nwave = self.flux.shape[1]
+        #It is much more efficient to copy wave and flux to GPU once
+        #and store here rather than doing this every time, and keep track
+        #of min and max wave as scalars on CPU
         self.minwave = self.wave[0]
         self.maxwave = self.wave[-1]
+        self.gpuwave = None
+        self.gpuflux = None
 
 
     @property
