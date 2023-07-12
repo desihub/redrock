@@ -556,6 +556,15 @@ def rrdesi(options=None, comm=None):
     parser.add_argument("--archetypes", type=str, default=None,
         required=False,
         help="archetype file or directory for final redshift comparison")
+    
+    parser.add_argument("-deg_legendre", type=int, default=3,
+        required=False, help="if archetypes are provided legendre polynomials upto deg_legendre-1 will be used (default is 3)")
+
+    parser.add_argument("-nz", type=int, default=15,
+        required=False, help="number of finer redshift to be used around best fit redshifts (default is 15)")
+
+    parser.add_argument("--per_camera", default=False, action="store_true",
+        required=False, help="If True, in archetype mode the fitting will be done for each camera/band")
 
     parser.add_argument("-d", "--details", type=str, default=None,
         required=False, help="output file for full redrock fit details")
@@ -682,9 +691,11 @@ def rrdesi(options=None, comm=None):
                     sys.exit(1)
         
         if args.archetypes is not None:
+            print('\n===== Archetype argument is provided, performing necessary checks=======\n')
             if os.path.exists(args.archetypes) and os.access(args.archetypes, os.R_OK):
                 if os.listdir(args.archetypes):
                     print('Archetype file/directory exists and readable and it is not empty..\n')
+                    print('Archetype will be applied to all spectype\n')
                 else:
                     print('ERROR: Archetype file/directory is empty\n')
                     sys.stdout.flush()
@@ -692,6 +703,13 @@ def rrdesi(options=None, comm=None):
                         comm.Abort()
                     else:
                         sys.exit(1)
+                
+                if os.path.isfile(args.archetypes) and os.access(args.archetypes, os.R_OK)::
+                    print('Archetype is a file and it exists and readable\n')
+                    print('Archetype will only be applied to that spectype\n')
+        
+            print('degree upto which legendre polynomials will be used = %d\n'%(args.deg_legendre-1))
+    
             else:
                 print("ERROR: can't find archetypes_dir or it is unreadable\n")
                 sys.stdout.flush()
@@ -822,7 +840,7 @@ def rrdesi(options=None, comm=None):
 
         scandata, zfit = zfind(targets, dtemplates, mpprocs,
             nminima=args.nminima, archetypes=args.archetypes,
-            priors=args.priors, chi2_scan=args.chi2_scan, use_gpu=use_gpu)
+            priors=args.priors, chi2_scan=args.chi2_scan, use_gpu=use_gpu, nz=args.nz, per_camera=args.per_camera, deg_legendre=args.deg_legendre)
 
         stop = elapsed(start, "Computing redshifts", comm=comm)
 
