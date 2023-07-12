@@ -236,6 +236,76 @@ def calc_zchi2_one(spectra, weights, flux, wflux, tdata):
 
     return zchi2, zcoeff
 
+
+def per_camera_coeff_with_least_square(spectra, tdata, method=None, model=False):
+
+    """
+    This function calculates coefficients for archetype mode in each camera using normal linear algebra matrix solver of bvls (bounded value least square) method
+
+    """
+    all_coeff, all_chi2 = {}, {}
+    all_model = {}
+    
+    bands = ['b', 'z', 'r'] # this is how it is saved in target spectra
+    new_bands = ['b', 'r', 'z'] # this is how it should be 
+    ncam = 3
+    
+    # fitting per camera
+    for s in spectra:
+        Tb = list()
+        nbasis = None
+        key = s.wavehash
+        band = bands[kk]
+        if nbasis is None:
+            nbasis = tdata[key].shape[1]
+        flux, weights = s.flux, s.ivar
+        Tb.append(s.Rcsr.dot(tdata[key]))
+        Tb = np.array(Tb)[0]
+
+        wflux = flux*weights
+
+        M = Tb.T.dot(np.multiply(weights[:,None], Tb))
+        y = Tb.T.dot(wflux)
+        ret_zcoeff= np.zeros(nbasis)
+
+        if method=='pca':
+            try:
+                zcoeff = solve_matrices(M, y, solve_algorithm='PCA', use_gpu=False)
+            except np.linalg.LinAlgError:
+                return 9e+99, np.zeros(ncam*nbasis)
+        else:
+            bounds = []
+            for i in range(nbasis):
+                if i not in [1]:
+                    bounds.append([0.0, np.inf])
+                else:
+                    bounds.append([-np.inf, np.inf]) # constant term in archetype method (can be positive or negative)
+            bounds = np.array(bounds).T
+            try:
+                res = lsq_linear(M, y, bounds=bounds, method='bvls')
+                zcoeff = res.x
+            except np.linalg.LinAlgError:
+                return 9e+99, ret_zcoeff
+
+        model = Tb.dot(zcoeff)
+        zchi2 = np.dot((flux - model)**2, weights)
+        all_chi2[band] = zchi2
+        all_coeff[band] = zcoeff
+        all_model[band] = model
+
+    #combining result per camera
+    
+    zchi2 = np.sum([all_chi2[key] for key in new_bands])
+    ret_zcoeff = np.concatenate([all_coeff[key] for key in new_bands])
+    ret_model = np.concatenate([all_model[key] for key in new_bands])
+    
+    if model:
+        return zchi2, ret_zcoeff, ret_model
+    else:
+        return zchi2, ret_zcoeff
+
+       
+
 def batch_dot_product_sparse(spectra, tdata, nz, use_gpu):
     """Calculate a batch dot product of the 3 sparse matrices in spectra
     with every template in tdata.  Sparse matrix libraries are used

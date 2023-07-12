@@ -18,6 +18,7 @@ from .rebin import trapz_rebin
 
 from .utils import transmission_Lyman
 
+from .zscan import per_camera_coeff_with_least_square
 
 class Archetype():
     """Class to store all different archetypes from the same spectype.
@@ -81,7 +82,7 @@ class Archetype():
 
         return flux
 
-    def get_best_archetype(self,spectra,weights,flux,wflux,dwave,z,legendre):
+    def get_best_archetype(self,spectra,weights,flux,wflux,dwave,z,legendre, per_camera):
         """Get the best archetype for the given redshift and spectype.
 
         Args:
@@ -92,32 +93,37 @@ class Archetype():
             dwave (dic): dictionary of wavelength grids
             z (float): best redshift
             legendre (dic): legendre polynomial
-
+            per_camera (bool): True if fitting needs to be done in each camera
+            
         Returns:
             chi2 (float): chi2 of best archetype
             zcoef (array): zcoef of best archetype
             fulltype (str): fulltype of best archetype
 
         """
+        
+        if per_camera:
+            ncam=3 # b, r, z cameras
+        else:
+            ncam = 1 # entire spectra
 
         nleg = legendre[list(legendre.keys())[0]].shape[0]
         zzchi2 = np.zeros(self._narch, dtype=np.float64)
-        zzcoeff = np.zeros((self._narch, nleg+1), dtype=np.float64)
+        zzcoeff = np.zeros((self._narch,  ncam*(nleg+1)), dtype=np.float64)
         trans = { hs:transmission_Lyman(z,w) for hs, w in dwave.items() }
 
         for i in range(self._narch):
-            binned = self.rebin_template(i, z, dwave,trapz=False)
+            binned = self.rebin_template(i, z, dwave,trapz=True)
             binned = { hs:trans[hs]*binned[hs] for hs, w in dwave.items() }
             tdata = { hs:np.append(binned[hs][:,None],legendre[hs].transpose(), axis=1 ) for hs, wave in dwave.items() }
-            zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux, wflux, tdata)
+            if per_camera:
+                zzchi2[i], zzcoeff[i]= per_camera_coeff_with_least_square(spectra, tdata, method=None)
+            else:
+                zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux, wflux, tdata)
 
         iBest = np.argmin(zzchi2)
-        binned = self.rebin_template(iBest, z, dwave,trapz=True)
-        binned = { hs:trans[hs]*binned[hs] for hs, w in dwave.items() }
-        tdata = { hs:np.append(binned[hs][:,None],legendre[hs].transpose(), axis=1 ) for hs, wave in dwave.items() }
-        zzchi2, zzcoeff = calc_zchi2_one(spectra, weights, flux, wflux, tdata)
 
-        return zzchi2, zzcoeff, self._full_type[iBest]
+        return zzchi2[iBest], zzcoeff[iBest], self._full_type[iBest]
 
 
 class All_archetypes():

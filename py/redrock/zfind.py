@@ -78,7 +78,7 @@ def sort_dict_by_cols(d, colnames, sort_first_column_first = True):
         d[k] = d[k][idx]
     return
 
-def _mp_fitz(chi2, target_data, t, nminima, qout, archetype, use_gpu):
+def _mp_fitz(chi2, target_data, t, nminima, qout, archetype, use_gpu, deg_legendre, nz, per_camera):
     """Wrapper for multiprocessing version of fitz.
     """
     try:
@@ -88,7 +88,7 @@ def _mp_fitz(chi2, target_data, t, nminima, qout, archetype, use_gpu):
         results = list()
         for i, tg in enumerate(target_data):
             zfit = fitz(chi2[i], t.template.redshifts, tg,
-                t.template, nminima=nminima, archetype=archetype, use_gpu=use_gpu)
+                t.template, nminima=nminima, archetype=archetype, use_gpu=use_gpu, nz=nz, per_camera=per_camera, deg_legendre=deg_legendre)
             results.append( (tg.id, zfit) )
         qout.put(results)
     except:
@@ -208,7 +208,7 @@ def sort_zfit_dict(zfit):
     sort_dict_by_cols(zfit, ('__badfit__', 'chi2'), sort_first_column_first=True)
     zfit.pop('__badfit__')
 
-def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=None, chi2_scan=None, use_gpu=False):
+def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=None, chi2_scan=None, use_gpu=False, nz=None, per_camera=None, deg_legendre=None):
     """Compute all redshift fits for the local set of targets and collect.
 
     Given targets and templates distributed across a set of MPI processes,
@@ -233,6 +233,9 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
         priors (str, optional): file containing redshift priors
         chi2_scan (str, optional): file containing already computed chi2 scan
         use_gpu (bool, optional): use gpu for calc_zchi2
+        deg_legendre (int): in archetype mode polynomials upto deg_legendre-1 will be used
+        nz (int): number of finer redshift pixels to search for final redshift
+        per_camera: (bool): True if fitting needs to be done in each camera for archetype mode
 
     Returns:
         tuple: (allresults, allzfit), where "allresults" is a dictionary of the
@@ -244,6 +247,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
 
     if archetypes:
         archetypes = All_archetypes(archetypes_dir=archetypes).archetypes
+        archetype_spectype = list(archetypes.keys()) # to account for the case if only one archetype is provided
 
     if not priors is None:
         priors = Priors(priors)
@@ -309,10 +313,21 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
 
     start_findbest = elapsed(None, "", comm=targets.comm)
     sort = np.array([ t.template.full_type for t in templates]).argsort()
+
+    #creating list of template spectype to make use in case archetypes would be used
+    all_spectype = []
+    for spec in templates:
+        temp_spectype = spec.template._rrtype.split(':::')
+        if temp_spectype not in all_spectype:
+            all_spectype.append(temp_spectype)
+
     for t in np.array(list(templates))[sort]:
         ft = t.template.full_type
         if archetypes:
-            archetype = archetypes[t.template._rrtype]
+            if t.template._rrtype in archetypes.keys():
+                archetype = archetypes[t.template._rrtype]
+            else:
+                archetype = None
         else:
             archetype = None
 
@@ -332,7 +347,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                 zfit = fitz(results[tg.id][ft]['zchi2'] \
                     + results[tg.id][ft]['penalty'],
                     t.template.redshifts, tg,
-                    t.template, nminima=nminima,archetype=archetype, use_gpu=use_gpu)
+                    t.template, nminima=nminima,archetype=archetype, use_gpu=use_gpu, deg_legendre=deg_legendre, nz=nz, per_camera=per_camera)
                 results[tg.id][ft]['zfit'] = zfit
         else:
             # Multiprocessing case.
@@ -356,7 +371,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     eff_chi2[i,:] = results[tg.id][ft]['zchi2'] \
                         + results[tg.id][ft]['penalty']
                 p = mp.Process(target=_mp_fitz, args=(eff_chi2,
-                    target_data, t, nminima, qout, archetype, use_gpu))
+                    target_data, t, nminima, qout, archetype, use_gpu, deg_legendre, nz, per_camera))
                 procs.append(p)
                 p.start()
 
@@ -456,9 +471,24 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             #np arrays instead of astropy Table
             l = len(tzfit['chi2'])
             tzfit['targetid'] = np.array([tid]*l)
-            if archetypes:
-                tzfit['zwarn'][ tzfit['coeff'][:,0]<=0. ] |= ZW.NEGATIVE_MODEL
-
+            if (archetypes):
+                if not per_camera:
+                    if (len(archetype_spectype)==len(all_spectype)):
+                        ibad = tzfit['coeff'][:,0]<=0. # means that best archetype has negative model
+                    else:
+                        ## need to check if this bitmask is only applied to objects for which archetypes are used
+                        ibad = np.array([tzfit['spectype']==spec for spec in archetype_spectype])[0]
+                        for k in np.where(ibad==1)[0].tolist():
+                            if tzfit['coeff'][:,0][k]>=0.: # don't reject physical model
+                                ibad[k]=False
+                else:
+                    for k in np.where(ibad==1)[0].tolist():
+                        # we will reject any model where archetype is negative in any band
+                        coeff_bool = np.array([tzfit['coeff'][:,(deg_legendre+1)*i][k]>=0. for i in range(3)])
+                        if np.all(coeff_bool):
+                            ibad[k]=False
+                tzfit['zwarn'][ibad] |= ZW.NEGATIVE_MODEL
+            
             tzfit['zwarn'][ tzfit['npixels']==0 ] |= ZW.NODATA
             tzfit['zwarn'][ (tzfit['npixels']<10*tzfit['ncoeff']) ] |= \
                 ZW.LITTLE_COVERAGE
@@ -546,8 +576,8 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             del allresults[tid]['meta']
 
         # Standardize column sizes
-        if allzfit['subtype'].dtype != '<U20':
-            allzfit.replace_column('subtype', allzfit['subtype'].astype('<U20'))
+        if allzfit['subtype'].dtype != '<U32':
+            allzfit.replace_column('subtype', allzfit['subtype'].astype('<U32'))
 
         if allzfit['spectype'].dtype != '<U6':
             allzfit.replace_column('spectype',allzfit['spectype'].astype('<U6'))

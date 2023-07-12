@@ -107,7 +107,17 @@ def minfit(x, y):
     return (x0, xerr, y0, zwarn)
 
 
-def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=False):
+
+def legendre_calculate(nleg, dwave):
+
+    wave = np.concatenate([ w for w in dwave.values() ])
+    wmin = wave.min()
+    wmax = wave.max()
+    legendre = { hs:np.array([scipy.special.legendre(i)( (w-wmin)/(wmax-wmin)*2.-1. ) for i in range(nleg)]) for hs, w in dwave.items() }
+
+    return legendre
+
+def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=False, deg_legendre=None, nz=None, per_camera=False):
     """Refines redshift measurement around up to nminima minima.
 
     TODO:
@@ -121,6 +131,9 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
         template (Template): the template for this fit.
         nminima (int): the number of minima to consider.
         use_gpu (bool): use GPU or not
+        deg_legendre (int): in archetype mode polynomials upto deg_legendre-1 will be used
+        nz (int): number of finer redshift pixels to search for final redshift
+        per_camera: (bool): True if fitting needs to be done in each camera for archetype mode
 
     Returns:
         Table: the fit parameters for the minima.
@@ -138,14 +151,10 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
     dwave = { s.wavehash:s.wave for s in spectra }
 
     if not archetype is None:
-        # TODO: set this as a parameter
-        deg_legendre = 3
-        wave = np.concatenate([ w for w in dwave.values() ])
-        wave_min = wave.min()
-        wave_max = wave.max()
-        legendre = { hs:np.array([scipy.special.legendre(i)( (w-wave_min)/(wave_max-wave_min)*2.-1. ) for i in range(deg_legendre)]) for hs, w in dwave.items() }
-
+        legendre = legendre_calculate(deg_legendre, dwave=dwave)
+    
     (weights, flux, wflux) = spectral_data(spectra)
+    
     if (use_gpu):
         #Get CuPy arrays of weights, flux, wflux
         #These are created on the first call of gpu_spectral_data() for a
@@ -158,7 +167,6 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
     results = list()
     #Define nz here instead of hard-coding length 15 and then defining nz as
     #length of zz list
-    nz = 15
 
     for imin in find_minima(zchi2):
         if len(results) == nminima:
@@ -279,7 +287,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
                 chi2=chi2min, zz=zz, zzchi2=zzchi2,
                 coeff=coeff))
         else:
-            chi2min, coeff, fulltype = archetype.get_best_archetype(spectra,weights,flux,wflux,dwave,zbest,legendre)
+            chi2min, coeff, fulltype = archetype.get_best_archetype(spectra,weights,flux,wflux,dwave,zbest,legendre, per_camera)
 
             results.append(dict(z=zbest, zerr=zerr, zwarn=zwarn,
                 chi2=chi2min, zz=zz, zzchi2=zzchi2,
