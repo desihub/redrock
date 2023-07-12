@@ -704,7 +704,7 @@ def rrdesi(options=None, comm=None):
                     else:
                         sys.exit(1)
                 
-                if os.path.isfile(args.archetypes) and os.access(args.archetypes, os.R_OK)::
+                if os.path.isfile(args.archetypes) and os.access(args.archetypes, os.R_OK):
                     print('Archetype is a file and it exists and readable\n')
                     print('Archetype will only be applied to that spectype\n')
         
