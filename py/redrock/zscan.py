@@ -294,7 +294,8 @@ def per_camera_coeff_with_least_square(spectra, tdata, method=None):
         all_coeff[band] = zcoeff
         all_model[band] = model
         kk = kk+1
-    #combining result per camera
+    
+    #combining per camera results into one full model
     
     zchi2 = np.sum([all_chi2[key] for key in new_bands])
     ret_zcoeff = np.concatenate([all_coeff[key] for key in new_bands])
