@@ -426,10 +426,17 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                         spectype, subtype = fulltype.split(':::')
                     else:
                         spectype, subtype = (fulltype, '')
+
                 else:
-                    spectype = [ el[0].split(':::')[0] for el in tmp['fulltype'] ] #el is a list with one element (corresponding to each minima)
-                    subtype = [ el[0].split(':::')[1] for el in tmp['fulltype'] ]
-                    del tmp['fulltype'] #it's a dictionary
+                    if 'fulltype' in tmp.keys():#to take care of case when archetype is applied only for one template
+                        spectype = [ el[0].split(':::')[0] for el in tmp['fulltype'] ] #el is a list with one element (corresponding to each minima)
+                        subtype = [ el[0].split(':::')[1] for el in tmp['fulltype'] ]
+                        del tmp['fulltype'] #it's a dictionary
+                    else:
+                        if fulltype.count(':::') > 0:
+                            spectype, subtype = fulltype.split(':::')
+                        else:
+                            spectype, subtype = (fulltype, '')
 
                 #Have to create arrays of correct length since using dict of
                 #np arrays instead of astropy Table
@@ -525,7 +532,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             allzfit.append(astropy.table.Table(tzfit))
 
         allzfit = astropy.table.vstack(allzfit)
-
+        print(allzfit['targetid', 'z', 'zwarn', 'chi2', 'deltachi2', 'spectype', 'subtype'])
         # Cosmetic: move TARGETID to be first column as primary key
         try:
             allzfit.columns.move_to_end('targetid', last=False)

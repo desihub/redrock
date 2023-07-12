@@ -691,25 +691,24 @@ def rrdesi(options=None, comm=None):
                     sys.exit(1)
         
         if args.archetypes is not None:
-            print('\n===== Archetype argument is provided, performing necessary checks=======\n')
+            print('\n===== Archetype argument is provided, doing necessary checks=======\n')
             if os.path.exists(args.archetypes) and os.access(args.archetypes, os.R_OK):
-                if os.listdir(args.archetypes):
-                    print('Archetype file/directory exists and readable and it is not empty..\n')
-                    print('Archetype will be applied to all spectype\n')
-                else:
-                    print('ERROR: Archetype file/directory is empty\n')
-                    sys.stdout.flush()
-                    if comm is not None:
-                        comm.Abort()
+                if os.path.isdir(args.archetypes):
+                    if os.listdir(args.archetypes):
+                        print('Archetype directory exists and readable and it is not empty..\n')
+                        print('Archetype will be applied to all spectype\n')
                     else:
-                        sys.exit(1)
+                        print('ERROR: Archetype directory is empty\n')
+                        sys.stdout.flush()
+                        if comm is not None:
+                            comm.Abort()
+                        else:
+                            sys.exit(1)
                 
-                if os.path.isfile(args.archetypes) and os.access(args.archetypes, os.R_OK):
+                if os.path.isfile(args.archetypes):
                     print('Archetype is a file and it exists and readable\n')
                     print('Archetype will only be applied to that spectype\n')
-        
-            print('degree upto which legendre polynomials will be used = %d\n'%(args.deg_legendre-1))
-    
+                print('legendre polynomials up to degree %d will be used\n'%(args.deg_legendre-1)) 
             else:
                 print("ERROR: can't find archetypes_dir or it is unreadable\n")
                 sys.stdout.flush()
@@ -717,7 +716,7 @@ def rrdesi(options=None, comm=None):
                     comm.Abort()
                 else:
                     sys.exit(1)
-                
+
     targetids = None
     if args.targetids is not None:
         targetids = [ int(x) for x in args.targetids.split(",") ]
