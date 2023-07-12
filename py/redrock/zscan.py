@@ -10,6 +10,7 @@ from __future__ import division, print_function
 import sys
 import traceback
 import numpy as np
+from scipy.optimize import lsq_linear
 
 #try:
 #    import cupy as cp
@@ -237,7 +238,7 @@ def calc_zchi2_one(spectra, weights, flux, wflux, tdata):
     return zchi2, zcoeff
 
 
-def per_camera_coeff_with_least_square(spectra, tdata, method=None, model=False):
+def per_camera_coeff_with_least_square(spectra, tdata, method=None):
 
     """
     This function calculates coefficients for archetype mode in each camera using normal linear algebra matrix solver of bvls (bounded value least square) method
@@ -245,7 +246,7 @@ def per_camera_coeff_with_least_square(spectra, tdata, method=None, model=False)
     """
     all_coeff, all_chi2 = {}, {}
     all_model = {}
-    
+    kk = 0 
     bands = ['b', 'z', 'r'] # this is how it is saved in target spectra
     new_bands = ['b', 'r', 'z'] # this is how it should be 
     ncam = 3
@@ -292,17 +293,14 @@ def per_camera_coeff_with_least_square(spectra, tdata, method=None, model=False)
         all_chi2[band] = zchi2
         all_coeff[band] = zcoeff
         all_model[band] = model
-
+        kk = kk+1
     #combining result per camera
     
     zchi2 = np.sum([all_chi2[key] for key in new_bands])
     ret_zcoeff = np.concatenate([all_coeff[key] for key in new_bands])
     ret_model = np.concatenate([all_model[key] for key in new_bands])
     
-    if model:
-        return zchi2, ret_zcoeff, ret_model
-    else:
-        return zchi2, ret_zcoeff
+    return zchi2, ret_zcoeff
 
        
 

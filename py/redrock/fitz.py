@@ -152,6 +152,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
 
     if not archetype is None:
         legendre = legendre_calculate(deg_legendre, dwave=dwave)
+   
     
     (weights, flux, wflux) = spectral_data(spectra)
     

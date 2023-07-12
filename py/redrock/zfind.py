@@ -248,7 +248,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
     if archetypes:
         archetypes = All_archetypes(archetypes_dir=archetypes).archetypes
         archetype_spectype = list(archetypes.keys()) # to account for the case if only one archetype is provided
-
+    
     if not priors is None:
         priors = Priors(priors)
 
@@ -489,6 +489,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                             if tzfit['coeff'][:,0][k]>=0.: # don't reject physical model
                                 ibad[k]=False
                 else:
+                    ibad = np.array([tzfit['spectype']==spec for spec in archetype_spectype])[0]
                     for k in np.where(ibad==1)[0].tolist():
                         # we will reject any model where archetype is negative in any band
                         coeff_bool = np.array([tzfit['coeff'][:,(deg_legendre+1)*i][k]>=0. for i in range(3)])
@@ -532,7 +533,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             allzfit.append(astropy.table.Table(tzfit))
 
         allzfit = astropy.table.vstack(allzfit)
-        print(allzfit['targetid', 'z', 'zwarn', 'chi2', 'deltachi2', 'spectype', 'subtype'])
+        #print(allzfit['targetid', 'z', 'zwarn', 'chi2', 'deltachi2', 'spectype', 'subtype'])
         # Cosmetic: move TARGETID to be first column as primary key
         try:
             allzfit.columns.move_to_end('targetid', last=False)

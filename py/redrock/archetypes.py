@@ -122,7 +122,6 @@ class Archetype():
                 zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux, wflux, tdata)
 
         iBest = np.argmin(zzchi2)
-
         return zzchi2[iBest], zzcoeff[iBest], self._full_type[iBest]
 
 
@@ -176,8 +175,11 @@ def find_archetypes(archetypes_dir=None):
                 raise IOError("ERROR: can't find archetypes_dir, $RR_ARCHETYPE_DIR, or {rrcode}/archetypes/")
         lstfilename = sorted(glob(os.path.join(archetypes_dir, 'rrarchetype-*.fits')))
     else:
-        archetypes_dir_expand = os.path.expandvars(archetypes_dir)
-        lstfilename = glob(os.path.join(archetypes_dir_expand, 'rrarchetype-*.fits'))
-        lstfilename = sorted([ f.replace(archetypes_dir_expand,archetypes_dir) for f in lstfilename])
+        if os.path.isfile(archetypes_dir):
+            lstfilename = [archetypes_dir]
+        else:
+            archetypes_dir_expand = os.path.expandvars(archetypes_dir)
+            lstfilename = glob(os.path.join(archetypes_dir_expand, 'rrarchetype-*.fits'))
+            lstfilename = sorted([ f.replace(archetypes_dir_expand,archetypes_dir) for f in lstfilename])
 
     return lstfilename
