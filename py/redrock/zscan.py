@@ -277,7 +277,7 @@ def per_camera_coeff_with_least_square(spectra, tdata, method=None):
         else:
             bounds = []
             for i in range(nbasis):
-                if i not in [1]:
+                if i!=1:
                     bounds.append([0.0, np.inf])
                 else:
                     bounds.append([-np.inf, np.inf]) # constant term in archetype method (can be positive or negative)

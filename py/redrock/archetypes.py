@@ -122,6 +122,7 @@ class Archetype():
                 zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux, wflux, tdata)
 
         iBest = np.argmin(zzchi2)
+        
         return zzchi2[iBest], zzcoeff[iBest], self._full_type[iBest]
 
 

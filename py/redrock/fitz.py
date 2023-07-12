@@ -113,7 +113,7 @@ def legendre_calculate(nleg, dwave):
     wave = np.concatenate([ w for w in dwave.values() ])
     wmin = wave.min()
     wmax = wave.max()
-    legendre = { hs:np.array([scipy.special.legendre(i)( (w-wmin)/(wmax-wmin)*2.-1. ) for i in range(nleg)]) for hs, w in dwave.items() }
+    legendre = { hs:np.array([scipy.special.legendre(i)( (w-wmin)/(wmax-wmin)*2.) for i in range(nleg)]) for hs, w in dwave.items() }
 
     return legendre
 

@@ -533,7 +533,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             allzfit.append(astropy.table.Table(tzfit))
 
         allzfit = astropy.table.vstack(allzfit)
-        #print(allzfit['targetid', 'z', 'zwarn', 'chi2', 'deltachi2', 'spectype', 'subtype'])
+        print(allzfit['targetid', 'z', 'zwarn', 'chi2', 'deltachi2', 'spectype', 'subtype'])
         # Cosmetic: move TARGETID to be first column as primary key
         try:
             allzfit.columns.move_to_end('targetid', last=False)
@@ -590,7 +590,11 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
         if allzfit['spectype'].dtype != '<U6':
             allzfit.replace_column('spectype',allzfit['spectype'].astype('<U6'))
 
-        maxcoeff = np.max([t.template.nbasis for t in templates])
+        if not per_camera:
+            maxcoeff = np.max([t.template.nbasis for t in templates])
+        else:
+            ncam = 3 # three cameras of DESI:: b, r, z
+            maxcoeff = max(np.max([t.template.nbasis for t in templates]), ncam*(deg_legendre+1))
         ntarg, ncoeff = allzfit['coeff'].shape
         if ncoeff != maxcoeff:
             coeff = np.zeros((ntarg, maxcoeff), dtype=allzfit['coeff'].dtype)
