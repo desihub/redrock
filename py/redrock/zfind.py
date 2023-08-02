@@ -479,21 +479,13 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             l = len(tzfit['chi2'])
             tzfit['targetid'] = np.array([tid]*l)
             if (archetypes):
-                if not per_camera:
-                    if (len(archetype_spectype)==len(all_spectype)):
-                        ibad = tzfit['coeff'][:,0]<=0. # means that best archetype has negative model
-                    else:
-                        ## need to check if this bitmask is only applied to objects for which archetypes are used
-                        ibad = np.array([tzfit['spectype']==spec for spec in archetype_spectype])[0]
-                        for k in np.where(ibad==1)[0].tolist():
-                            if tzfit['coeff'][:,0][k]>=0.: # don't reject physical model
-                                ibad[k]=False
+                if (len(archetype_spectype)==len(all_spectype)):
+                    ibad = tzfit['coeff'][:,0]<=0. # means that best archetype has negative model
                 else:
+                    ## need to check if this bitmask is only applied to objects for which archetypes are used
                     ibad = np.array([tzfit['spectype']==spec for spec in archetype_spectype])[0]
                     for k in np.where(ibad==1)[0].tolist():
-                        # we will reject any model where archetype is negative in any band
-                        coeff_bool = np.array([tzfit['coeff'][:,(deg_legendre+1)*i][k]>=0. for i in range(3)])
-                        if np.all(coeff_bool):
+                        if tzfit['coeff'][:,0][k]>=0.: # don't reject physical model
                             ibad[k]=False
                 tzfit['zwarn'][ibad] |= ZW.NEGATIVE_MODEL
             
@@ -533,7 +525,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             allzfit.append(astropy.table.Table(tzfit))
 
         allzfit = astropy.table.vstack(allzfit)
-        # print(allzfit['targetid', 'z', 'zwarn', 'chi2', 'deltachi2', 'spectype', 'subtype'])
+        print(allzfit['targetid', 'z', 'zwarn', 'chi2', 'deltachi2', 'spectype', 'subtype'])
         # Cosmetic: move TARGETID to be first column as primary key
         try:
             allzfit.columns.move_to_end('targetid', last=False)
@@ -594,7 +586,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             maxcoeff = np.max([t.template.nbasis for t in templates])
         else:
             ncam = 3 # three cameras of DESI:: b, r, z
-            maxcoeff = max(np.max([t.template.nbasis for t in templates]), ncam*(deg_legendre+1))
+            maxcoeff = max(np.max([t.template.nbasis for t in templates]), ncam*(deg_legendre)+1)
         ntarg, ncoeff = allzfit['coeff'].shape
         if ncoeff != maxcoeff:
             coeff = np.zeros((ntarg, maxcoeff), dtype=allzfit['coeff'].dtype)

@@ -20,6 +20,8 @@ from .utils import transmission_Lyman
 
 from .zscan import per_camera_coeff_with_least_square
 
+#from .nearest_neighbours import model_galaxy_spectra_with_nearest_neighbours
+
 class Archetype():
     """Class to store all different archetypes from the same spectype.
 
@@ -106,10 +108,18 @@ class Archetype():
             ncam=3 # b, r, z cameras
         else:
             ncam = 1 # entire spectra
+        
+        wkeys = list(dwave.keys())
+        new_keys = [wkeys[0], wkeys[2], wkeys[1]]
 
+        obs_wave = np.concatenate([dwave[key] for key in new_keys])
+        
+ 
         nleg = legendre[list(legendre.keys())[0]].shape[0]
         zzchi2 = np.zeros(self._narch, dtype=np.float64)
-        zzcoeff = np.zeros((self._narch,  ncam*(nleg+1)), dtype=np.float64)
+        zzcoeff = np.zeros((self._narch,  1+ncam*(nleg)), dtype=np.float64)
+        #zzmodel = np.zeros((self._narch, obs_wave.size), dtype=np.float64)
+
         trans = { hs:transmission_Lyman(z,w) for hs, w in dwave.items() }
 
         for i in range(self._narch):
@@ -117,12 +127,12 @@ class Archetype():
             binned = { hs:trans[hs]*binned[hs] for hs, w in dwave.items() }
             tdata = { hs:np.append(binned[hs][:,None],legendre[hs].transpose(), axis=1 ) for hs, wave in dwave.items() }
             if per_camera:
-                zzchi2[i], zzcoeff[i]= per_camera_coeff_with_least_square(spectra, tdata, method=None)
+                zzchi2[i], zzcoeff[i]= per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None)
             else:
                 zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux, wflux, tdata)
 
         iBest = np.argmin(zzchi2)
-        #print(zzcoeff[iBest]) 
+        #print(zzchi2[iBest], zzcoeff[iBest])
         return zzchi2[iBest], zzcoeff[iBest], self._full_type[iBest]
 
 
