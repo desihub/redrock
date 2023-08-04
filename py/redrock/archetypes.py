@@ -125,7 +125,10 @@ class Archetype():
         for i in range(self._narch):
             binned = self.rebin_template(i, z, dwave,trapz=True)
             binned = { hs:trans[hs]*binned[hs] for hs, w in dwave.items() }
-            tdata = { hs:np.append(binned[hs][:,None],legendre[hs].transpose(), axis=1 ) for hs, wave in dwave.items() }
+            if nleg>0:
+                tdata = { hs:np.append(binned[hs][:,None],legendre[hs].transpose(), axis=1 ) for hs, wave in dwave.items() }
+            else:
+                tdata = {hs:binned[hs][:,None] for hs, wave in dwave.items()}
             if per_camera:
                 zzchi2[i], zzcoeff[i]= per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None)
             else:

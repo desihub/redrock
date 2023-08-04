@@ -708,8 +708,10 @@ def rrdesi(options=None, comm=None):
                 if os.path.isfile(args.archetypes):
                     print('Archetype is a file and it exists and readable\n')
                     print('Archetype will only be applied to that spectype\n')
-
-                print('legendre polynomials up to degree %d will be used\n'%(args.deg_legendre-1)) 
+                if args.deg_legendre>0:
+                    print('legendre polynomials of degrees %s will be added to Archetypes\n'%([i for i in range(args.deg_legendre)]))
+                else:
+                    print('No Legendre polynomial will be added to archetypes...\n')
             else:
                 print("ERROR: can't find archetypes_dir or it is unreadable\n")
                 sys.stdout.flush()

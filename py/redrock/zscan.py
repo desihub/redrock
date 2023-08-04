@@ -239,62 +239,74 @@ def calc_zchi2_one(spectra, weights, flux, wflux, tdata):
 
 def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None):
 
-    """
-    This function calculates coefficients for archetype mode in each camera using normal linear algebra matrix solver of bvls (bounded value least square) method
+  """
+  This function calculates coefficients for archetype mode in each camera using normal linear algebra matrix solver of bvls (bounded value least square) method
+  """
+  ncam = 3
+  Tb = list()
+  flux = np.concatenate([s.flux for s in spectra])
+  weights = np.concatenate([s.ivar for s in spectra])
+  wflux = flux*weights
 
-    """
+  nbasis2 = 1+nleg*ncam # 1 : for actual physical archetype, nleg: number of legendre polynomials, ncamera: number of cameras
 
-    ncam = 3
-    Tb = list()
-    flux = np.concatenate([s.flux for s in spectra])
-    weights = np.concatenate([s.ivar for s in spectra])
-    wflux = flux*weights
+  # fitting per camera
+  for i,s in enumerate(spectra):
+    key = s.wavehash
+    tdata2 = np.zeros((tdata[key].shape[0],nbasis2))
+    tdata2[:,0]   = tdata[key][:,0] # this is the actual archetype
+    if nleg>0:
+        for k in range(1, nleg+1):
+            tdata2[:,k+nleg*i] = tdata[key][:,k] # Legendre polynomials terms
+    Tb.append(s.Rcsr.dot(tdata2))
 
-    nbasis2 = 1+nleg*ncam # 1 : for actual physical archetype, nleg: number of legendre polynomials, ncamera: number of cameras
+  Tb = np.vstack(Tb)
 
-    # fitting per camera
-    for i,s in enumerate(spectra):
-        key = s.wavehash
-        tdata2 = np.zeros((tdata[key].shape[0],nbasis2))
-        tdata2[:,0]     = tdata[key][:,0] # this is the actual archetype
-        tdata2[:,1+2*i] = tdata[key][:,1] # constant term
-        tdata2[:,2+2*i] = tdata[key][:,2] # slope term
-        Tb.append(s.Rcsr.dot(tdata2))
+  M = Tb.T.dot(np.multiply(weights[:,None], Tb))
+  y = Tb.T.dot(wflux)
+  ret_zcoeff= {'alpha':[], 'b':[], 'r':[], 'z':[]}
 
-    Tb = np.vstack(Tb)
+  if method=='pca':
+    try:
+      zcoeff = solve_matrices(M, y, solve_algorithm='PCA', use_gpu=False)
+    except np.linalg.LinAlgError:
+      return 9e+99, np.zeros(nbasis2)
+  else:
+    bounds = []
+    for i in range(nbasis2):
+      if i==0:
+        bounds.append([0.0, np.inf]) # archetype term
+      else:
+        bounds.append([-np.inf, np.inf]) # constant and slope terms in archetype method (can be positive or negative)
+
+    bounds = np.array(bounds).T
+    try:
+      res = lsq_linear(M, y, bounds=bounds, method='bvls')
+      zcoeff = res.x
+    except np.linalg.LinAlgError:
+      return 9e+99, np.zeros(nbasis2)
+
+  model = Tb.dot(zcoeff)
+  zchi2 = np.dot((flux - model)**2, weights)
+
+  # saving coefficients in correct order
+  ret_zcoeff['alpha'] = [zcoeff[0]] # archetype coefficient
+  
+  if nleg>=1:
+    split_coeff =  np.split(zcoeff[1:], ncam) # n_camera = 3
+    old_coeff = {}
     
-    M = Tb.T.dot(np.multiply(weights[:,None], Tb))
-    y = Tb.T.dot(wflux)
-    ret_zcoeff= np.zeros(nbasis2)
+    # in spectra the values are saved as 'b', 'z', 'r'. So just re-ordering them here
+    old_coeff['b']=split_coeff[0] 
+    old_coeff['r']=split_coeff[2]
+    old_coeff['z']=split_coeff[1]
+    
+    for band in ['b', 'r', 'z']:# 3 camera
+        ret_zcoeff[band] = old_coeff[band]
 
-    if method=='pca':
-        try:
-            zcoeff = solve_matrices(M, y, solve_algorithm='PCA', use_gpu=False)
-        except np.linalg.LinAlgError:
-            return 9e+99, np.zeros(nbasis2)
-    else:
-        bounds = []
-        for i in range(nbasis2):
-            if i==0:
-                bounds.append([0.0, np.inf])
-            else:
-                bounds.append([-np.inf, np.inf]) # constant term in archetype method (can be positive or negative)
-        bounds = np.array(bounds).T
-        try:
-            res = lsq_linear(M, y, bounds=bounds, method='bvls')
-            zcoeff = res.x
-        except np.linalg.LinAlgError:
-            return 9e+99, ret_zcoeff
-
-    model = Tb.dot(zcoeff)
-    zchi2 = np.dot((flux - model)**2, weights)
-    # saving coefficients in correct order
-    ret_zcoeff[0:3] = zcoeff[0:3] # b-camera
-    ret_zcoeff[3:5] = zcoeff[5:] # r - camera
-    ret_zcoeff[5:]=zcoeff[3:5] # z-camera
-
-    return zchi2, ret_zcoeff
-
+  coeff = np.concatenate([c for c in ret_zcoeff.values()])
+   
+  return zchi2, coeff
 
 def batch_dot_product_sparse(spectra, tdata, nz, use_gpu):
     """Calculate a batch dot product of the 3 sparse matrices in spectra
