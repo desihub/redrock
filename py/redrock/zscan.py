@@ -296,7 +296,8 @@ def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None):
     split_coeff =  np.split(zcoeff[1:], ncam) # n_camera = 3
     old_coeff = {}
     
-    # in spectra the values are saved as 'b', 'z', 'r'. So just re-ordering them here
+    # in target spectra redrock saves values as 'b', 'z', 'r'. So just re-ordering them here to 'b', 'r', 'z' for easier reading
+
     old_coeff['b']=split_coeff[0] 
     old_coeff['r']=split_coeff[2]
     old_coeff['z']=split_coeff[1]
