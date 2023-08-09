@@ -237,7 +237,7 @@ def calc_zchi2_one(spectra, weights, flux, wflux, tdata):
 
     return zchi2, zcoeff
 
-def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None):
+def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None, n_nbh=None):
 
   """
   This function calculates coefficients for archetype mode in each camera using normal linear algebra matrix solver of bvls (bounded value least square) method
@@ -248,15 +248,18 @@ def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None):
   weights = np.concatenate([s.ivar for s in spectra])
   wflux = flux*weights
 
-  nbasis2 = 1+nleg*ncam # 1 : for actual physical archetype, nleg: number of legendre polynomials, ncamera: number of cameras
+  nbasis2 = n_nbh+nleg*ncam # 1 : for actual physical archetype, nleg: number of legendre polynomials, ncamera: number of cameras
 
   # fitting per camera
   for i,s in enumerate(spectra):
     key = s.wavehash
     tdata2 = np.zeros((tdata[key].shape[0],nbasis2))
     tdata2[:,0]   = tdata[key][:,0] # this is the actual archetype
+    if n_nbh >1:
+        for k in range(1, n_nbh):
+            tdata2[:,k]   = tdata[key][:,k] # these are nearest archetype
     if nleg>0:
-        for k in range(1, nleg+1):
+        for k in range(n_nbh, nleg+1):
             tdata2[:,k+nleg*i] = tdata[key][:,k] # Legendre polynomials terms
     Tb.append(s.Rcsr.dot(tdata2))
 
@@ -274,7 +277,7 @@ def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None):
   else:
     bounds = []
     for i in range(nbasis2):
-      if i==0:
+      if i in [j for j in range(n_nbh)]:
         bounds.append([0.0, np.inf]) # archetype term
       else:
         bounds.append([-np.inf, np.inf]) # constant and slope terms in archetype method (can be positive or negative)
@@ -290,10 +293,10 @@ def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None):
   zchi2 = np.dot((flux - model)**2, weights)
 
   # saving coefficients in correct order
-  ret_zcoeff['alpha'] = [zcoeff[0]] # archetype coefficient
+  ret_zcoeff['alpha'] = [zcoeff[k] for k in range(n_nbh)] # archetype coefficient
   
   if nleg>=1:
-    split_coeff =  np.split(zcoeff[1:], ncam) # n_camera = 3
+    split_coeff =  np.split(zcoeff[n_nbh:], ncam) # n_camera = 3
     old_coeff = {}
     
     # in target spectra redrock saves values as 'b', 'z', 'r'. So just re-ordering them here to 'b', 'r', 'z' for easier reading
