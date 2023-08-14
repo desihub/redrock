@@ -114,7 +114,7 @@ class Archetype():
 
         obs_wave = np.concatenate([dwave[key] for key in new_keys])
         
-        nearest_archetypes=True
+        nearest_archetypes=False
 
         nleg = legendre[list(legendre.keys())[0]].shape[0]
         zzchi2 = np.zeros(self._narch, dtype=np.float64)
@@ -157,7 +157,7 @@ class Archetype():
             return zzchi2, zzcoeff, 'GALAXY:::%s'%(fsstype)
         else:
             iBest = np.argmin(zzchi2)
-            #print(zzchi2[iBest], zzcoeff[iBest])
+            print(zzchi2[iBest], zzcoeff[iBest])
             return zzchi2[iBest], zzcoeff[iBest], self._full_type[iBest]
 
 
