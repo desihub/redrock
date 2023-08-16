@@ -128,12 +128,12 @@ class Archetype():
             else:
                 tdata = {hs:binned[hs][:,None] for hs, wave in dwave.items()}
             if per_camera:
-                zzchi2[i], zzcoeff[i]= per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None, n_nbh=1)
+                zzchi2[i], zzcoeff[i]= per_camera_coeff_with_least_square(spectra, tdata, nleg, method='bvls', n_nbh=1)
             else:
                 zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux, wflux, tdata)
         
         iBest = np.argmin(zzchi2)
-        #print(zzchi2[iBest], zzcoeff[iBest])
+        print(z, zzchi2[iBest], zzcoeff[iBest])
         return zzchi2[iBest], zzcoeff[iBest], self._full_type[iBest]
 
 
