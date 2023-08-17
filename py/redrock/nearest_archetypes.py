@@ -20,6 +20,7 @@ from .utils import transmission_Lyman
 
 from .zscan import per_camera_coeff_with_least_square
 
+#from .nearest_neighbours import model_galaxy_spectra_with_nearest_neighbours
 
 class Archetype():
     """Class to store all different archetypes from the same spectype.
@@ -113,6 +114,8 @@ class Archetype():
 
         obs_wave = np.concatenate([dwave[key] for key in new_keys])
         
+        nearest_archetypes=True
+
         nleg = legendre[list(legendre.keys())[0]].shape[0]
         zzchi2 = np.zeros(self._narch, dtype=np.float64)
         zzcoeff = np.zeros((self._narch,  1+ncam*(nleg)), dtype=np.float64)
@@ -127,14 +130,39 @@ class Archetype():
                 tdata = { hs:np.append(binned[hs][:,None],legendre[hs].transpose(), axis=1 ) for hs, wave in dwave.items() }
             else:
                 tdata = {hs:binned[hs][:,None] for hs, wave in dwave.items()}
+            
             if per_camera:
                 zzchi2[i], zzcoeff[i]= per_camera_coeff_with_least_square(spectra, tdata, nleg, method='bvls', n_nbh=1)
             else:
                 zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux, wflux, tdata)
         
-        iBest = np.argmin(zzchi2)
-        #print(z, zzchi2[iBest], zzcoeff[iBest], self._full_type[iBest])
-        return zzchi2[iBest], zzcoeff[iBest], self._full_type[iBest]
+        if nearest_archetypes:
+            nnbh = 2
+            iBest = np.argsort(zzchi2)[0:nnbh]
+            binned_best = self.rebin_template(iBest[0], z, dwave,trapz=True)
+            tdata = {hs: binned_best[hs][:,None] for hs, wave in dwave.items()}
+            if len(iBest)>1:
+                for ib in iBest[1:]:
+                    binned = self.rebin_template(ib, z, dwave,trapz=True)
+                    tdata = { hs:np.append(tdata[hs], binned[hs][:,None], axis=1) for hs, wave in dwave.items()}
+            if nleg>0:
+                #for i in range(nnbh):
+                tdata = { hs:np.append(tdata[hs],legendre[hs].transpose(), axis=1 ) for hs, wave in dwave.items() }
+                 
+            if per_camera:
+                zzchi2, zzcoeff= per_camera_coeff_with_least_square(spectra, tdata, nleg, method='bvls', n_nbh=nnbh)
+            else:
+                zzchi2, zzcoeff= calc_zchi2_one(spectra, weights, flux, wflux, tdata)
+            
+            sstype = ['%s'%(self._subtype[k]) for k in iBest] # subtypes of best archetypes
+            fsstype = '_'.join(sstype)
+            #print(sstype)
+            #print(z, zzchi2, zzcoeff, fsstype)
+            return zzchi2, zzcoeff, 'GALAXY:::%s'%(fsstype)
+        else:
+            iBest = np.argmin(zzchi2)
+            print(zzchi2[iBest], zzcoeff[iBest])
+            return zzchi2[iBest], zzcoeff[iBest], self._full_type[iBest]
 
 
 class All_archetypes():
