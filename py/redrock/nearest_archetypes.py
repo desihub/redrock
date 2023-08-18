@@ -140,10 +140,12 @@ class Archetype():
             nnbh = 2
             iBest = np.argsort(zzchi2)[0:nnbh]
             binned_best = self.rebin_template(iBest[0], z, dwave,trapz=True)
+            binned_best = { hs:trans[hs]*binned_best[hs] for hs, w in dwave.items() }
             tdata = {hs: binned_best[hs][:,None] for hs, wave in dwave.items()}
             if len(iBest)>1:
                 for ib in iBest[1:]:
                     binned = self.rebin_template(ib, z, dwave,trapz=True)
+                    binned = { hs:trans[hs]*binned[hs] for hs, w in dwave.items() }
                     tdata = { hs:np.append(tdata[hs], binned[hs][:,None], axis=1) for hs, wave in dwave.items()}
             if nleg>0:
                 #for i in range(nnbh):
