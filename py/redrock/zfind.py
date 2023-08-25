@@ -21,9 +21,9 @@ from .utils import elapsed
 
 from .targets import distribute_targets
 
-#from .archetypes import All_archetypes
+from .archetypes import All_archetypes
 
-from .nearest_archetypes import All_archetypes
+#from .nearest_archetypes import All_archetypes
 
 from .priors import Priors
 
