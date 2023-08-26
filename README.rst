@@ -43,7 +43,7 @@ Running Redrock on desi spectra
 
 **1) Without Archetypes**::
 
-    rrdesi -i <spectra_file> --output <output_file> --details <details_file.h5> -n 1
+    rrdesi -i <spectra_file> -o <output_file> -d <details_file.h5> 
 
 **2) With Archetypes**::
     
@@ -61,7 +61,7 @@ In summary, the archetypes method uses a combination of physical galaxy spectra 
 
 Example run::
     
-    rrdesi -i <spectra_file> --archetypes <archetype_dir or archetype_file> --output <output_file> --details <details_file.h5> -deg_legendre 2 --nminima 9 --per-camera
+    rrdesi -i <spectra_file> --archetypes <archetype_dir or archetype_file> -o <output_file> -d <details_file.h5> -deg_legendre 2 --nminima 9 --per-camera
 
 **3) Archetypes + Nearest neighbours (in chi2 space) approach**::
 
