@@ -32,7 +32,7 @@ To install::
 That will install the templates with the code.  Alternatively, the templates
 can be put elsewhere and set ``$RR_TEMPLATE_DIR`` to that location.
 
-We recommend users see details of `rrdesi` before running `redrock` to understand the arguments in more detail.
+We recommend users see details of ``rrdesi`` before running ``redrock`` to understand the arguments in more detail.
 
 Run::
     
@@ -57,17 +57,19 @@ Or::
 
     git clone https://github.com/desihub/redrock-archetypes.git
 
+In summary, the archetypes method uses a combination of physical galaxy spectra and Legendre polynomials to construct a new set of templates and then solve for the coefficients using the bounded value least square method. The method solves for the coefficients of the Legendre polynomials in each camera (b, r, z cameras of desi, ``--per-camera`` keyword is introduced for that).
+
 Example run::
     
-    rrdesi -i <spectra_file> --archetypes <archetype_dir or archetype_file> --output <output_file> --details <details_file.h5> -deg_legendre 2 --nminima 9
+    rrdesi -i <spectra_file> --archetypes <archetype_dir or archetype_file> --output <output_file> --details <details_file.h5> -deg_legendre 2 --nminima 9 --per-camera
 
 **3) Archetypes + Nearest neighbours (in chi2 space) approach**::
 
-Similar to archetypes (method - 2), it also looks for the nearest neighbours of the best archetypes in chi2 space, selects a few nearest neighbours (input provided by the user, `-n_nearest`) and then constructs a new set of templates combing these archetypes and Legendre polynomials to fit the galaxy spectra. 
+Similar to archetypes (method - 2), it also looks for the nearest neighbours of the best archetypes in chi2 space, selects a few nearest neighbours (input provided by the user, ``-n_nearest``) and then constructs a new set of templates combing these archetypes and Legendre polynomials to fit the galaxy spectra. 
 
 Example run ::
         
-    rrdesi -i <spectra_file> --archetypes <archetype_dir or archetype_file> -o <output_file> -d  <details_file.h5> -deg_legendre 2 -n_nearest 2
+    rrdesi -i <spectra_file> --archetypes <archetype_dir or archetype_file> -o <output_file> -d  <details_file.h5> -deg_legendre 2 -n_nearest 2 --per-camera
 
 For comment or help regarding archetypes please contact AbhijeetAnand [at] lbl.gov
 
