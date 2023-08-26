@@ -293,7 +293,7 @@ def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None, n_nbh=
     try:
       zcoeff = solve_matrices(M, y, solve_algorithm='PCA', use_gpu=False)
     except np.linalg.LinAlgError:
-      return 9e+99, np.zeros(nbasis2)
+      return 9e+99, np.zeros(nbasis)
   
   # BVLS implementation with scipy
   if method=='bvls':
@@ -309,7 +309,7 @@ def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None, n_nbh=
       res = lsq_linear(M, y, bounds=bounds, method='bvls')
       zcoeff = res.x
     except np.linalg.LinAlgError:
-      return 9e+99, np.zeros(nbasis2)
+      return 9e+99, np.zeros(nbasis)
 
   model = Tb.dot(zcoeff)
   zchi2 = np.dot((flux - model)**2, weights)
