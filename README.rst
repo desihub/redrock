@@ -32,7 +32,7 @@ To install::
 That will install the templates with the code.  Alternatively, the templates
 can be put elsewhere and set ``$RR_TEMPLATE_DIR`` to that location.
 
-Users are recommended to see details of `rrdesi` before running `redrock` to understand the      arguments in more details.
+We recommend users see details of `rrdesi` before running `redrock` to understand the arguments in more detail.
 
 Run::
     
@@ -47,10 +47,10 @@ Running Redrock on desi spectra
 
 **2) With Archetypes**::
     
-In archetype mode, redrock can be run either with one particular archetype file (e.g., GALAXY, QSO or STAR) or you can also provide the full directory that contains archetypes for all spectypes.
+In archetype mode, redrock can be run either with one particular archetype file (e.g., GALAXY, QSO or STAR), or you can also provide the directory that contains archetypes for different spectral classes.
 
-You can also define your own set of archetypes, however users must follow the file structure of redrock-archetypes. To start with, user should clone following repository to run redrock in Archetype mode::
-    
+You can also define your own set of archetypes. However, users must follow the file structure of redrock archetypes. To start with, the user should clone the following repository to run redrock in Archetype mode.::
+
     git clone https://github.com/abhi0395/new-archetypes.git
 
 Or::
@@ -63,7 +63,7 @@ Example run::
 
 **3) Archetypes + Nearest neighbours (in chi2 space) approach**::
 
-Similar to archetypes (method - 2) but also looks for the nearest neighbours of the bestarchetypes in chi2 space. Then uses a combination of those nearest neighbours and Legendre polynomials to fit the galaxy spectra using bounded value least square method.
+Similar to archetypes (method - 2), it also looks for the nearest neighbours of the best archetypes in chi2 space, selects a few nearest neighbours (input provided by the user, `-n_nearest`) and then constructs a new set of templates combing these archetypes and Legendre polynomials to fit the galaxy spectra. 
 
 Example run ::
         
