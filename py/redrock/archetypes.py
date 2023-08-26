@@ -82,8 +82,61 @@ class Archetype():
         flux = flux.T.dot(coeff).T / (1+z)
 
         return flux
+    
+    def nearest_neighbour_model(self, spectra,weights,flux,wflux,dwave,z, legendre, n_nearest, zzchi2, trans, per_camera):
+        
+        """
+        
+        Parameters:
+        ------------------
+        spectra (list): list of Spectrum objects.
+        weights (array): concatenated spectral weights (ivar).
+        flux (array): concatenated flux values.
+        wflux (array): concatenated weighted flux values.
+        dwave (dict): dictionary of wavelength grids
+        z (float): best redshift
+        legendre (dict): legendre polynomial
+        n_nearest (int): number of nearest neighbours to be used in chi2 space (including best archetype)
+        zchi2 (array); chi2 array for all archetypes
+        trans (dict); dictionary of transmission Ly-a arrays
+        per_camera (bool): If True model will be solved in each camera
+        
+        Returns:
+        -----------------
 
-    def get_best_archetype(self,spectra,weights,flux,wflux,dwave,z,legendre, per_camera):
+        chi2 (float): chi2 of best fit model
+        zcoeff (array): zcoeff of best fit model
+        fulltype (str): fulltype of best archetypes
+
+        """
+
+        nleg = legendre[list(legendre.keys())[0]].shape[0]
+        iBest = np.argsort(zzchi2)[0:n_nearest]
+        binned_best = self.rebin_template(iBest[0], z, dwave,trapz=True)
+        binned_best = { hs:trans[hs]*binned_best[hs] for hs, w in dwave.items() }
+        tdata = {hs: binned_best[hs][:,None] for hs, wave in dwave.items()}
+        if len(iBest)>1:
+            for ib in iBest[1:]:
+                binned = self.rebin_template(ib, z, dwave,trapz=True)
+                binned = { hs:trans[hs]*binned[hs] for hs, w in dwave.items() }
+                tdata = { hs:np.append(tdata[hs], binned[hs][:,None], axis=1) for hs, wave in dwave.items()}
+            if nleg>0:
+                tdata = { hs:np.append(tdata[hs],legendre[hs].transpose(), axis=1 ) for hs, wave in dwave.items() }
+
+            if per_camera:
+                zzchi2, zzcoeff= per_camera_coeff_with_least_square(spectra, tdata, nleg, method='bvls', n_nbh=n_nearest)
+            else:
+                zzchi2, zzcoeff= calc_zchi2_one(spectra, weights, flux, wflux, tdata)
+
+            sstype = ['%s'%(self._subtype[k]) for k in iBest] # subtypes of best archetypes
+            fsstype = '_'.join(sstype)
+            #print(sstype)
+            #print(z, zzchi2, zzcoeff, fsstype)
+            return zzchi2, zzcoeff, self._rrtype+':::%s'%(fsstype)
+
+
+    def get_best_archetype(self,spectra,weights,flux,wflux,dwave,z,legendre, per_camera, n_nearest):
+
         """Get the best archetype for the given redshift and spectype.
 
         Args:
@@ -91,14 +144,15 @@ class Archetype():
             weights (array): concatenated spectral weights (ivar).
             flux (array): concatenated flux values.
             wflux (array): concatenated weighted flux values.
-            dwave (dic): dictionary of wavelength grids
+            dwave (dict): dictionary of wavelength grids
             z (float): best redshift
-            legendre (dic): legendre polynomial
+            legendre (dict): legendre polynomial
             per_camera (bool): True if fitting needs to be done in each camera
+            n_nearest (int): number of nearest neighbours to be used in chi2 space (including best archetype)
             
         Returns:
             chi2 (float): chi2 of best archetype
-            zcoef (array): zcoef of best archetype
+            zcoef (array): zcoeff of best archetype
             fulltype (str): fulltype of best archetype
 
         """
@@ -116,6 +170,8 @@ class Archetype():
         nleg = legendre[list(legendre.keys())[0]].shape[0]
         zzchi2 = np.zeros(self._narch, dtype=np.float64)
         zzcoeff = np.zeros((self._narch,  1+ncam*(nleg)), dtype=np.float64)
+        
+        #TODO: return best fit model as well
         #zzmodel = np.zeros((self._narch, obs_wave.size), dtype=np.float64)
 
         trans = { hs:transmission_Lyman(z,w) for hs, w in dwave.items() }
@@ -132,9 +188,13 @@ class Archetype():
             else:
                 zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux, wflux, tdata)
         
-        iBest = np.argmin(zzchi2)
-        #print(z, zzchi2[iBest], zzcoeff[iBest], self._full_type[iBest])
-        return zzchi2[iBest], zzcoeff[iBest], self._full_type[iBest]
+        if n_nearest is not None:
+            best_chi2, best_coeff, best_fulltype = self.nearest_neighbour_model(spectra,weights,flux,wflux,dwave,z, legendre, n_nearest, zzchi2, trans, per_camera) 
+            return best_chi2, best_coeff, best_fulltype
+        else:
+            iBest = np.argmin(zzchi2)
+            #print(z, zzchi2[iBest], zzcoeff[iBest], self._full_type[iBest])
+            return zzchi2[iBest], zzcoeff[iBest], self._full_type[iBest]
 
 
 class All_archetypes():

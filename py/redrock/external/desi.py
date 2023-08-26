@@ -559,11 +559,14 @@ def rrdesi(options=None, comm=None):
     
     parser.add_argument("-deg_legendre", type=int, default=3,
         required=False, help="if archetypes are provided legendre polynomials upto deg_legendre-1 will be used (default is 3)")
+    
+    parser.add_argument("-n_nearest", type=int, default=None,
+        required=False, help="number of nearest archetypes (in chi2 space) to be used in archetype modeling, must be greater than 1 (default is None)")
 
     parser.add_argument("-nz", type=int, default=15,
         required=False, help="number of finer redshift to be used around best fit redshifts (default is 15)")
 
-    parser.add_argument("--per_camera", default=False, action="store_true",
+    parser.add_argument("--per-camera", default=False, action="store_true",
         required=False, help="If True, in archetype mode the fitting will be done for each camera/band")
 
     parser.add_argument("-d", "--details", type=str, default=None,
@@ -712,6 +715,9 @@ def rrdesi(options=None, comm=None):
                     print('legendre polynomials of degrees %s will be added to Archetypes\n'%([i for i in range(args.deg_legendre)]))
                 else:
                     print('No Legendre polynomial will be added to archetypes...\n')
+                if args.n_nearest:
+                    print('n_nearest argument is provided so %d nearest neighbour (in chi2 space) to the best archetype will be used for further modeling...\n'%(args.n_nearest-1))
+                    
             else:
                 print("ERROR: can't find archetypes_dir or it is unreadable\n")
                 sys.stdout.flush()
@@ -842,7 +848,7 @@ def rrdesi(options=None, comm=None):
 
         scandata, zfit = zfind(targets, dtemplates, mpprocs,
             nminima=args.nminima, archetypes=args.archetypes,
-            priors=args.priors, chi2_scan=args.chi2_scan, use_gpu=use_gpu, nz=args.nz, per_camera=args.per_camera, deg_legendre=args.deg_legendre)
+            priors=args.priors, chi2_scan=args.chi2_scan, use_gpu=use_gpu, nz=args.nz, per_camera=args.per_camera, deg_legendre=args.deg_legendre, n_nearest=args.n_nearest)
 
         stop = elapsed(start, "Computing redshifts", comm=comm)
 

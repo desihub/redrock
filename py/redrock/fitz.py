@@ -117,7 +117,7 @@ def legendre_calculate(nleg, dwave):
 
     return legendre
 
-def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=False, deg_legendre=None, nz=None, per_camera=False):
+def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=False, deg_legendre=None, nz=None, per_camera=False, n_nearest=None):
     """Refines redshift measurement around up to nminima minima.
 
     TODO:
@@ -134,6 +134,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
         deg_legendre (int): in archetype mode polynomials upto deg_legendre-1 will be used
         nz (int): number of finer redshift pixels to search for final redshift
         per_camera: (bool): True if fitting needs to be done in each camera for archetype mode
+        n_nearest: (int): number of nearest neighbours to be used in chi2 space (including best archetype) 
 
     Returns:
         Table: the fit parameters for the minima.
@@ -288,7 +289,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
                 chi2=chi2min, zz=zz, zzchi2=zzchi2,
                 coeff=coeff))
         else:
-            chi2min, coeff, fulltype = archetype.get_best_archetype(spectra,weights,flux,wflux,dwave,zbest,legendre, per_camera)
+            chi2min, coeff, fulltype = archetype.get_best_archetype(spectra,weights,flux,wflux,dwave,zbest,legendre, per_camera, n_nearest)
 
             results.append(dict(z=zbest, zerr=zerr, zwarn=zwarn,
                 chi2=chi2min, zz=zz, zzchi2=zzchi2,

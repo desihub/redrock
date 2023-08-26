@@ -23,8 +23,6 @@ from .targets import distribute_targets
 
 from .archetypes import All_archetypes
 
-#from .nearest_archetypes import All_archetypes
-
 from .priors import Priors
 
 from .results import read_zscan_redrock
@@ -80,7 +78,7 @@ def sort_dict_by_cols(d, colnames, sort_first_column_first = True):
         d[k] = d[k][idx]
     return
 
-def _mp_fitz(chi2, target_data, t, nminima, qout, archetype, use_gpu, deg_legendre, nz, per_camera):
+def _mp_fitz(chi2, target_data, t, nminima, qout, archetype, use_gpu, deg_legendre, nz, per_camera, n_nearest):
     """Wrapper for multiprocessing version of fitz.
     """
     try:
@@ -90,7 +88,7 @@ def _mp_fitz(chi2, target_data, t, nminima, qout, archetype, use_gpu, deg_legend
         results = list()
         for i, tg in enumerate(target_data):
             zfit = fitz(chi2[i], t.template.redshifts, tg,
-                t.template, nminima=nminima, archetype=archetype, use_gpu=use_gpu, nz=nz, per_camera=per_camera, deg_legendre=deg_legendre)
+                t.template, nminima=nminima, archetype=archetype, use_gpu=use_gpu, nz=nz, per_camera=per_camera, deg_legendre=deg_legendre, n_nearest=n_nearest)
             results.append( (tg.id, zfit) )
         qout.put(results)
     except:
@@ -210,7 +208,7 @@ def sort_zfit_dict(zfit):
     sort_dict_by_cols(zfit, ('__badfit__', 'chi2'), sort_first_column_first=True)
     zfit.pop('__badfit__')
 
-def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=None, chi2_scan=None, use_gpu=False, nz=None, per_camera=None, deg_legendre=None):
+def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=None, chi2_scan=None, use_gpu=False, nz=None, per_camera=None, deg_legendre=None, n_nearest=None):
     """Compute all redshift fits for the local set of targets and collect.
 
     Given targets and templates distributed across a set of MPI processes,
@@ -238,6 +236,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
         deg_legendre (int): in archetype mode polynomials upto deg_legendre-1 will be used
         nz (int): number of finer redshift pixels to search for final redshift
         per_camera: (bool): True if fitting needs to be done in each camera for archetype mode
+        n_nearest (int): number of nearest neighbours to be used in chi2 space (including best archetype)
 
     Returns:
         tuple: (allresults, allzfit), where "allresults" is a dictionary of the
@@ -349,7 +348,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                 zfit = fitz(results[tg.id][ft]['zchi2'] \
                     + results[tg.id][ft]['penalty'],
                     t.template.redshifts, tg,
-                    t.template, nminima=nminima,archetype=archetype, use_gpu=use_gpu, deg_legendre=deg_legendre, nz=nz, per_camera=per_camera)
+                    t.template, nminima=nminima,archetype=archetype, use_gpu=use_gpu, deg_legendre=deg_legendre, nz=nz, per_camera=per_camera, n_nearest=n_nearest)
                 results[tg.id][ft]['zfit'] = zfit
         else:
             # Multiprocessing case.
@@ -373,7 +372,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     eff_chi2[i,:] = results[tg.id][ft]['zchi2'] \
                         + results[tg.id][ft]['penalty']
                 p = mp.Process(target=_mp_fitz, args=(eff_chi2,
-                    target_data, t, nminima, qout, archetype, use_gpu, deg_legendre, nz, per_camera))
+                    target_data, t, nminima, qout, archetype, use_gpu, deg_legendre, nz, per_camera, n_nearest))
                 procs.append(p)
                 p.start()
 
@@ -482,13 +481,22 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             tzfit['targetid'] = np.array([tid]*l)
             if (archetypes):
                 if (len(archetype_spectype)==len(all_spectype)):
-                    ibad = tzfit['coeff'][:,0]<=0. # means that best archetype has negative model
+                    if n_nearest is None:
+                        ibad = tzfit['coeff'][:,0]<=0. # means that best archetype has negative model
+                    else:
+                        ibad = np.any(tzfit['coeff'][:,:n_nearest]<0, axis=1) # any archetype has negative coeff
                 else:
                     ## need to check if this bitmask is only applied to objects for which archetypes are used
-                    ibad = np.array([tzfit['spectype']==spec for spec in archetype_spectype])[0]
-                    for k in np.where(ibad==1)[0].tolist():
-                        if tzfit['coeff'][:,0][k]>=0.: # don't reject physical model
-                            ibad[k]=False
+                    ibad = np.isin(tzfit['spectype'], np.array(archetype_spectype))
+                    index_check = np.where(ibad)[0]
+                    for k in index_check:
+                        if n_nearest is None:
+                            if tzfit['coeff'][:,0][k]>=0.: # don't reject physical model
+                                ibad[k]=False
+                        else:
+                            if np.all(tzfit['coeff'][:,:n_nearest][k]>=0):
+                                ibad[k]=False
+
                 tzfit['zwarn'][ibad] |= ZW.NEGATIVE_MODEL
             
             tzfit['zwarn'][ tzfit['npixels']==0 ] |= ZW.NODATA
@@ -588,7 +596,10 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             maxcoeff = np.max([t.template.nbasis for t in templates])
         else:
             ncam = 3 # three cameras of DESI:: b, r, z
-            maxcoeff = max(np.max([t.template.nbasis for t in templates]), ncam*(deg_legendre)+1)
+            if n_nearest is not None:
+                maxcoeff = max(np.max([t.template.nbasis for t in templates]), ncam*(deg_legendre)+n_nearest)
+            else:
+                maxcoeff = max(np.max([t.template.nbasis for t in templates]), ncam*(deg_legendre)+1)
         ntarg, ncoeff = allzfit['coeff'].shape
         if ncoeff != maxcoeff:
             coeff = np.zeros((ntarg, maxcoeff), dtype=allzfit['coeff'].dtype)
