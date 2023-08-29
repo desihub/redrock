@@ -352,7 +352,7 @@ def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None, n_nbh=
         for band in ['b', 'r', 'z']:# 3 cameras
             ret_zcoeff[band] = old_coeff[band]
 
-    coeff = np.concatenate(list(ret_zcoeff.values())
+    coeff = np.concatenate(list(ret_zcoeff.values()))
     return zchi2, coeff
 
 def batch_dot_product_sparse(spectra, tdata, nz, use_gpu):
