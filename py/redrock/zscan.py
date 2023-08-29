@@ -313,25 +313,24 @@ def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None, n_nbh=
     # PCA method will use numpy Linear Algebra method to solve the best fit linear equation
     if method=='pca':
         try:
-        zcoeff = solve_matrices(M, y, solve_algorithm='PCA', use_gpu=False)
+            zcoeff = solve_matrices(M, y, solve_algorithm='PCA', use_gpu=False)
         except np.linalg.LinAlgError:
-        return 9e+99, np.zeros(nbasis)
+            return 9e+99, np.zeros(nbasis)
     
     # BVLS implementation with scipy
     if method=='bvls':
         bounds = []
         for i in range(nbasis):
-        if i in [j for j in range(n_nbh)]:
-            bounds.append([0.0, np.inf]) # archetype term(s), these coefficients must be positive
-        else:
-            bounds.append([-np.inf, np.inf]) # constant and slope terms in archetype method (can be positive or negative)
-
+            if i in [j for j in range(n_nbh)]:
+                bounds.append([0.0, np.inf]) # archetype term(s), these coefficients must be positive
+            else:
+                bounds.append([-np.inf, np.inf]) # constant and slope terms in archetype method (can be positive or negative)
         bounds = np.array(bounds).T
         try:
-        res = lsq_linear(M, y, bounds=bounds, method='bvls')
-        zcoeff = res.x
+            res = lsq_linear(M, y, bounds=bounds, method='bvls')
+            zcoeff = res.x
         except np.linalg.LinAlgError:
-        return 9e+99, np.zeros(nbasis)
+            return 9e+99, np.zeros(nbasis)
 
     model = Tb.dot(zcoeff)
     zchi2 = np.dot((flux - model)**2, weights)
@@ -353,7 +352,7 @@ def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None, n_nbh=
         for band in ['b', 'r', 'z']:# 3 cameras
             ret_zcoeff[band] = old_coeff[band]
 
-    coeff = np.concatenate([c for c in ret_zcoeff.values()])
+    coeff = np.concatenate(list(ret_zcoeff.values())
     return zchi2, coeff
 
 def batch_dot_product_sparse(spectra, tdata, nz, use_gpu):
