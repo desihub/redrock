@@ -239,22 +239,20 @@ def calc_zchi2_one(spectra, weights, flux, wflux, tdata):
 
 
 def Tb_for_archetype(spectra, tdata, nbasis, n_nbh, nleg):
-    
     """
     Parameters
     ---------------------
 
-     spectra (object): target spectra object
-     tdata (dict): template data for model fit
-     nleg (int): number of Legendre polynomials
-     nbasis (int): number of templates
-     n_nbh (int): number of nearest best archetypes
-     nleg (int): number of Legendre polynomials
+    spectra (object): target spectra object
+    tdata (dict): template data for model fit
+    nleg (int): number of Legendre polynomials
+    nbasis (int): number of templates
+    n_nbh (int): number of nearest best archetypes
+    nleg (int): number of Legendre polynomials
 
     Returns
     --------------------
     Matrix of dot product
-
     """ 
     
     Tb = list()
