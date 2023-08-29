@@ -134,7 +134,7 @@ class Archetype():
             #print(z, zzchi2, zzcoeff, fsstype)
             return zzchi2, zzcoeff, self._rrtype+':::%s'%(fsstype)
 
-
+    
     def get_best_archetype(self,spectra,weights,flux,wflux,dwave,z,legendre, per_camera, n_nearest):
 
         """Get the best archetype for the given redshift and spectype.

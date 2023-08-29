@@ -237,6 +237,42 @@ def calc_zchi2_one(spectra, weights, flux, wflux, tdata):
 
     return zchi2, zcoeff
 
+
+def Tb_for_archetype(spectra, tdata, nbasis, n_nbh, nleg):
+    
+    """
+    Parameters
+    ---------------------
+
+     spectra (object): target spectra object
+     tdata (dict): template data for model fit
+     nleg (int): number of Legendre polynomials
+     nbasis (int): number of templates
+     n_nbh (int): number of nearest best archetypes
+     nleg (int): number of Legendre polynomials
+
+    Returns
+    --------------------
+    Matrix of dot product
+
+    """ 
+    
+    Tb = list()
+    
+    for i,s in enumerate(spectra):
+        key = s.wavehash
+        tdata2 = np.zeros((tdata[key].shape[0],nbasis))
+        for k in range(n_nbh):
+            tdata2[:,k]   = tdata[key][:,k] # these are nearest archetype
+        if nleg>0:
+            for k in range(n_nbh, n_nbh+nleg):
+                tdata2[:,k+nleg*i] = tdata[key][:,k] # Legendre polynomials terms
+        Tb.append(s.Rcsr.dot(tdata2))
+
+    Tb = np.vstack(Tb)
+
+    return Tb
+
 def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None, n_nbh=None):
 
   """
@@ -263,27 +299,15 @@ def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None, n_nbh=
   
   ncam = 3 # number of cameras in DESI: b, r, z
 
-  Tb = list()
   flux = np.concatenate([s.flux for s in spectra])
   weights = np.concatenate([s.ivar for s in spectra])
   wflux = flux*weights
 
   nbasis = n_nbh+nleg*ncam # n_nbh : for actual physical archetype(s), nleg: number of legendre polynomials, ncamera: number of cameras
 
-  # linear templates in each camera (only the Legendre terms will vary per camera, the lead archetype(s) will remain same for entire spectra)
+  #linear templates in each camera (only the Legendre terms will vary per camera, the lead archetype(s) will remain same for entire spectra)
 
-  for i,s in enumerate(spectra):
-    key = s.wavehash
-    tdata2 = np.zeros((tdata[key].shape[0],nbasis))
-    for k in range(n_nbh):
-        tdata2[:,k]   = tdata[key][:,k] # these are nearest archetype
-    if nleg>0:
-        for k in range(n_nbh, n_nbh+nleg):
-            tdata2[:,k+nleg*i] = tdata[key][:,k] # Legendre polynomials terms
-    Tb.append(s.Rcsr.dot(tdata2))
-
-  Tb = np.vstack(Tb)
-  
+  Tb = Tb_for_archetype(spectra, tdata, nbasis, n_nbh, nleg)  
   M = Tb.T.dot(np.multiply(weights[:,None], Tb))
   y = Tb.T.dot(wflux)
   ret_zcoeff= {'alpha':[], 'b':[], 'r':[], 'z':[]}
@@ -609,7 +633,9 @@ def calc_batch_dot_product_3d3d_gpu(a, b, transpose_a=False, fullprecision=True)
 ###    templates are looped over on the CPU.  The operations performed
 ###    are very obviously analagous though and should be highly
 ###    maintainable.  The main difference is the extra loop on the CPU version
+
 def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, solve_matrices_algorithm="PCA", use_gpu=False, fullprecision=True):
+    
     """Calculate a batch of chi2.
     For many redshifts and a set of spectral data, compute the chi2 for
     template data that is already on the correct grid.
