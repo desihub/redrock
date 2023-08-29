@@ -237,7 +237,6 @@ def calc_zchi2_one(spectra, weights, flux, wflux, tdata):
 
     return zchi2, zcoeff
 
-
 def Tb_for_archetype(spectra, tdata, nbasis, n_nbh, nleg):
     """
     Parameters
@@ -256,20 +255,18 @@ def Tb_for_archetype(spectra, tdata, nbasis, n_nbh, nleg):
     """ 
     
     Tb = list()
-    
     for i,s in enumerate(spectra):
         key = s.wavehash
         tdata2 = np.zeros((tdata[key].shape[0],nbasis))
         for k in range(n_nbh):
-            tdata2[:,k]   = tdata[key][:,k] # these are nearest archetype
+            tdata2[:,k] = tdata[key][:,k] # these are nearest archetype
         if nleg>0:
             for k in range(n_nbh, n_nbh+nleg):
                 tdata2[:,k+nleg*i] = tdata[key][:,k] # Legendre polynomials terms
         Tb.append(s.Rcsr.dot(tdata2))
-
     Tb = np.vstack(Tb)
-
     return Tb
+
 
 def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None, n_nbh=None):
 
@@ -319,13 +316,10 @@ def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None, n_nbh=
     
     # BVLS implementation with scipy
     if method=='bvls':
-        bounds = []
-        for i in range(nbasis):
-            if i in [j for j in range(n_nbh)]:
-                bounds.append([0.0, np.inf]) # archetype term(s), these coefficients must be positive
-            else:
-                bounds.append([-np.inf, np.inf]) # constant and slope terms in archetype method (can be positive or negative)
-        bounds = np.array(bounds).T
+        #only positive coefficients are allowed for the archetypes
+        bounds = np.zeros((2, nbasis))
+        bounds[0][n_nbh:]=-np.inf #constant and slope terms in archetype method (can be positive or negative)
+        bounds[1] = np.inf   
         try:
             res = lsq_linear(M, y, bounds=bounds, method='bvls')
             zcoeff = res.x
@@ -340,14 +334,9 @@ def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None, n_nbh=
     
     if nleg>=1:
         split_coeff =  np.split(zcoeff[n_nbh:], ncam) # n_camera = 3
-        old_coeff = {}
-        
         # In target spectra redrock saves values as 'b', 'z', 'r'. 
         # So just re-ordering them here to 'b', 'r', 'z' for easier reading
-
-        old_coeff['b']=split_coeff[0] 
-        old_coeff['r']=split_coeff[2]
-        old_coeff['z']=split_coeff[1]
+        old_coeff = {band: split_coeff[i] for i, band in enumerate(['b', 'z', 'r'])}
         
         for band in ['b', 'r', 'z']:# 3 cameras
             ret_zcoeff[band] = old_coeff[band]
