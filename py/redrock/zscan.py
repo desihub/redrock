@@ -7,6 +7,7 @@ Algorithms for scanning redshifts.
 
 from __future__ import division, print_function
 
+import time
 import sys
 import traceback
 import numpy as np
@@ -244,16 +245,15 @@ def Tb_for_archetype(spectra, tdata, nbasis, n_nbh, nleg):
 
     spectra (object): target spectra object
     tdata (dict): template data for model fit
-    nleg (int): number of Legendre polynomials
     nbasis (int): number of templates
     n_nbh (int): number of nearest best archetypes
     nleg (int): number of Legendre polynomials
 
     Returns
     --------------------
-    Matrix of dot product
+    Template matrix after applying resolution matrix
+
     """ 
-    
     Tb = list()
     for i,s in enumerate(spectra):
         key = s.wavehash
@@ -263,7 +263,7 @@ def Tb_for_archetype(spectra, tdata, nbasis, n_nbh, nleg):
         if nleg>0:
             for k in range(n_nbh, n_nbh+nleg):
                 tdata2[:,k+nleg*i] = tdata[key][:,k] # Legendre polynomials terms
-        Tb.append(s.Rcsr.dot(tdata2))
+        Tb.append(s.Rcsr.dot(tdata2)) # this is perhaps the slowest step:
     Tb = np.vstack(Tb)
     return Tb
 
@@ -291,7 +291,9 @@ def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None, n_nbh=
     coefficients and chi2
 
     """
-  
+    # this function on an average takes 0.0007 sec for one archetye
+
+    #start = time.time()
     ncam = 3 # number of cameras in DESI: b, r, z
 
     flux = np.concatenate([s.flux for s in spectra])
@@ -342,6 +344,7 @@ def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None, n_nbh=
             ret_zcoeff[band] = old_coeff[band]
 
     coeff = np.concatenate(list(ret_zcoeff.values()))
+    #print(f'{time.time()-start} [sec] took for per camera BVLS method\n')
     return zchi2, coeff
 
 def batch_dot_product_sparse(spectra, tdata, nz, use_gpu):

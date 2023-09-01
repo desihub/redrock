@@ -4,7 +4,6 @@ redrock.archetypes
 
 Classes and functions for archetypes.
 """
-
 import os
 from glob import glob
 from astropy.io import fits
@@ -156,7 +155,6 @@ class Archetype():
             fulltype (str): fulltype of best archetype
 
         """
-        
         if per_camera:
             ncam=3 # b, r, z cameras
         else:
