@@ -535,7 +535,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             allzfit.append(astropy.table.Table(tzfit))
 
         allzfit = astropy.table.vstack(allzfit)
-        #print(allzfit['targetid', 'z', 'zwarn', 'chi2', 'deltachi2','spectype','subtype'])
+        print(allzfit['targetid', 'z', 'zwarn', 'chi2', 'deltachi2','spectype','subtype'])
         # Cosmetic: move TARGETID to be first column as primary key
         try:
             allzfit.columns.move_to_end('targetid', last=False)

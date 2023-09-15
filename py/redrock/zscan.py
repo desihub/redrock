@@ -321,7 +321,7 @@ def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None, n_nbh=
         #only positive coefficients are allowed for the archetypes
         bounds = np.zeros((2, nbasis))
         bounds[0][n_nbh:]=-np.inf #constant and slope terms in archetype method (can be positive or negative)
-        bounds[1] = np.inf   
+        bounds[1] = np.inf  
         try:
             res = lsq_linear(M, y, bounds=bounds, method='bvls')
             zcoeff = res.x
