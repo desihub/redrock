@@ -109,7 +109,6 @@ def minfit(x, y):
 
 
 def legendre_calculate(nleg, dwave):
-
     wave = np.concatenate([ w for w in dwave.values() ])
     wmin = wave.min()
     wmax = wave.max()
@@ -151,10 +150,6 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
     # Build dictionary of wavelength grids
     dwave = { s.wavehash:s.wave for s in spectra }
 
-    if not archetype is None:
-        legendre = legendre_calculate(deg_legendre, dwave=dwave)
-   
-    
     (weights, flux, wflux) = spectral_data(spectra)
     
     if (use_gpu):
@@ -165,6 +160,9 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
         # Build dictionaries of wavelength bin edges, min/max, and centers
         gpuedges = { s.wavehash:(s.gpuedges, s.minedge, s.maxedge) for s in spectra }
         gpudwave = { s.wavehash:s.gpuwave for s in spectra }
+
+    if not archetype is None:
+        legendre = legendre_calculate(deg_legendre, dwave=dwave)
 
     results = list()
     #Define nz here instead of hard-coding length 15 and then defining nz as
@@ -226,6 +224,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
         i = min(max(np.argmin(zzchi2),1), len(zz)-2)
         zmin, sigma, chi2min, zwarn = minfit(zz[i-1:i+2], zzchi2[i-1:i+2])
 
+        trans = dict()
         try:
             #Calculate xmin and xmax from template and pass as scalars 
             xmin = template.minwave*(1+zmin)
@@ -242,6 +241,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
                     binned[k] = binned[k].get()
                 #Use CPU always
                 T = transmission_Lyman(np.array([zmin]),dwave[k], use_gpu=False)
+                trans[k] = T
                 if (T is None):
                     #Return value of None means that wavelenght regime
                     #does not overlap Lyman transmission - continue here
@@ -289,7 +289,11 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
                 chi2=chi2min, zz=zz, zzchi2=zzchi2,
                 coeff=coeff))
         else:
-            chi2min, coeff, fulltype = archetype.get_best_archetype(spectra,weights,flux,wflux,dwave,zbest,legendre, per_camera, n_nearest)
+            if (use_gpu):
+                chi2min, coeff, fulltype = archetype.get_best_archetype(spectra,gpuweights,gpuflux,gpuwflux,dwave,zbest,legendre, per_camera, n_nearest, dedges=gpuedges, trans=trans, use_gpu=use_gpu)
+                del trans
+            else:
+                chi2min, coeff, fulltype = archetype.get_best_archetype(spectra,weights,flux,wflux,dwave,zbest,legendre, per_camera, n_nearest, use_gpu=use_gpu)
 
             results.append(dict(z=zbest, zerr=zerr, zwarn=zwarn,
                 chi2=chi2min, zz=zz, zzchi2=zzchi2,

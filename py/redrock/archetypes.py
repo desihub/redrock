@@ -11,14 +11,13 @@ import numpy as np
 from scipy.interpolate import interp1d
 import scipy.special
 
-from .zscan import calc_zchi2_one
+from .zscan import calc_zchi2_one, calc_zchi2_batch
 
 from .rebin import trapz_rebin
 
 from .utils import transmission_Lyman
 
-from .zscan import per_camera_coeff_with_least_square
-
+from .zscan import per_camera_coeff_with_least_square, per_camera_coeff_with_least_square_batch
 
 class Archetype():
     """Class to store all different archetypes from the same spectype.
@@ -47,6 +46,8 @@ class Archetype():
         self.wave = np.asarray(hdr['CRVAL1'] + hdr['CDELT1']*np.arange(self.flux.shape[1]))
         if hdr['LOGLAM']:
             self.wave = 10**self.wave
+        self.minwave = self.wave[0]
+        self.maxwave = self.wave[-1]
 
         self._archetype = {}
         self._archetype['INTERP'] = np.array([None]*self._narch)
@@ -63,6 +64,40 @@ class Archetype():
             return {hs:trapz_rebin((1.+z)*self.wave, self.flux[index], wave) for hs, wave in dwave.items()}
         else:
             return {hs:self._archetype['INTERP'][index](wave/(1.+z)) for hs, wave in dwave.items()}
+
+    def rebin_template_batch(self,z,dwave,trapz=True,dedges=None,use_gpu=False):
+        """
+        """
+        if (use_gpu):
+            import cupy as cp
+            xmin = self.minwave
+            xmax = self.maxwave
+            self.flux = cp.asarray(self.flux)
+            self.wave = cp.asarray(self.wave)
+
+        minedge = None
+        maxedge = None
+        result = dict()
+        if (trapz and use_gpu and dedges is not None):
+            #Use GPU mode with bin edges already calculated
+            for hs, edges in dedges.items():
+                #Check if edges is a 1-d array or a tuple also containing scalar min/max values
+                if type(edges) is tuple:
+                    (edges, minedge, maxedge) = edges
+                result[hs] = trapz_rebin(self.wave, self.flux, edges=edges, use_gpu=use_gpu, myz=cp.array([z]), xmin=xmin, xmax=xmax, edge_min=minedge, edge_max=maxedge)[0,:,:]
+            return result
+        if trapz:
+            #Use batch mode of trapz_rebin
+            return {hs:trapz_rebin((1.+z)*self.wave, self.flux, wave, use_gpu=use_gpu) for hs, wave in dwave.items()}
+        else:
+            for hs, wave in dwave.items():
+                result[hs] = np.empty((len(wave), self._narch))
+                for i in range(self._narch):
+                    result[hs][:,i] = self._archetype['INTERP'][i](wave/(1.+z))
+                if (use_gpu):
+                    result[hs] = cp.asarray(result[hs])
+            #return {hs:self._archetype['INTERP'](wave/(1.+z)) for hs, wave in dwave.items()}
+        return result
 
     def eval(self, subtype, dwave, coeff, wave, z):
         """
@@ -112,12 +147,19 @@ class Archetype():
         nleg = legendre[list(legendre.keys())[0]].shape[0]
         iBest = np.argsort(zzchi2)[0:n_nearest]
         binned_best = self.rebin_template(iBest[0], z, dwave,trapz=True)
-        binned_best = { hs:trans[hs]*binned_best[hs] for hs, w in dwave.items() }
+        for hs, w in dwave.items():
+            if (trans[hs] is not None):
+                binned_best[hs] *= trans[hs]
+        #binned_best = { hs:trans[hs]*binned_best[hs] for hs, w in dwave.items() }
         tdata = {hs: binned_best[hs][:,None] for hs, wave in dwave.items()}
         if len(iBest)>1:
             for ib in iBest[1:]:
+                #print ("IB", ib)
                 binned = self.rebin_template(ib, z, dwave,trapz=True)
-                binned = { hs:trans[hs]*binned[hs] for hs, w in dwave.items() }
+                for hs, w in dwave.items():
+                    if (trans[hs] is not None):
+                        binned[hs] *= trans[hs]
+                #binned = { hs:trans[hs]*binned[hs] for hs, w in dwave.items() }
                 tdata = { hs:np.append(tdata[hs], binned[hs][:,None], axis=1) for hs, wave in dwave.items()}
             if nleg>0:
                 tdata = { hs:np.append(tdata[hs],legendre[hs].transpose(), axis=1 ) for hs, wave in dwave.items() }
@@ -134,7 +176,7 @@ class Archetype():
             return zzchi2, zzcoeff, self._rrtype+':::%s'%(fsstype)
 
     
-    def get_best_archetype(self,spectra,weights,flux,wflux,dwave,z,legendre, per_camera, n_nearest):
+    def get_best_archetype(self,spectra,weights,flux,wflux,dwave,z,legendre, per_camera, n_nearest, dedges=None, trans=None, use_gpu=False):
 
         """Get the best archetype for the given redshift and spectype.
 
@@ -148,6 +190,9 @@ class Archetype():
             legendre (dict): legendre polynomial
             per_camera (bool): True if fitting needs to be done in each camera
             n_nearest (int): number of nearest neighbours to be used in chi2 space (including best archetype)
+            dedges (dict): in GPU mode, use pre-computed dict of wavelength bin edges, already on GPU
+            trans (dict): pass previously calcualated Lyman transmission instead of recalculating
+            use_gpu (bool): use GPU or not
             
         Returns:
             chi2 (float): chi2 of best archetype
@@ -172,22 +217,50 @@ class Archetype():
         #TODO: return best fit model as well
         #zzmodel = np.zeros((self._narch, obs_wave.size), dtype=np.float64)
 
-        trans = { hs:transmission_Lyman(z,w) for hs, w in dwave.items() }
+        if (trans is None):
+            #Calculate Lyman transmission if not passed as dict
+            trans = { hs:transmission_Lyman(z,w, use_gpu=False) for hs, w in dwave.items() }
+        else:
+            #Use previously calculated Lyman transmission
+            for hs in trans:
+                if (trans[hs] is not None):
+                    trans[hs] = trans[hs][0,:]
 
-        for i in range(self._narch):
-            binned = self.rebin_template(i, z, dwave,trapz=True)
-            binned = { hs:trans[hs]*binned[hs] for hs, w in dwave.items() }
-            if nleg>0:
-                tdata = { hs:np.append(binned[hs][:,None],legendre[hs].transpose(), axis=1 ) for hs, wave in dwave.items() }
+        #Select np or cp for operations as arrtype
+        if (use_gpu):
+            import cupy as cp
+            arrtype = cp
+        else:
+            arrtype = np
+        #Rebin in batch
+        binned = self.rebin_template_batch(z, dwave, trapz=True, dedges=dedges, use_gpu=use_gpu)
+
+        tdata = dict()
+        nbasis = 1
+        for hs, wave in dwave.items():
+            if (trans[hs] is not None):
+                #Only multiply if trans[hs] is not None
+                binned[hs] *= arrtype.asarray(trans[hs][:,None])
+            #Create 3-d tdata with narch x nwave x nbasis where nbasis = 1+nleg
+            if nleg > 0:
+                tdata[hs] = arrtype.append(binned[hs].transpose()[:,:,None], arrtype.tile(arrtype.asarray(legendre[hs]).transpose()[None,:,:], (self._narch, 1, 1)), axis=2)
             else:
-                tdata = {hs:binned[hs][:,None] for hs, wave in dwave.items()}
-            if per_camera:
-                zzchi2[i], zzcoeff[i]= per_camera_coeff_with_least_square(spectra, tdata, nleg, method='bvls', n_nbh=1)
-            else:
-                zzchi2[i], zzcoeff[i] = calc_zchi2_one(spectra, weights, flux, wflux, tdata)
-        
+                tdata[hs] = binned[hs].transpose()[:,:,None]
+            nbasis = tdata[hs].shape[2]
+        if per_camera:
+            #Batch placeholder that right now loops over each arch but will be GPU accelerated
+            (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(spectra, tdata, nleg, self._narch, method='bvls', n_nbh=1, use_gpu=use_gpu)
+        else:
+            (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, weights, flux, wflux, self._narch, nbasis, use_gpu=use_gpu)
+
         if n_nearest is not None:
-            best_chi2, best_coeff, best_fulltype = self.nearest_neighbour_model(spectra,weights,flux,wflux,dwave,z, legendre, n_nearest, zzchi2, trans, per_camera) 
+            if (use_gpu):
+                ##PLACEHOLDER - copy flux and wave back to CPU so that nearest neighbor will work until that algorithm is GPU-ized
+                self.flux = self.flux.get()
+                self.wave = self.wave.get()
+                best_chi2, best_coeff, best_fulltype = self.nearest_neighbour_model(spectra,weights.get(),flux.get(),wflux.get(),dwave,z, legendre, n_nearest, zzchi2, trans, per_camera)
+            else:
+                best_chi2, best_coeff, best_fulltype = self.nearest_neighbour_model(spectra,weights,flux,wflux,dwave,z, legendre, n_nearest, zzchi2, trans, per_camera)
             return best_chi2, best_coeff, best_fulltype
         else:
             iBest = np.argmin(zzchi2)

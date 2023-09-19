@@ -347,6 +347,21 @@ def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None, n_nbh=
     #print(f'{time.time()-start} [sec] took for per camera BVLS method\n')
     return zchi2, coeff
 
+def per_camera_coeff_with_least_square_batch(spectra, tdata, nleg, narch, method=None, n_nbh=None, use_gpu=False):
+    ### PLACEHOLDER for algorithm that will be GPU accelerated
+    ncam = 3 # number of cameras in DESI: b, r, z
+    zzchi2 = np.zeros(narch, dtype=np.float64)
+    zzcoeff = np.zeros((narch,  1+ncam*(nleg)), dtype=np.float64)
+
+    tdata_one = dict()
+    for i in range(narch):
+        for hs in tdata:
+            tdata_one[hs] = tdata[hs][i,:,:]
+            if (use_gpu):
+                tdata_one[hs] = tdata_one[hs].get()
+        zzchi2[i], zzcoeff[i]= per_camera_coeff_with_least_square(spectra, tdata_one, nleg, method='bvls', n_nbh=1)
+    return zzchi2, zzcoeff
+
 def batch_dot_product_sparse(spectra, tdata, nz, use_gpu):
     """Calculate a batch dot product of the 3 sparse matrices in spectra
     with every template in tdata.  Sparse matrix libraries are used
