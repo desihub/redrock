@@ -167,6 +167,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
     results = list()
     #Define nz here instead of hard-coding length 15 and then defining nz as
     #length of zz list
+    nz = 15
 
     for imin in find_minima(zchi2):
         if len(results) == nminima:
