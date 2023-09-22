@@ -305,7 +305,13 @@ def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None, n_nbh=
     #linear templates in each camera (only the Legendre terms will vary per camera, the lead archetype(s) will remain same for entire spectra)
 
     Tb = Tb_for_archetype(spectra, tdata, nbasis, n_nbh, nleg)  
-    M = Tb.T.dot(np.multiply(weights[:,None], Tb))
+    M = Tb.T.dot(np.multiply(weights[:,None], Tb)) 
+    prior = np.zeros(M.shape)
+    sigmas =[[0.4, 0.2, 0.5], [0.4, 0.2, 0.1]]
+    for i in range(3):
+        prior[2*i+1][2*i+1]= 1/sigmas[0][i]**2
+        prior[2*i+2][2*i+2]= 1/sigmas[1][i]**2 
+    M = M + prior
     y = Tb.T.dot(wflux)
     ret_zcoeff= {'alpha':[], 'b':[], 'r':[], 'z':[]}
 
