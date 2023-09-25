@@ -575,6 +575,15 @@ def rrdesi(options=None, comm=None):
     parser.add_argument("--chi2-scan", type=str, default=None,
         required=False, help="Load the chi2-scan from the input file")
 
+    parser.add_argument("--zscan-galaxy", type=str, default='-0.005,1.7,3e-4',
+        required=False, help="Redshift scan parameters for galaxies: zmin,zmax,dz")
+
+    parser.add_argument("--zscan-qso", type=str, default='0.05,6.0,5e-4',
+        required=False, help="Redshift scan parameters for QSO: zmin,zmax,dz")
+
+    parser.add_argument("--zscan-star", type=str, default='-0.002,0.00201,4e-5',
+        required=False, help="Redshift scan parameters for stars: zmin,zmax,dz")
+
     parser.add_argument("-n", "--ntargets", type=int,
         required=False, help="the number of targets to process in each file")
 
@@ -813,7 +822,12 @@ def rrdesi(options=None, comm=None):
         # Read the template data
         # Pass both use_gpu (this proc) and args.gpu (if any proc is using GPU)
         dtemplates = load_dist_templates(dwave, templates=args.templates,
-            comm=comm, mp_procs=mpprocs, redistribute=redistribute_templates, use_gpu=use_gpu, gpu_mode=args.gpu)
+                                         zscan_galaxy=args.zscan_galaxy,
+                                         zscan_qso=args.zscan_qso,
+                                         zscan_star=args.zscan_star,
+                                         comm=comm, mp_procs=mpprocs,
+                                         redistribute=redistribute_templates,
+                                         use_gpu=use_gpu, gpu_mode=args.gpu)
 
         # Compute the redshifts, including both the coarse scan and the
         # refinement.  This function only returns data on the rank 0 process.

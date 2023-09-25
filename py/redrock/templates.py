@@ -31,7 +31,8 @@ class Template(object):
 
     """
     def __init__(self, filename=None, spectype=None, redshifts=None,
-        wave=None, flux=None, subtype=None):
+                 wave=None, flux=None, subtype=None,
+                 zscan_galaxy=None, zscan_qso=None, zscan_star=None):
 
         if filename is not None:
             fx = None
@@ -73,15 +74,23 @@ class Template(object):
             self._rrtype = hdr['RRTYPE'].strip().upper()
             if old_style_templates:
                 if self._rrtype == 'GALAXY':
-                    # redshifts = 10**np.arange(np.log10(1+0.005),
-                    # np.log10(1+2.0), 1.5e-4) - 1
-                    self._redshifts = 10**np.arange(np.log10(1-0.005),
-                        np.log10(1+7.0), 3e-4) - 1
+                    if zscan_galaxy is not None:
+                        zmin, zmax, dz = zscan_galaxy.split(',')
+                        self._redshifts = 10**np.arange(np.log10(1+float(zmin)), np.log10(1+float(zmax)), float(dz)) - 1
+                    else:
+                        self._redshifts = 10**np.arange(np.log10(1-0.005), np.log10(1+1.7), 3e-4) - 1
                 elif self._rrtype == 'STAR':
-                    self._redshifts = np.arange(-0.002, 0.00201, 4e-5)
+                    if zscan_star is not None:
+                        zmin, zmax, dz = zscan_star.split(',')
+                        self._redshifts = np.arange(float(zmin), float(zmax), float(dz))
+                    else:
+                        self._redshifts = np.arange(-0.002, 0.00201, 4e-5)
                 elif self._rrtype == 'QSO':
-                    self._redshifts = 10**np.arange(np.log10(1+0.05),
-                        np.log10(1+6.0), 5e-4) - 1
+                    if zscan_qso is not None:
+                        zmin, zmax, dz = zscan_qso.split(',')
+                        self._redshifts = 10**np.arange(np.log10(1+float(zmin)), np.log10(1+float(zmax)), float(dz)) - 1
+                    else:
+                        self._redshifts = 10**np.arange(np.log10(1+0.05), np.log10(1+6.0), 5e-4) - 1
                 else:
                     raise ValueError("Unknown redshift range to use for "
                         "template type {}".format(self._rrtype))
@@ -446,7 +455,9 @@ class ReDistTemplate(DistTemplate):
         return True
 
 
-def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1, redistribute=False, use_gpu=False, gpu_mode=False):
+def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1,
+                        zscan_galaxy=None, zscan_qso=None, zscan_star=None,
+                        redistribute=False, use_gpu=False, gpu_mode=False):
     """Read and distribute templates from disk.
 
     This reads one or more template files from disk and distributes them among
@@ -509,7 +520,8 @@ def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1, redistribu
     template_data = list()
     if (comm is None) or (comm.rank == 0):
         for t in template_files:
-            template_data.append(Template(filename=t))
+            template_data.append(Template(filename=t, zscan_galaxy=zscan_galaxy,
+                                          zscan_star=zscan_star, zscan_qso=zscan_qso))
 
     if comm is not None:
         template_data = comm.bcast(template_data, root=0)

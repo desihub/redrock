@@ -15,8 +15,11 @@ import numpy as np
 
 from . import constants
 
+<<<<<<< HEAD
 #IGM = Inoue14()
 
+=======
+>>>>>>> f1eaa9b7bad3c5a397a4ed53bf5a215a01a9f787
 class Inoue14(object):
     def __init__(self, scale_tau=1.):
         """
@@ -605,7 +608,14 @@ def distribute_work(nproc, ids, weights=None, capacities=None):
     return dist
 
 
+<<<<<<< HEAD
 def transmission_IGM_old(zObj, lObs, use_gpu=False):
+=======
+
+
+
+def transmission_Lyman(zObj, lObs, use_gpu=False):
+>>>>>>> f1eaa9b7bad3c5a397a4ed53bf5a215a01a9f787
     """Calculate the transmitted flux fraction from the Lyman series
     This returns the transmitted flux fraction:
     1 -> everything is transmitted (medium is transparent)
@@ -629,7 +639,7 @@ def transmission_IGM_old(zObj, lObs, use_gpu=False):
         scalar input; nz x nlambda in case of array input)
 
     """
-    if (use_gpu):
+    if use_gpu:
         import cupy as cp
         tile = cp.tile
         asarray = cp.asarray
@@ -637,6 +647,7 @@ def transmission_IGM_old(zObj, lObs, use_gpu=False):
         tile = np.tile
         asarray = np.asarray
 
+<<<<<<< HEAD
     #Lyman_series = constants.Lyman_series
     min_wave = 0
     if (np.isscalar(zObj)):
@@ -671,6 +682,37 @@ def transmission_IGM_old(zObj, lObs, use_gpu=False):
             T[iz, :] = IGM.full_IGM_old(myz, lRF[iz, :]) # .get() hack
     if use_gpu:
         T = asarray(T) # hack
+=======
+    ##Lyman_series = constants.Lyman_series
+    #min_wave = 0
+    #if np.isscalar(zObj):
+    #    #zObj is a float
+    #    lRF = lObs/(1.+zObj)
+    #else:
+    #    if (len(zObj) == 0):
+    #        #Empty z array
+    #        return np.ones((0, len(lObs)), dtype=np.float64)
+    #    #This is an array of float
+    #    min_wave = lObs.min()/(1+zObj.max())
+    #    #if (lObs.min()/(1+zObj.max()) > Lyman_series['Lya']['line']):
+    #    #if (min_wave > Lyman_series['Lya']['line']):
+    #    #    #Return None if wavelength range doesn't overlap with Lyman series
+    #    #    #No need to perform any calculations in this case
+    #    #    return None
+    #    if (not use_gpu and type(zObj) != np.ndarray):
+    #        #Cupy array passed??
+    #        zObj = zObj.get()
+    #    lObs = tile(lObs, (zObj.size, 1))
+    #    lRF = lObs/(1.+asarray(zObj)[:,None])
+
+    T = tile(np.ones_like(lObs), (zObj.size, 1))
+
+    W = np.where(lObs.min() / (1. + zObj) < 1215.67)[0]
+    if len(W) > 0:
+        for iz in W:
+            T[iz, :] = asarray(IGM.full_IGM(zObj[iz], lObs))
+
+>>>>>>> f1eaa9b7bad3c5a397a4ed53bf5a215a01a9f787
     #for l in list(Lyman_series.keys()):
     #    if (min_wave > Lyman_series[l]['line']):
     #        continue
@@ -678,8 +720,10 @@ def transmission_IGM_old(zObj, lObs, use_gpu=False):
     #    zpix   = lObs[w]/Lyman_series[l]['line']-1.
     #    tauEff = Lyman_series[l]['A']*(1.+zpix)**Lyman_series[l]['B']
     #    T[w]  *= np.exp(-tauEff)
-    if (np.isscalar(zObj) and use_gpu):
-        T = asarray(T)
+    
+    #if (np.isscalar(zObj) and use_gpu):
+    #    T = asarray(T)
+        
     return T
 
 def transmission_IGM(zObj, lObs, use_gpu=False):
