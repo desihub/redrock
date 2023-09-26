@@ -167,6 +167,8 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
 
     results = list()
     #Moved default nz to arg list
+    if (nz is None):
+        nz = 15
 
     for imin in find_minima(zchi2):
         if len(results) == nminima:
