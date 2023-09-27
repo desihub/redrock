@@ -735,7 +735,7 @@ def transmission_IGM(zObj, lObs, use_gpu=False):
         scalar input; nz x nlambda in case of array input)
 
     """
-    if (use_gpu):
+    if use_gpu:
         import cupy as cp
         tile = cp.tile
         asarray = cp.asarray
@@ -744,37 +744,31 @@ def transmission_IGM(zObj, lObs, use_gpu=False):
         asarray = np.asarray
 
     min_wave = 0
-    if (np.isscalar(zObj)):
+    if np.isscalar(zObj):
         #zObj is a float
-        lRF = lObs/(1.+zObj)
         min_wave = np.array([lObs.min()/(1.+zObj)])
     else:
-        if (len(zObj) == 0):
+        if len(zObj) == 0:
             #Empty z array
             return np.ones((0, len(lObs)), dtype=np.float64)
         #This is an array of float
         min_wave = lObs.min()/(1+zObj.max())
-        if (min_wave > 1215.):
+        if min_wave > 1220.: 
             #Return None if wavelength range doesn't overlap with Lyman series
             #No need to perform any calculations in this case
             return None
         #Calculate min wave for every z
         min_wave = lObs.min()/(1+zObj)
-        if (not use_gpu and type(zObj) != np.ndarray):
+        if not use_gpu and type(zObj) != np.ndarray:
             #Cupy array passed??
             zObj = zObj.get()
         lObs = tile(lObs, (zObj.size, 1))
-        lRF = lObs/(1.+asarray(zObj)[:,None])
-    T = np.ones_like(lRF)
-    #Only process those that overlap with lymann range
-    i = min_wave < 1215.
-    #i = zObj >= 2
-    T[i,:] = IGM.full_IGM(asarray(zObj[i]), lObs[i,:], use_gpu=use_gpu)
-    ## NOTE
-    ## I think lObs is the correct array to pass (unless IGM is rewritten to
-    ## take rest frame wavelength array lRF as argument).
-    #T[i,:] = IGM.full_IGM(asarray(zObj[i]), lRF[i,:], use_gpu=use_gpu)
-    if (np.isscalar(zObj) and use_gpu):
+    T = np.ones_like(lObs)
+    # Only process wavelengths at or shorter than Lya. Now, Lya is at 1215.67,
+    # but let the IGM class figure out the exact transmission around the line.
+    i = min_wave < 1220.
+    T[i, :] = IGM.full_IGM(asarray(zObj[i]), lObs[i,:], use_gpu=use_gpu)
+    if np.isscalar(zObj) and use_gpu:
         T = asarray(T)
     return T
 
