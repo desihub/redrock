@@ -310,7 +310,7 @@ def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None, n_nbh=
     prior = np.zeros(M.shape)
     #sigmas =[[0.33, 0.33, 0.29], [0.44, 0.25, 0.20]]
     sigmas =[[0.4, 0.4, 0.4], [0.4, 0.4, 0.4]]
-    ct=0.025
+    ct=0.5
     for i in range(3):
         prior[2*i+1][2*i+1]= 1/(ct*sigmas[0][i])**2
         prior[2*i+2][2*i+2]= 1/(ct*sigmas[1][i])**2 
