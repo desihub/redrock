@@ -347,20 +347,87 @@ def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None, n_nbh=
     #print(f'{time.time()-start} [sec] took for per camera BVLS method\n')
     return zchi2, coeff
 
-def per_camera_coeff_with_least_square_batch(spectra, tdata, nleg, narch, method=None, n_nbh=None, use_gpu=False):
+def per_camera_coeff_with_least_square_batch_cpu(target, tdata, weights, flux, wflux, nleg, narch, method=None, n_nbh=None, use_gpu=False):
+    ### TODO - implement BVLS as a lin alg method instead of PCA and then can use calc_zchi2_batch!
     ### PLACEHOLDER for algorithm that will be GPU accelerated
     ncam = 3 # number of cameras in DESI: b, r, z
+    spectra = target.spectra
+    #nleg = target._nleg
+    #legendre = target.legendre(nleg=nleg, use_gpu=use_gpu) #Get previously calculated legendre
+
     zzchi2 = np.zeros(narch, dtype=np.float64)
     zzcoeff = np.zeros((narch,  1+ncam*(nleg)), dtype=np.float64)
 
+    nbasis = n_nbh+nleg*ncam # n_nbh : for actual physical archetype(s), nleg: number of legendre polynomials, ncamera: number of cameras
     tdata_one = dict()
     for i in range(narch):
         for hs in tdata:
             tdata_one[hs] = tdata[hs][i,:,:]
             if (use_gpu):
                 tdata_one[hs] = tdata_one[hs].get()
-        zzchi2[i], zzcoeff[i]= per_camera_coeff_with_least_square(spectra, tdata_one, nleg, method='bvls', n_nbh=1)
+        zzchi2[i], zzcoeff[i]= per_camera_coeff_with_least_square(spectra, tdata_one, nleg, method=method, n_nbh=1)
     return zzchi2, zzcoeff
+
+
+def per_camera_coeff_with_least_square_batch_gpu(target, tdata, weights, flux, wflux, nleg, narch, method=None, n_nbh=None, use_gpu=False):
+    ### TODO - implement BVLS as a lin alg method instead of PCA and then can use calc_zchi2_batch!
+    ### PLACEHOLDER for algorithm that will be GPU accelerated
+    ncam = 3 # number of cameras in DESI: b, r, z
+    spectra = target.spectra
+    #nleg = target._nleg
+    #legendre = target.legendre(nleg=nleg, use_gpu=use_gpu) #Get previously calculated legendre
+
+    nbasis = n_nbh+nleg*ncam # n_nbh : for actual physical archetype(s), nleg: number of legendre polynomials, ncamera: number of cameras
+    ret_zcoeff= {'alpha':[], 'b':[], 'r':[], 'z':[]}
+
+    if (use_gpu):
+        #Use batch 3d array on GPU with CuPy to calculate new tdata array
+        for i, hs in enumerate(tdata):
+            tdata2 = np.zeros_like(tdata[hs], shape=(tdata[hs].shape[0], tdata[hs].shape[1], nbasis))
+            tdata2[:,:,:n_nbh] = tdata[hs][:,:,:n_nbh]
+            tdata2[:,:,n_nbh+i*nleg:n_nbh+(i+1)*nleg] = tdata[hs][:,:,n_nbh:]
+            tdata[hs] = tdata2
+    else:
+        #TODO - bizarre that this is faster than above for CPU
+        for i, hs in enumerate(tdata):
+            tdata_new = np.empty_like(tdata[hs], shape=(tdata[hs].shape[0], tdata[hs].shape[1], nbasis))
+            for j in range(narch):
+                tdata2 = np.zeros_like(tdata[hs], shape=(tdata[hs].shape[1], nbasis))
+                for k in range(n_nbh):
+                    tdata2[:,k] = tdata[hs][j,:,k] # these are nearest archetype
+                if nleg>0:
+                    for k in range(n_nbh, n_nbh+nleg):
+                        tdata2[:,k+nleg*i] = tdata[hs][j,:,k] # Legendre polynomials terms
+                tdata_new[j,:,:] = tdata2
+            tdata[hs] = tdata_new
+
+    #Setup dict of solver args to pass bounds to solver
+    solver_args = dict()
+    if (method == 'bvls'):
+        #only positive coefficients are allowed for the archetypes
+        bounds = np.zeros((2, nbasis))
+        bounds[0][n_nbh:]=-np.inf #constant and slope terms in archetype method (can be positive or negative)
+        bounds[1] = np.inf
+        solver_args['bounds'] = bounds
+
+    (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, weights, flux, wflux, narch, nbasis, solve_matrices_algorithm=method.upper(), solver_args=solver_args, use_gpu=use_gpu)
+
+    # saving leading archetype coefficients in correct order
+    ret_zcoeff['alpha'] = [zzcoeff[:,k] for k in range(n_nbh)] # archetype coefficient(s)
+    ret_zcoeff['alpha'] = ret_zcoeff['alpha'][0][:,None]
+
+    if nleg>=1:
+        split_coeff =  np.split(zzcoeff[:,n_nbh:], ncam, axis=1) # n_camera = 3
+        # In target spectra redrock saves values as 'b', 'z', 'r'. 
+        # So just re-ordering them here to 'b', 'r', 'z' for easier reading
+        old_coeff = {band: split_coeff[i] for i, band in enumerate(['b', 'z', 'r'])}
+
+        for band in ['b', 'r', 'z']:# 3 cameras
+            ret_zcoeff[band] = old_coeff[band]
+
+    coeff = np.concatenate(list(ret_zcoeff.values()), axis=1)
+    #print(f'{time.time()-start} [sec] took for per camera BVLS method\n')
+    return zzchi2, coeff
 
 def batch_dot_product_sparse(spectra, tdata, nz, use_gpu):
     """Calculate a batch dot product of the 3 sparse matrices in spectra
@@ -638,7 +705,7 @@ def calc_batch_dot_product_3d3d_gpu(a, b, transpose_a=False, fullprecision=True)
 ###    are very obviously analagous though and should be highly
 ###    maintainable.  The main difference is the extra loop on the CPU version
 
-def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, solve_matrices_algorithm="PCA", use_gpu=False, fullprecision=True):
+def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, solve_matrices_algorithm="PCA", solver_args=None, use_gpu=False, fullprecision=True):
     
     """Calculate a batch of chi2.
     For many redshifts and a set of spectral data, compute the chi2 for
@@ -653,6 +720,10 @@ def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, solve_mat
         wflux (array): concatenated weighted flux values.
         nz (int): number of templates
         nbasis (int): nbasis
+        solve_matrices_algorithm (string): PCA, BLVS, or NMF - the algorithm
+            used to solve matrix equation
+        solver_args (dict): Optional args to pass to solver, such as bounds
+            array for BVLS.
         use_gpu (bool): use GPU or not
         fullprecision (bool): Whether or not to ensure reproducibly identical
             results.  See calc_batch_dot_product_3d3d_gpu.
@@ -723,7 +794,7 @@ def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, solve_mat
         #There is no Error thrown by cupy's version of linalg.solve so just
         #need to catch NotImplementedError.
         try:
-            zcoeff = solve_matrices(all_M, all_y, solve_algorithm=solve_matrices_algorithm, use_gpu=True)
+            zcoeff = solve_matrices(all_M, all_y, solve_algorithm=solve_matrices_algorithm, solver_args=solver_args, use_gpu=True)
         except NotImplementedError:
             zchi2[:] = 9e99
             zcoeff = np.zeros((nz, nbasis))
@@ -769,7 +840,7 @@ def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, solve_mat
             #for this template to solve for zcoeff for each M, y.
             #Catch LinAlgError and NotImplementedError
             try:
-                zcoeff[i,:] = solve_matrices(M, y, solve_algorithm=solve_matrices_algorithm, use_gpu=False)
+                zcoeff[i,:] = solve_matrices(M, y, solve_algorithm=solve_matrices_algorithm, solver_args=solver_args, use_gpu=False)
             except np.linalg.LinAlgError:
                 zchi2[i] = 9e99
                 continue
@@ -866,7 +937,7 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
         # for all templates for all three spectra for this target
 
         # For coarse z scan, use fullprecision = False to maximize speed
-        (zchi2[j,:], zcoeff[j,:,:]) = calc_zchi2_batch(target_data[j].spectra, tdata, weights, flux, wflux, nz, nbasis, dtemplate.template.solve_matrices_algorithm, use_gpu, fullprecision=False)
+        (zchi2[j,:], zcoeff[j,:,:]) = calc_zchi2_batch(target_data[j].spectra, tdata, weights, flux, wflux, nz, nbasis, dtemplate.template.solve_matrices_algorithm, use_gpu=use_gpu, fullprecision=False)
 
         #- Penalize chi2 for negative [OII] flux; ad-hoc
         if dtemplate.template.template_type == 'GALAXY':
@@ -1091,7 +1162,7 @@ def calc_zchi2_targets(targets, templates, mp_procs=1, use_gpu=False):
 
     return results
 
-def solve_matrices(M, y, solve_algorithm="PCA", use_gpu=False):
+def solve_matrices(M, y, solve_algorithm="PCA", solver_args=None, use_gpu=False):
     """Solve the matrix equation y = M*x for the unknown x using the
     specified algorithm.  The default is to use PCA via numpy or cupy
     linalg.solve.  But non-negative matrix factorization (NMF) and other
@@ -1101,6 +1172,8 @@ def solve_matrices(M, y, solve_algorithm="PCA", use_gpu=False):
         M (array): 2d array on CPU; 3d array on GPU for all redshifts
         y (array): 1d array on CPU; 2d array on GPU for all redshifts
         solve_algorithm (string): which algorithm to use
+        solver_args (dict): Optional args to pass to solver, such as bounds
+            array for BVLS.
         use_gpu (bool): use GPU or not
 
     Returns:
@@ -1113,7 +1186,7 @@ def solve_matrices(M, y, solve_algorithm="PCA", use_gpu=False):
 
     """
 
-    if solve_algorithm == "PCA":
+    if solve_algorithm.upper() == "PCA":
         #Use PCA via linalg.solve in either numpy or cupy
         if (use_gpu):
             #Use cupy linalg.solve to solve for zcoeff in batch for all_M and
@@ -1127,6 +1200,34 @@ def solve_matrices(M, y, solve_algorithm="PCA", use_gpu=False):
                 return np.linalg.solve(M, y)
             except np.linalg.LinAlgError:
                 raise
+    elif solve_algorithm == "BVLS":
+        if (solver_args is not None and 'bounds' in solver_args):
+            bounds = solver_args['bounds']
+        else:
+            nbasis = y.shape[-1]
+            bounds = np.zeros((2, nbasis))
+            bounds[0]=-np.inf
+            bounds[1]=np.inf
+        if (use_gpu):
+            nz = y.shape[0]
+            Mcpu = M.get()
+            ycpu = y.get()
+            zcoeff = np.zeros(y.shape)
+            #Copy to CPU, run scipy.optimize.lsq_linear, copy back to GPU
+            for j in range(nz):
+                try:
+                    res = lsq_linear(Mcpu[j,:,:], ycpu[j,:], bounds=bounds, method='bvls')
+                    zcoeff[j,:] = res.x
+                except np.linalg.LinAlgError:
+                    zcoeff[j,:] = 9e99
+            return cp.asarray(zcoeff)
+        else:
+            try:
+                res = lsq_linear(M, y, bounds=bounds, method='bvls')
+                zcoeff = res.x
+            except np.linalg.LinAlgError:
+                raise
+            return zcoeff
     elif solve_algorithm == "NMF":
         raise NotImplementedError("NMF is not yet implemented.")
     else:
