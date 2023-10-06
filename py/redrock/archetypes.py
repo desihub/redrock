@@ -17,7 +17,7 @@ from .rebin import trapz_rebin
 
 from .utils import transmission_Lyman
 
-from .zscan import per_camera_coeff_with_least_square, per_camera_coeff_with_least_square_batch_cpu, per_camera_coeff_with_least_square_batch_gpu
+from .zscan import per_camera_coeff_with_least_square_batch
 
 class Archetype():
     """Class to store all different archetypes from the same spectype.
@@ -202,8 +202,8 @@ class Archetype():
                 tdata[hs] = np.append(tdata[hs], legendre[hs].transpose()[None,:,:], axis=2)
             nbasis = tdata[hs].shape[2]
         if per_camera:
-            #Batch placeholder that right now loops over each arch but will be GPU accelerated
-            (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch_cpu(spectra, tdata, weights, flux, wflux, nleg, 1, method='bvls', n_nbh=1)
+            #Use CPU mode since small tdata
+            (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(spectra, tdata, weights, flux, wflux, nleg, 1, method='bvls', n_nbh=n_nearest, use_gpu=False)
         else:
             #Use CPU mode for calc_zchi2 since small tdata
             (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, weights, flux, wflux, 1, nbasis, use_gpu=False)
@@ -298,9 +298,9 @@ class Archetype():
             nbasis = tdata[hs].shape[2]
         if per_camera:
             if (use_gpu):
-                (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch_gpu(target, tdata, gpuweights, gpuflux, gpuwflux, nleg, self._narch, method=solve_method, n_nbh=1, use_gpu=use_gpu)
+                (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, tdata, gpuweights, gpuflux, gpuwflux, nleg, self._narch, method=solve_method, n_nbh=1, use_gpu=use_gpu)
             else:
-                (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch_cpu(target, tdata, weights, flux, wflux, nleg, self._narch, method=solve_method, n_nbh=1)
+                (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux, nleg, self._narch, method=solve_method, n_nbh=1, use_gpu=use_gpu)
         else:
             if (use_gpu):
                 (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, gpuweights, gpuflux, gpuwflux, self._narch, nbasis, use_gpu=use_gpu)
