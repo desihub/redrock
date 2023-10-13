@@ -323,11 +323,14 @@ def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None, n_nbh=
         bounds[0][n_nbh:]=-np.inf #constant and slope terms in archetype method (can be positive or negative)
         bounds[1] = np.inf  
         try:
-            res = lsq_linear(M, y, bounds=bounds, method='bvls')
-            zcoeff = res.x
+            if not np.sum(weights) == 0:
+                res = lsq_linear(M, y, bounds=bounds, method='bvls')
+                zcoeff = res.x
+            else:
+                return 9e+99, np.zeros(nbasis)
         except np.linalg.LinAlgError:
             return 9e+99, np.zeros(nbasis)
-
+         
     model = Tb.dot(zcoeff)
     zchi2 = np.dot((flux - model)**2, weights)
 
