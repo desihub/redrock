@@ -255,6 +255,11 @@ def transmission_Lyman(zObj,lObs, use_gpu=False):
     min_wave = 0
     if (np.isscalar(zObj)):
         #zObj is a float
+        min_wave = lObs.min()/(1+zObj)
+        if (min_wave > Lyman_series['Lya']['line']):
+            #Return None if wavelength range doesn't overlap with Lyman series
+            #No need to perform any calculations in this case
+            return None
         lRF = lObs/(1.+zObj)
     else:
         if (len(zObj) == 0):

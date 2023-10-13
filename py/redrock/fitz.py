@@ -109,7 +109,6 @@ def minfit(x, y):
 
 
 def legendre_calculate(nleg, dwave):
-
     wave = np.concatenate([ w for w in dwave.values() ])
     wmin = wave.min()
     wmax = wave.max()
@@ -117,7 +116,7 @@ def legendre_calculate(nleg, dwave):
 
     return legendre
 
-def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=False, deg_legendre=None, nz=None, per_camera=False, n_nearest=None):
+def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=False, deg_legendre=None, nz=15, per_camera=False, n_nearest=None):
     """Refines redshift measurement around up to nminima minima.
 
     TODO:
@@ -132,7 +131,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
         nminima (int): the number of minima to consider.
         use_gpu (bool): use GPU or not
         deg_legendre (int): in archetype mode polynomials upto deg_legendre-1 will be used
-        nz (int): number of finer redshift pixels to search for final redshift
+        nz (int): number of finer redshift pixels to search for final redshift - default 15
         per_camera: (bool): True if fitting needs to be done in each camera for archetype mode
         n_nearest: (int): number of nearest neighbours to be used in chi2 space (including best archetype) 
 
@@ -151,10 +150,6 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
     # Build dictionary of wavelength grids
     dwave = { s.wavehash:s.wave for s in spectra }
 
-    if not archetype is None:
-        legendre = legendre_calculate(deg_legendre, dwave=dwave)
-   
-    
     (weights, flux, wflux) = spectral_data(spectra)
     
     if (use_gpu):
@@ -166,9 +161,14 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
         gpuedges = { s.wavehash:(s.gpuedges, s.minedge, s.maxedge) for s in spectra }
         gpudwave = { s.wavehash:s.gpuwave for s in spectra }
 
+    if not archetype is None:
+        #legendre = legendre_calculate(deg_legendre, dwave=dwave)
+        legendre = target.legendre(deg_legendre)
+
     results = list()
-    #Define nz here instead of hard-coding length 15 and then defining nz as
-    #length of zz list
+    #Moved default nz to arg list
+    if (nz is None):
+        nz = 15
 
     for imin in find_minima(zchi2):
         if len(results) == nminima:
@@ -226,6 +226,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
         i = min(max(np.argmin(zzchi2),1), len(zz)-2)
         zmin, sigma, chi2min, zwarn = minfit(zz[i-1:i+2], zzchi2[i-1:i+2])
 
+        trans = dict()
         try:
             #Calculate xmin and xmax from template and pass as scalars 
             xmin = template.minwave*(1+zmin)
@@ -242,6 +243,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
                     binned[k] = binned[k].get()
                 #Use CPU always
                 T = transmission_Lyman(np.array([zmin]),dwave[k], use_gpu=False)
+                trans[k] = T
                 if (T is None):
                     #Return value of None means that wavelenght regime
                     #does not overlap Lyman transmission - continue here
@@ -289,7 +291,8 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
                 chi2=chi2min, zz=zz, zzchi2=zzchi2,
                 coeff=coeff))
         else:
-            chi2min, coeff, fulltype = archetype.get_best_archetype(spectra,weights,flux,wflux,dwave,zbest,legendre, per_camera, n_nearest)
+            chi2min, coeff, fulltype = archetype.get_best_archetype(target,weights,flux,wflux,dwave,zbest, per_camera, n_nearest, trans=trans, use_gpu=use_gpu)
+            del trans
 
             results.append(dict(z=zbest, zerr=zerr, zwarn=zwarn,
                 chi2=chi2min, zz=zz, zzchi2=zzchi2,
