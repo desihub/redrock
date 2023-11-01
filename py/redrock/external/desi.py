@@ -592,6 +592,9 @@ def rrdesi(options=None, comm=None):
 
     parser.add_argument("--nminima", type=int, default=3,
         required=False, help="the number of redshift minima to search")
+    
+    parser.add_argument("--prior_sigma", type=float, default=None,
+        required=False, help="sigma to add as prior in solving linear equation, 1/sig**2 will be added")
 
     parser.add_argument("--allspec", default=False, action="store_true",
         required=False, help="use individual spectra instead of coadd")
@@ -717,7 +720,8 @@ def rrdesi(options=None, comm=None):
                     print('No Legendre polynomial will be added to archetypes...\n')
                 if args.n_nearest:
                     print('n_nearest argument is provided so %d nearest neighbour (in chi2 space) to the best archetype will be used for further modeling...\n'%(args.n_nearest-1))
-                    
+                if args.prior_sigma:
+                    print('prior_sigma = %s has been provided, so a prior will be added while solving for the coefficients\n'%(args.prior_sigma))
             else:
                 print("ERROR: can't find archetypes_dir or it is unreadable\n")
                 sys.stdout.flush()
@@ -848,7 +852,7 @@ def rrdesi(options=None, comm=None):
 
         scandata, zfit = zfind(targets, dtemplates, mpprocs,
             nminima=args.nminima, archetypes=args.archetypes,
-            priors=args.priors, chi2_scan=args.chi2_scan, use_gpu=use_gpu, nz=args.nz, per_camera=args.per_camera, deg_legendre=args.deg_legendre, n_nearest=args.n_nearest)
+            priors=args.priors, chi2_scan=args.chi2_scan, use_gpu=use_gpu, nz=args.nz, per_camera=args.per_camera, deg_legendre=args.deg_legendre, n_nearest=args.n_nearest, prior_sigma=args.prior_sigma)
 
         stop = elapsed(start, "Computing redshifts", comm=comm)
 

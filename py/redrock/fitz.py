@@ -116,7 +116,16 @@ def legendre_calculate(nleg, dwave):
 
     return legendre
 
-def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=False, deg_legendre=None, nz=15, per_camera=False, n_nearest=None):
+def prior_on_coeffs(n_nbh, deg_legendre, sigma):
+
+    nbasis = n_nbh+deg_legendre*3 # 3 desi cameras
+    prior = np.zeros((nbasis, nbasis), dtype='float64');np.fill_diagonal(prior, 1/(sigma**2))
+    for i in range(n_nbh):
+        prior[i][i]=0. ## Do not add prior to the archetypes, added only to the Legendre polynomials
+    return prior
+
+
+def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=False, deg_legendre=None, nz=15, per_camera=False, n_nearest=None, prior_sigma=None):
     """Refines redshift measurement around up to nminima minima.
 
     TODO:
@@ -134,6 +143,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
         nz (int): number of finer redshift pixels to search for final redshift - default 15
         per_camera: (bool): True if fitting needs to be done in each camera for archetype mode
         n_nearest: (int): number of nearest neighbours to be used in chi2 space (including best archetype) 
+        prior_sigma (float): prior to add in the final solution matrix: added as 1/(prior_sigma**2) only for per-camera mode
 
     Returns:
         Table: the fit parameters for the minima.
@@ -291,7 +301,14 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
                 chi2=chi2min, zz=zz, zzchi2=zzchi2,
                 coeff=coeff))
         else:
-            chi2min, coeff, fulltype = archetype.get_best_archetype(target,weights,flux,wflux,dwave,zbest, per_camera, n_nearest, trans=trans, use_gpu=use_gpu)
+            if prior_sigma is not None:
+                if n_nearest is None:
+                    prior = prior_on_coeffs(1, deg_legendre, prior_sigma)
+                else:
+                    prior = prior_on_coeffs(n_nearest, deg_legendre, prior_sigma)
+            else:
+                prior=None
+            chi2min, coeff, fulltype = archetype.get_best_archetype(target,weights,flux,wflux,dwave,zbest, per_camera, n_nearest, trans=trans, use_gpu=use_gpu, prior=prior)
             del trans
 
             results.append(dict(z=zbest, zerr=zerr, zwarn=zwarn,

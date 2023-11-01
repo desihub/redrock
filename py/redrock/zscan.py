@@ -268,7 +268,7 @@ def Tb_for_archetype(spectra, tdata, nbasis, n_nbh, nleg):
     return Tb
 
 
-def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None, n_nbh=None):
+def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None, n_nbh=None, prior=None):
 
     """
     This function calculates coefficients for archetype mode in each camera using normal linear algebra matrix solver or BVLS (bounded value least square) method
@@ -285,6 +285,7 @@ def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None, n_nbh=
     nleg (int): number of Legendre polynomials
     method (string): 'PCA' or 'bvls'
     n_nbh (int): number of nearest best archetypes
+    prior (2d matrix); prior added to be the final solution step (1/sigma^2)
 
     Returns
     --------------------
@@ -301,12 +302,18 @@ def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None, n_nbh=
     wflux = flux*weights
 
     nbasis = n_nbh+nleg*ncam # n_nbh : for actual physical archetype(s), nleg: number of legendre polynomials, ncamera: number of cameras
+    
+    # in case of zero ivars
+    if weights.sum()==0:
+        return  9e+99, np.zeros(nbasis)
 
     #linear templates in each camera (only the Legendre terms will vary per camera, the lead archetype(s) will remain same for entire spectra)
 
     Tb = Tb_for_archetype(spectra, tdata, nbasis, n_nbh, nleg)  
     M = Tb.T.dot(np.multiply(weights[:,None], Tb)) 
     y = Tb.T.dot(wflux)
+    if prior is not None:
+        M = M + prior
 
     ret_zcoeff= {'alpha':[], 'b':[], 'r':[], 'z':[]}
 
@@ -351,7 +358,7 @@ def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None, n_nbh=
     #print(f'{time.time()-start} [sec] took for per camera BVLS method\n')
     return zchi2, coeff
 
-def per_camera_coeff_with_least_square_batch(spectra, tdata, nleg, narch, method=None, n_nbh=None, use_gpu=False):
+def per_camera_coeff_with_least_square_batch(spectra, tdata, nleg, narch, method=None, n_nbh=None, use_gpu=False, prior=None):
     ### PLACEHOLDER for algorithm that will be GPU accelerated
     ncam = 3 # number of cameras in DESI: b, r, z
     zzchi2 = np.zeros(narch, dtype=np.float64)
@@ -363,7 +370,7 @@ def per_camera_coeff_with_least_square_batch(spectra, tdata, nleg, narch, method
             tdata_one[hs] = tdata[hs][i,:,:]
             if (use_gpu):
                 tdata_one[hs] = tdata_one[hs].get()
-        zzchi2[i], zzcoeff[i]= per_camera_coeff_with_least_square(spectra, tdata_one, nleg, method='bvls', n_nbh=1)
+        zzchi2[i], zzcoeff[i]= per_camera_coeff_with_least_square(spectra, tdata_one, nleg, method='bvls', n_nbh=1, prior=prior)
     return zzchi2, zzcoeff
 
 def batch_dot_product_sparse(spectra, tdata, nz, use_gpu):

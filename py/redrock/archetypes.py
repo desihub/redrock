@@ -143,7 +143,7 @@ class Archetype():
 
         return flux
     
-    def nearest_neighbour_model(self, target,weights,flux,wflux,dwave,z, n_nearest, zzchi2, trans, per_camera, dedges=None, binned=None, use_gpu=False):
+    def nearest_neighbour_model(self, target,weights,flux,wflux,dwave,z, n_nearest, zzchi2, trans, per_camera, dedges=None, binned=None, use_gpu=False, prior=None):
         
         """
         
@@ -162,6 +162,7 @@ class Archetype():
         dedges (dict): in GPU mode, use pre-computed dict of wavelength bin edges, already on GPU
         binned (dict): already computed dictionary of rebinned fluxes
         use_gpu (bool): use GPU or not
+        prior (2d array): prior matrix on coefficients (1/sig**2)
 
         
         Returns:
@@ -203,7 +204,7 @@ class Archetype():
             nbasis = tdata[hs].shape[2]
         if per_camera:
             #Batch placeholder that right now loops over each arch but will be GPU accelerated
-            (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(spectra, tdata, nleg, method='bvls', n_nbh=1, use_gpu=use_gpu)
+            (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(spectra, tdata, nleg, method='bvls', n_nbh=1, use_gpu=use_gpu, prior=prior)
         else:
             #Use CPU mode for calc_zchi2 since small tdata
             (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, weights, flux, wflux, 1, nbasis, use_gpu=False)
@@ -214,7 +215,7 @@ class Archetype():
         #print(z, zzchi2, zzcoeff, fsstype)
         return zzchi2[0], zzcoeff[0], self._rrtype+':::%s'%(fsstype)
 
-    def get_best_archetype(self,target,weights,flux,wflux,dwave,z, per_camera, n_nearest, trans=None, use_gpu=False):
+    def get_best_archetype(self,target,weights,flux,wflux,dwave,z, per_camera, n_nearest, trans=None, use_gpu=False, prior=None):
 
         """Get the best archetype for the given redshift and spectype.
 
@@ -229,6 +230,7 @@ class Archetype():
             n_nearest (int): number of nearest neighbours to be used in chi2 space (including best archetype)
             trans (dict): pass previously calcualated Lyman transmission instead of recalculating
             use_gpu (bool): use GPU or not
+            prior (2d array): prior matrix on coefficients (1/sig**2)
             
         Returns:
             chi2 (float): chi2 of best archetype
@@ -297,7 +299,7 @@ class Archetype():
             nbasis = tdata[hs].shape[2]
         if per_camera:
             #Batch placeholder that right now loops over each arch but will be GPU accelerated
-            (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(spectra, tdata, nleg, self._narch, method='bvls', n_nbh=1, use_gpu=use_gpu)
+            (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(spectra, tdata, nleg, self._narch, method='bvls', n_nbh=1, use_gpu=use_gpu, prior=prior)
         else:
             if (use_gpu):
                 (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, gpuweights, gpuflux, gpuwflux, self._narch, nbasis, use_gpu=use_gpu)
@@ -305,7 +307,7 @@ class Archetype():
                 (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, weights, flux, wflux, self._narch, nbasis, use_gpu=use_gpu)
 
         if n_nearest is not None:
-            best_chi2, best_coeff, best_fulltype = self.nearest_neighbour_model(target,weights,flux,wflux,dwave,z, n_nearest, zzchi2, trans, per_camera, dedges=dedges, binned=binned, use_gpu=use_gpu)
+            best_chi2, best_coeff, best_fulltype = self.nearest_neighbour_model(target,weights,flux,wflux,dwave,z, n_nearest, zzchi2, trans, per_camera, dedges=dedges, binned=binned, use_gpu=use_gpu, prior=prior)
             return best_chi2, best_coeff, best_fulltype
         else:
             iBest = np.argmin(zzchi2)
