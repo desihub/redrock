@@ -57,7 +57,7 @@ Or::
 
     git clone https://github.com/desihub/redrock-archetypes.git
 
-In summary, the archetypes method uses a combination of physical galaxy spectra and Legendre polynomials to construct a new set of templates and then solve for the coefficients using the bounded value least square method. The method solves for the coefficients of the Legendre polynomials in each camera (b, r, z cameras of desi, ``--per-camera`` keyword is introduced for that).
+In summary, the archetypes method uses a combination of physical galaxy spectra and Legendre polynomials to construct a new set of templates and then solve for the coefficients using the bounded value least square method for a few redshifts defined by ``--nminima``. The method solves for the coefficients of the Legendre polynomials in each camera (b, r, z cameras of desi, ``--per-camera`` keyword is introduced for that). Another argument is ``--prior_sigma``, which can be prescribed to add a prior while solving for the coefficients (e.g. ``--prior_sigma 0.1``). If ``-deg_legendre 0`` is provided, the method will only use archetypes to fit the spectra; no Legendre polynomials will be used.
 
 Example run::
     
@@ -65,9 +65,9 @@ Example run::
 
 **3) Archetypes + Nearest neighbours (in chi2 space) approach**::
 
-Similar to archetypes (method - 2), it also looks for the nearest neighbours of the best archetypes in chi2 space, selects a few nearest neighbours (input provided by the user, ``-n_nearest``) and then constructs a new set of templates combing these archetypes and Legendre polynomials to fit the galaxy spectra. 
+Similar to archetypes (method - 2), it also looks for the nearest neighbours of the best archetypes in chi2 space, selects a few nearest neighbours (input provided by the user, ``-n_nearest``) and then constructs a new set of templates combining these archetypes and Legendre polynomials to fit the galaxy spectra as described above. 
 
-Example run ::
+Example run::
         
     rrdesi -i <spectra_file> --archetypes <archetype_dir or archetype_file> -o <output_file> -d  <details_file.h5> -deg_legendre 2 -n_nearest 2 --per-camera
 
