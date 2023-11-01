@@ -303,10 +303,6 @@ def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None, n_nbh=
 
     nbasis = n_nbh+nleg*ncam # n_nbh : for actual physical archetype(s), nleg: number of legendre polynomials, ncamera: number of cameras
     
-    # in case of zero ivars
-    if weights.sum()==0:
-        return  9e+99, np.zeros(nbasis)
-
     #linear templates in each camera (only the Legendre terms will vary per camera, the lead archetype(s) will remain same for entire spectra)
 
     Tb = Tb_for_archetype(spectra, tdata, nbasis, n_nbh, nleg)  
@@ -335,6 +331,7 @@ def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None, n_nbh=
                 res = lsq_linear(M, y, bounds=bounds, method='bvls')
                 zcoeff = res.x
             else:
+                # in case of zero ivars
                 return 9e+99, np.zeros(nbasis)
         except np.linalg.LinAlgError:
             return 9e+99, np.zeros(nbasis)
