@@ -238,7 +238,8 @@ def calc_zchi2_one(spectra, weights, flux, wflux, tdata):
 
     return zchi2, zcoeff
 
-def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux, nleg, narch, method=None, n_nbh=None, use_gpu=False):
+def per_camera_coeff_with_least_square(spectra, tdata, nleg, method=None, n_nbh=None, prior=None):
+
     """
     This function calculates coefficients for archetype mode in each camera using normal linear algebra matrix solver or BVLS (bounded value least square) method
 
@@ -249,84 +250,95 @@ def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux
     Parameters
     ---------------------
 
-    target (object): target object
-    tdata (dict): template data for model fit for ALL archetypes
-    weights (array): concatenated spectral weights (ivar).
-    flux (array): concatenated flux values.
-    wflux (array): concatenated weighted flux values.
+    spectra (object): target spectra object
+    tdata (dict): template data for model fit
     nleg (int): number of Legendre polynomials
-    narch (int): number of archetypes
     method (string): 'PCA' or 'bvls'
     n_nbh (int): number of nearest best archetypes
-    use_gpu (bool): use GPU or not
+    prior (2d matrix); prior added to be the final solution step (1/sigma^2)
 
     Returns
     --------------------
     coefficients and chi2
 
     """
+    # this function on an average takes 0.0007 sec for one archetye
 
-    ### TODO - implement BVLS on GPU
+    #start = time.time()
     ncam = 3 # number of cameras in DESI: b, r, z
-    spectra = target.spectra
+
+    flux = np.concatenate([s.flux for s in spectra])
+    weights = np.concatenate([s.ivar for s in spectra])
+    wflux = flux*weights
 
     nbasis = n_nbh+nleg*ncam # n_nbh : for actual physical archetype(s), nleg: number of legendre polynomials, ncamera: number of cameras
+    
+    #linear templates in each camera (only the Legendre terms will vary per camera, the lead archetype(s) will remain same for entire spectra)
+
+    Tb = Tb_for_archetype(spectra, tdata, nbasis, n_nbh, nleg)  
+    M = Tb.T.dot(np.multiply(weights[:,None], Tb)) 
+    y = Tb.T.dot(wflux)
+    if prior is not None:
+        M = M + prior
+
     ret_zcoeff= {'alpha':[], 'b':[], 'r':[], 'z':[]}
 
-    #Setup dict of solver args to pass bounds to solver
-    solver_args = dict()
-    if (method == 'bvls'):
+    # PCA method will use numpy Linear Algebra method to solve the best fit linear equation
+    if method=='pca':
+        try:
+            zcoeff = solve_matrices(M, y, solve_algorithm='PCA', use_gpu=False)
+        except np.linalg.LinAlgError:
+            return 9e+99, np.zeros(nbasis)
+    
+    # BVLS implementation with scipy
+    if method=='bvls':
         #only positive coefficients are allowed for the archetypes
         bounds = np.zeros((2, nbasis))
         bounds[0][n_nbh:]=-np.inf #constant and slope terms in archetype method (can be positive or negative)
-        bounds[1] = np.inf
-        solver_args['bounds'] = bounds
-
-    #Use branching options because GPU is faster in batch in 3d
-    #but due to timing weirdness in numpy, CPU is faster looping over
-    #narch and calling calc_zchi2_batch one arch at a time.
-    if (use_gpu):
-        #Use batch 3d array on GPU with CuPy to calculate new tdata array
-        for i, hs in enumerate(tdata):
-            tdata2 = np.zeros_like(tdata[hs], shape=(tdata[hs].shape[0], tdata[hs].shape[1], nbasis))
-            tdata2[:,:,:n_nbh] = tdata[hs][:,:,:n_nbh]
-            tdata2[:,:,n_nbh+i*nleg:n_nbh+(i+1)*nleg] = tdata[hs][:,:,n_nbh:]
-            tdata[hs] = tdata2
-        (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, weights, flux, wflux, narch, nbasis, solve_matrices_algorithm=method.upper(), solver_args=solver_args, use_gpu=use_gpu)
-    else:
-        #Create zzchi2, zcoeff, and tdata2 dict here
-        tdata2 = dict()
-        zzchi2 = np.zeros(narch, dtype=np.float64)
-        zzcoeff = np.zeros((narch,  n_nbh+ncam*(nleg)), dtype=np.float64)
-        #Loop over all arch
-        for j in range(narch):
-            #Create a 2d array in each color for tdata2 then add 3rd dimension of rank 1
-            for i, hs in enumerate(tdata):
-                tdata2[hs] = np.zeros((tdata[hs].shape[1], nbasis))
-                for k in range(n_nbh):
-                    tdata2[hs][:,k] = tdata[hs][j,:,k] # these are nearest archetype
-                if nleg>0:
-                    for k in range(n_nbh, n_nbh+nleg):
-                        tdata2[hs][:,k+nleg*i] = tdata[hs][j,:,k] # Legendre polynomials terms
-                tdata2[hs] = tdata2[hs][None,:,:]
-            zzchi2[j], zzcoeff[j] = calc_zchi2_batch(spectra, tdata2, weights, flux, wflux, 1, nbasis, solve_matrices_algorithm=method.upper(), solver_args=solver_args, use_gpu=use_gpu)
+        bounds[1] = np.inf  
+        try:
+            if not np.sum(weights) == 0:
+                res = lsq_linear(M, y, bounds=bounds, method='bvls')
+                zcoeff = res.x
+            else:
+                # in case of zero ivars
+                return 9e+99, np.zeros(nbasis)
+        except np.linalg.LinAlgError:
+            return 9e+99, np.zeros(nbasis)
+         
+    model = Tb.dot(zcoeff)
+    zchi2 = np.dot((flux - model)**2, weights)
 
     # saving leading archetype coefficients in correct order
-    ret_zcoeff['alpha'] = [zzcoeff[:,k] for k in range(n_nbh)] # archetype coefficient(s)
-    ret_zcoeff['alpha'] = ret_zcoeff['alpha'][0][:,None]
-
+    ret_zcoeff['alpha'] = [zcoeff[k] for k in range(n_nbh)] # archetype coefficient(s)
+    
     if nleg>=1:
-        split_coeff =  np.split(zzcoeff[:,n_nbh:], ncam, axis=1) # n_camera = 3
+        split_coeff =  np.split(zcoeff[n_nbh:], ncam) # n_camera = 3
         # In target spectra redrock saves values as 'b', 'z', 'r'. 
         # So just re-ordering them here to 'b', 'r', 'z' for easier reading
         old_coeff = {band: split_coeff[i] for i, band in enumerate(['b', 'z', 'r'])}
-
+        
         for band in ['b', 'r', 'z']:# 3 cameras
             ret_zcoeff[band] = old_coeff[band]
 
-    coeff = np.concatenate(list(ret_zcoeff.values()), axis=1)
+    coeff = np.concatenate(list(ret_zcoeff.values()))
     #print(f'{time.time()-start} [sec] took for per camera BVLS method\n')
-    return zzchi2, coeff
+    return zchi2, coeff
+ 
+def per_camera_coeff_with_least_square_batch(spectra, tdata, nleg, narch, method=None, n_nbh=None, use_gpu=False, prior=None):
+    ### PLACEHOLDER for algorithm that will be GPU accelerated
+    ncam = 3 # number of cameras in DESI: b, r, z
+    zzchi2 = np.zeros(narch, dtype=np.float64)
+    zzcoeff = np.zeros((narch,  1+ncam*(nleg)), dtype=np.float64)
+
+    tdata_one = dict()
+    for i in range(narch):
+        for hs in tdata:
+            tdata_one[hs] = tdata[hs][i,:,:]
+            if (use_gpu):
+                tdata_one[hs] = tdata_one[hs].get()
+        zzchi2[i], zzcoeff[i]= per_camera_coeff_with_least_square(spectra, tdata_one, nleg, method='bvls', n_nbh=1, prior=prior)
+    return zzchi2, zzcoeff
 
 def batch_dot_product_sparse(spectra, tdata, nz, use_gpu):
     """Calculate a batch dot product of the 3 sparse matrices in spectra

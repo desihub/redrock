@@ -208,7 +208,7 @@ def sort_zfit_dict(zfit):
     sort_dict_by_cols(zfit, ('__badfit__', 'chi2'), sort_first_column_first=True)
     zfit.pop('__badfit__')
 
-def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=None, chi2_scan=None, use_gpu=False, nz=None, per_camera=None, deg_legendre=None, n_nearest=None):
+def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=None, chi2_scan=None, use_gpu=False, nz=15, per_camera=None, deg_legendre=None, n_nearest=None):
     """Compute all redshift fits for the local set of targets and collect.
 
     Given targets and templates distributed across a set of MPI processes,
@@ -535,7 +535,8 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             allzfit.append(astropy.table.Table(tzfit))
 
         allzfit = astropy.table.vstack(allzfit)
-        #print(allzfit['targetid', 'z', 'zwarn', 'chi2', 'deltachi2','spectype','subtype'])
+        print(allzfit['targetid', 'z', 'zwarn', 'chi2', 'deltachi2','spectype', 'subtype'])
+        #print(allzfit['targetid', 'z', 'zwarn', 'chi2', 'deltachi2','spectype'])
         # Cosmetic: move TARGETID to be first column as primary key
         try:
             allzfit.columns.move_to_end('targetid', last=False)
