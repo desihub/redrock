@@ -204,7 +204,7 @@ class Archetype():
             nbasis = tdata[hs].shape[2]
         if per_camera:
             #Batch placeholder that right now loops over each arch but will be GPU accelerated
-            (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(spectra, tdata, nleg, method='bvls', n_nbh=1, use_gpu=use_gpu, prior=prior)
+            (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(spectra, tdata, nleg, method='bvls', n_nbh=n_nearest, use_gpu=use_gpu, prior=prior)
         else:
             #Use CPU mode for calc_zchi2 since small tdata
             (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, weights, flux, wflux, 1, nbasis, use_gpu=False)
