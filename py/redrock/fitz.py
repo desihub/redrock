@@ -219,7 +219,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
         try:
             #Calculate xmin and xmax from template and pass as scalars 
             xmin = template.minwave*(1+zmin)
-            ximax = template.maxwave*(1+zmin)
+            xmax = template.maxwave*(1+zmin)
             if (use_gpu):
                 #Use gpuedges already calculated and on GPU
                 binned = rebin_template(template, cp.array([zmin]), dedges=gpuedges, use_gpu=use_gpu, xmin=xmin, xmax=xmax)
