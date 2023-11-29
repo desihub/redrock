@@ -17,7 +17,7 @@ from .rebin import trapz_rebin
 
 from .utils import transmission_Lyman
 
-from .zscan import per_camera_coeff_with_least_square, per_camera_coeff_with_least_square_batch
+from .zscan import per_camera_coeff_with_least_square_batch
 
 class Archetype():
     """Class to store all different archetypes from the same spectype.
@@ -203,8 +203,8 @@ class Archetype():
                 tdata[hs] = np.append(tdata[hs], legendre[hs].transpose()[None,:,:], axis=2)
             nbasis = tdata[hs].shape[2]
         if per_camera:
-            #Batch placeholder that right now loops over each arch but will be GPU accelerated
-            (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(spectra, tdata, nleg, method='bvls', n_nbh=n_nearest, use_gpu=use_gpu, prior=prior)
+            #Use CPU mode since small tdata
+            (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(spectra, tdata, weights, flux, wflux, nleg, n_nearest, method='bvls', n_nbh=n_nearest, prior=prior, use_gpu=False)
         else:
             #Use CPU mode for calc_zchi2 since small tdata
             (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, weights, flux, wflux, 1, nbasis, use_gpu=False)
@@ -215,7 +215,7 @@ class Archetype():
         #print(z, zzchi2, zzcoeff, fsstype)
         return zzchi2[0], zzcoeff[0], self._rrtype+':::%s'%(fsstype)
 
-    def get_best_archetype(self,target,weights,flux,wflux,dwave,z, per_camera, n_nearest, trans=None, use_gpu=False, prior=None):
+    def get_best_archetype(self,target,weights,flux,wflux,dwave,z, per_camera, n_nearest, trans=None, solve_method='bvls', prior=None, use_gpu=False):
 
         """Get the best archetype for the given redshift and spectype.
 
@@ -229,6 +229,7 @@ class Archetype():
             per_camera (bool): True if fitting needs to be done in each camera
             n_nearest (int): number of nearest neighbours to be used in chi2 space (including best archetype)
             trans (dict): pass previously calcualated Lyman transmission instead of recalculating
+            solve_method (string): bvls or pca
             use_gpu (bool): use GPU or not
             prior (2d array): prior matrix on coefficients (1/sig**2)
             
@@ -298,8 +299,10 @@ class Archetype():
                 tdata[hs] = binned[hs].transpose()[:,:,None]
             nbasis = tdata[hs].shape[2]
         if per_camera:
-            #Batch placeholder that right now loops over each arch but will be GPU accelerated
-            (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(spectra, tdata, nleg, self._narch, method='bvls', n_nbh=1, use_gpu=use_gpu, prior=prior)
+            if (use_gpu):
+                (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, tdata, gpuweights, gpuflux, gpuwflux, nleg, self._narch, method=solve_method, n_nbh=1, prior=prior, use_gpu=use_gpu)
+            else:
+                (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux, nleg, self._narch, method=solve_method, n_nbh=1, prior=prior, use_gpu=use_gpu)
         else:
             if (use_gpu):
                 (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, gpuweights, gpuflux, gpuwflux, self._narch, nbasis, use_gpu=use_gpu)
