@@ -40,6 +40,23 @@ Significant speedups through GPU support, and bug fixes for archetype mode.
 .. _`#247`: https://github.com/desihub/redrock/pull/247
 .. _`#252`: https://github.com/desihub/redrock/pull/252
 
+0.17.9 (2023-12-01)
+-------------------
+
+This is a tag of the "opticaldepth" branch used by Allyson Brodzeller
+to re-process Iron production z>1.6 QSOs with a new HIZ template
+(redrock-templates tag 0.8.1) and updated optical depth coefficients
+to match Kamble et al. 2020 (Arxiv: 1904.01110).
+Although this tag was made after 0.18.0, it was branched prior to that
+tag and includes all of the 0.18.0 PRs except:
+
+* Refactor GPU to CPU copying for big speedup (PR `#245`_).
+* Update readthedocs config (PR `#252`_).
+
+This branch will not be merged into main as-is, but the updated coefficients
+will be included in a future tag to handle multiple optical depth models
+to support templates trained with different models.
+
 0.17.0 (2023-01-12)
 -------------------
 
