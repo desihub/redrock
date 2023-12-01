@@ -2,12 +2,60 @@
 redrock Change Log
 ==================
 
-0.17.1 (unreleased)
+0.18.1 (unreleased)
 -------------------
 
+* No changes yet.
+
+0.18.0 (2023-09-14)
+-------------------
+
+Significant speedups through GPU support, and bug fixes for archetype mode.
+
 * Update API documentation for completeness (PR `#229`_).
+* Fix to force mpprocs=1 when using GPU mode with multiprocessing (PR `#230`_).
+* Remove multiprocessing from rebin (PR `#232`_).
+* Bugfixes for crashes when MPI ranks > ntargets (PR `#233`_).
+* Refactored np.linalg.solve into solve_matrices (PR `#234`_).
+* Fix used of max_gpuprocs (PR `#236`_).
+* Bug fixes for archetype mode (PR `#238`_).
+* Added min/maxwave to templates.py that store wave[0] (PR `#239`_).
+* Fix archetype mode numba conflict (PR `#240`_).
+* Fix archetype mode with wrong input dir (PR `#244`_).
+* Refactor GPU to CPU copying for big speedup (PR `#245`_).
+* Fix unit test_gpu_zscan (PR `#247`_).
+* Update readthedocs config (PR `#252`_).
 
 .. _`#229`: https://github.com/desihub/redrock/pull/229
+.. _`#230`: https://github.com/desihub/redrock/pull/230
+.. _`#232`: https://github.com/desihub/redrock/pull/232
+.. _`#233`: https://github.com/desihub/redrock/pull/233
+.. _`#234`: https://github.com/desihub/redrock/pull/234
+.. _`#236`: https://github.com/desihub/redrock/pull/236
+.. _`#238`: https://github.com/desihub/redrock/pull/238
+.. _`#239`: https://github.com/desihub/redrock/pull/239
+.. _`#240`: https://github.com/desihub/redrock/pull/240
+.. _`#244`: https://github.com/desihub/redrock/pull/244
+.. _`#245`: https://github.com/desihub/redrock/pull/245
+.. _`#247`: https://github.com/desihub/redrock/pull/247
+.. _`#252`: https://github.com/desihub/redrock/pull/252
+
+0.17.9 (2023-12-01)
+-------------------
+
+This is a tag of the "opticaldepth" branch used by Allyson Brodzeller
+to re-process Iron production z>1.6 QSOs with a new HIZ template
+(redrock-templates tag 0.8.1) and updated optical depth coefficients
+to match Kamble et al. 2020 (Arxiv: 1904.01110).
+Although this tag was made after 0.18.0, it was branched prior to that
+tag and includes all of the 0.18.0 PRs except:
+
+* Refactor GPU to CPU copying for big speedup (PR `#245`_).
+* Update readthedocs config (PR `#252`_).
+
+This branch will not be merged into main as-is, but the updated coefficients
+will be included in a future tag to handle multiple optical depth models
+to support templates trained with different models.
 
 0.17.0 (2023-01-12)
 -------------------
