@@ -797,8 +797,11 @@ def transmission_Lyman(zObj,lObs, use_gpu=False):
         scalar input; nz x nlambda in case of array input)
 
     """
-    return transmission_IGM(zObj,lObs, use_gpu)
+    # Inoue14 models
+    #return transmission_IGM(zObj,lObs, use_gpu)
     #return transmission_IGM_old(zObj,lObs, use_gpu)
+
+    # original Calura/Irsic/Kamble form
     if (use_gpu):
         import cupy as cp
         tile = cp.tile
