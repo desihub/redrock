@@ -222,7 +222,22 @@ def find_templates(template_dir=None):
     else:
         print('DEBUG: Read templates from {}'.format(template_dir) )
 
-    return sorted(glob(os.path.join(template_dir, 'rrtemplate-*.fits')))
+    template_files = list()
+    with open(f'{template_dir}/default_templates.txt') as fx:
+        for line in fx.readlines():
+            line = line.strip()
+            if len(line) < 2 or line.startswith('#'):
+                continue
+            else:
+                if not filename.startswith('/'):
+                    filename = f'{template_dir}/{line}'
+
+                if os.path.exists(filename):
+                    template_files.append(filename)
+                else:
+                    raise ValueError(f'missing {filename} given in templates config file')
+
+    return template_files
 
 
 class DistTemplatePiece(object):
