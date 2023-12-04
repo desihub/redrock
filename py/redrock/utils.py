@@ -62,8 +62,8 @@ class Inoue14(object):
     
     def _load_data(self):
         from importlib import resources
-        LAF_file = resources.files('redrock').joinpath('data/LAFcoeff.txt')
-        DLA_file = resources.files('redrock').joinpath('data/DLAcoeff.txt')
+        LAF_file = str(resources.files('redrock').joinpath('data/LAFcoeff.txt'))
+        DLA_file = str(resources.files('redrock').joinpath('data/DLAcoeff.txt'))
     
         data = np.loadtxt(LAF_file, unpack=True)
         ix, lam, ALAF1, ALAF2, ALAF3 = data
