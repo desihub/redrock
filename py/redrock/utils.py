@@ -396,9 +396,6 @@ class Inoue14(object):
         
         self.interpolate = CubicSpline(zgrid, igm_grid)
 
-
-IGM = Inoue14()
-
 #- From https://github.com/desihub/desispec io.util.native_endian
 def native_endian(data):
     """Convert numpy array data to native endianness if needed.
@@ -602,6 +599,7 @@ def distribute_work(nproc, ids, weights=None, capacities=None):
 
     return dist
 
+IGM = None
 
 def transmission_IGM_old(zObj, lObs, use_gpu=False):
     """Calculate the transmitted flux fraction from the Lyman series
@@ -627,6 +625,11 @@ def transmission_IGM_old(zObj, lObs, use_gpu=False):
         scalar input; nz x nlambda in case of array input)
 
     """
+    global IGM
+
+    if IGM is None:
+        IGM = Inoue14()
+
     if use_gpu:
         import cupy as cp
         tile = cp.tile
@@ -735,6 +738,10 @@ def transmission_IGM(zObj, lObs, use_gpu=False):
         scalar input; nz x nlambda in case of array input)
 
     """
+    global IGM
+    if IGM is None:
+        IGM = Inoue14()
+
     if use_gpu:
         import cupy as cp
         tile = cp.tile
