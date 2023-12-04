@@ -87,7 +87,25 @@ class Archetype():
             return {hs:self._archetype['INTERP'][index](wave/(1.+z)) for hs, wave in dwave.items()}
 
     def rebin_template_batch(self,z,dwave,trapz=True,dedges=None,indx=None,use_gpu=False):
-        """
+        """Rebin templates to a set of wavelengths.
+
+        The templates are part of this archetype.
+        The wavelengths can be passed as centers (dwave) or edges (dedges)
+        of the wavelength bins.
+
+        Args:
+            z (float): the redshift
+            dwave (dict): the keys are the "wavehash" and the values
+                are a 1D array containing the wavelength grid.
+            trapz (bool): Whether to use the trapz algorithm or interpolation
+            dedges (dict): in GPU mode, use pre-computed dict of wavelength
+                bin edges, already on GPU
+            indx (array): Only rebin these indices in the flux array
+                (e.g. rebin flux[indx] rather than flux[:])
+            use_gpu (bool): whether or not to use the GPU algorithm
+
+        Returns:
+            dict:  The rebinned template
         """
         if (use_gpu):
             import cupy as cp
@@ -276,7 +294,7 @@ class Archetype():
 
         if (trans is None):
             #Calculate Lyman transmission if not passed as dict
-            trans = { hs:transmission_Lyman(z,w, use_gpu=False) for hs, w in dwave.items() }
+            trans = { hs:transmission_Lyman(z,w, use_gpu=False, always_return_array=False) for hs, w in dwave.items() }
         else:
             #Use previously calculated Lyman transmission
             for hs in trans:

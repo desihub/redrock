@@ -219,7 +219,7 @@ def distribute_work(nproc, ids, weights=None, capacities=None):
     return dist
 
 
-def transmission_Lyman(zObj,lObs, use_gpu=False):
+def transmission_Lyman(zObj,lObs, use_gpu=False, always_return_array=True):
     """Calculate the transmitted flux fraction from the Lyman series
     This returns the transmitted flux fraction:
     1 -> everything is transmitted (medium is transparent)
@@ -238,6 +238,8 @@ def transmission_Lyman(zObj,lObs, use_gpu=False):
         zObj (float or array of float): Redshift(s) of object
         lObs (array of float): wavelength grid
         use_gpu (boolean): whether to use CUPY
+        always_return_array (boolean): whether to return an array of ones
+            or None if there is no overlap with the Lyman region
     Returns:
         array of float: transmitted flux fraction (nlambda in case of
         scalar input; nz x nlambda in case of array input)
@@ -256,7 +258,7 @@ def transmission_Lyman(zObj,lObs, use_gpu=False):
     if (np.isscalar(zObj)):
         #zObj is a float
         min_wave = lObs.min()/(1+zObj)
-        if (min_wave > Lyman_series['Lya']['line']):
+        if (min_wave > Lyman_series['Lya']['line'] and not always_return_array):
             #Return None if wavelength range doesn't overlap with Lyman series
             #No need to perform any calculations in this case
             return None
@@ -268,7 +270,7 @@ def transmission_Lyman(zObj,lObs, use_gpu=False):
         #This is an array of float
         min_wave = lObs.min()/(1+zObj.max())
         #if (lObs.min()/(1+zObj.max()) > Lyman_series['Lya']['line']):
-        if (min_wave > Lyman_series['Lya']['line']):
+        if (min_wave > Lyman_series['Lya']['line'] and not always_return_array):
             #Return None if wavelength range doesn't overlap with Lyman series
             #No need to perform any calculations in this case
             return None

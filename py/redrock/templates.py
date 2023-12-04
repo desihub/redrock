@@ -328,7 +328,7 @@ class DistTemplate(object):
         for k in list(self._dwave.keys()):
             #New algorithm accepts all z as an array and returns T, a 2-d
             # matrix (nz, nlambda) as a cupy or numpy array
-            T = transmission_Lyman(myz,self._dwave[k], use_gpu=use_gpu)
+            T = transmission_Lyman(myz,self._dwave[k], use_gpu=use_gpu, always_return_array=False)
             if (T is None):
                 #Return value of None means that wavelenght regime
                 #does not overlap Lyman transmission - continue here
