@@ -563,9 +563,6 @@ def rrdesi(options=None, comm=None):
     parser.add_argument("--archetype-nnearest", type=int, default=None,
         required=False, help="number of nearest archetypes (in chi2 space) to be used in archetype modeling, must be greater than 1 (default is None)")
 
-    parser.add_argument("-zminfit_npoints", type=int, default=15,
-        required=False, help="number of finer redshift to be used around best fit redshifts (default is 15)")
-
     parser.add_argument("--archetype-legendre-percamera", default=True, action="store_true",
         required=False, help="If True, in archetype mode the fitting will be done for each camera/band")
     
