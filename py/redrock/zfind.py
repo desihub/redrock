@@ -78,7 +78,7 @@ def sort_dict_by_cols(d, colnames, sort_first_column_first = True):
         d[k] = d[k][idx]
     return
 
-def _mp_fitz(chi2, target_data, t, nminima, qout, archetype, use_gpu, deg_legendre, nz, per_camera, n_nearest, prior_sigma):
+def _mp_fitz(chi2, target_data, t, nminima, qout, archetype, use_gpu, deg_legendre, zminfit_npoints, per_camera, n_nearest, prior_sigma):
     """Wrapper for multiprocessing version of fitz.
     """
     try:
@@ -88,7 +88,7 @@ def _mp_fitz(chi2, target_data, t, nminima, qout, archetype, use_gpu, deg_legend
         results = list()
         for i, tg in enumerate(target_data):
             zfit = fitz(chi2[i], t.template.redshifts, tg,
-                t.template, nminima=nminima, archetype=archetype, use_gpu=use_gpu, nz=nz, per_camera=per_camera, deg_legendre=deg_legendre, n_nearest=n_nearest, prior_sigma=prior_sigma)
+                t.template, nminima=nminima, archetype=archetype, use_gpu=use_gpu, zminfit_npoints=zminfit_npoints, per_camera=per_camera, deg_legendre=deg_legendre, n_nearest=n_nearest, prior_sigma=prior_sigma)
             results.append( (tg.id, zfit) )
         qout.put(results)
     except:
@@ -208,7 +208,7 @@ def sort_zfit_dict(zfit):
     sort_dict_by_cols(zfit, ('__badfit__', 'chi2'), sort_first_column_first=True)
     zfit.pop('__badfit__')
 
-def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=None, chi2_scan=None, use_gpu=False, nz=15, per_camera=None, deg_legendre=None, n_nearest=None, prior_sigma=None):
+def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=None, chi2_scan=None, use_gpu=False, zminfit_npoints=15, per_camera=None, deg_legendre=None, n_nearest=None, prior_sigma=None, ncamera=None):
     """Compute all redshift fits for the local set of targets and collect.
 
     Given targets and templates distributed across a set of MPI processes,
@@ -234,10 +234,11 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
         chi2_scan (str, optional): file containing already computed chi2 scan
         use_gpu (bool, optional): use gpu for calc_zchi2
         deg_legendre (int): in archetype mode polynomials upto deg_legendre-1 will be used
-        nz (int): number of finer redshift pixels to search for final redshift
+        zminfit_npoints (int): number of finer redshift pixels to search for final redshift
         per_camera: (bool): True if fitting needs to be done in each camera for archetype mode
         n_nearest (int): number of nearest neighbours to be used in chi2 space (including best archetype)
         prior_sigma (float): prior to add in the final solution matrix: added as 1/(prior_sigma**2) only for per-camera mode
+        zminfit_npoints (int): number of minimum redshift to be fit for final redshift estimation
 
     Returns:
         tuple: (allresults, allzfit), where "allresults" is a dictionary of the
@@ -349,7 +350,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                 zfit = fitz(results[tg.id][ft]['zchi2'] \
                     + results[tg.id][ft]['penalty'],
                     t.template.redshifts, tg,
-                    t.template, nminima=nminima,archetype=archetype, use_gpu=use_gpu, deg_legendre=deg_legendre, nz=nz, per_camera=per_camera, n_nearest=n_nearest, prior_sigma=prior_sigma)
+                    t.template, nminima=nminima,archetype=archetype, use_gpu=use_gpu, deg_legendre=deg_legendre, zminfit_npoints=zminfit_npoints, per_camera=per_camera, n_nearest=n_nearest, prior_sigma=prior_sigma)
                 results[tg.id][ft]['zfit'] = zfit
         else:
             # Multiprocessing case.
@@ -373,7 +374,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     eff_chi2[i,:] = results[tg.id][ft]['zchi2'] \
                         + results[tg.id][ft]['penalty']
                 p = mp.Process(target=_mp_fitz, args=(eff_chi2,
-                    target_data, t, nminima, qout, archetype, use_gpu, deg_legendre, nz, per_camera, n_nearest, prior_sigma))
+                    target_data, t, nminima, qout, archetype, use_gpu, deg_legendre, zminfit_npoints, per_camera, n_nearest, prior_sigma))
                 procs.append(p)
                 p.start()
 
@@ -587,8 +588,9 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             del allresults[tid]['meta']
 
         # Standardize column sizes
-        if allzfit['subtype'].dtype != '<U32':
-            allzfit.replace_column('subtype', allzfit['subtype'].astype('<U32'))
+        if allzfit['subtype'].dtype != '<U20':
+            allzfit.replace_column('subtype', allzfit['subtype'].astype('<U20'))
+            #TODO: Think about standardizing the array dtype in case nearest neighbours is used
 
         if allzfit['spectype'].dtype != '<U6':
             allzfit.replace_column('spectype',allzfit['spectype'].astype('<U6'))
@@ -596,11 +598,10 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
         if not per_camera:
             maxcoeff = np.max([t.template.nbasis for t in templates])
         else:
-            ncam = 3 # three cameras of DESI:: b, r, z
             if n_nearest is not None:
-                maxcoeff = max(np.max([t.template.nbasis for t in templates]), ncam*(deg_legendre)+n_nearest)
+                maxcoeff = max(np.max([t.template.nbasis for t in templates]), ncamera*(deg_legendre)+n_nearest)
             else:
-                maxcoeff = max(np.max([t.template.nbasis for t in templates]), ncam*(deg_legendre)+1)
+                maxcoeff = max(np.max([t.template.nbasis for t in templates]), ncamera*(deg_legendre)+1)
         ntarg, ncoeff = allzfit['coeff'].shape
         if ncoeff != maxcoeff:
             coeff = np.zeros((ntarg, maxcoeff), dtype=allzfit['coeff'].dtype)

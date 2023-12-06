@@ -557,18 +557,21 @@ def rrdesi(options=None, comm=None):
         required=False,
         help="archetype file or directory for final redshift comparison")
     
-    parser.add_argument("-deg_legendre", type=int, default=3,
-        required=False, help="if archetypes are provided legendre polynomials upto deg_legendre-1 will be used (default is 3)")
+    parser.add_argument("--archetypes-legendre", default=False, action="store_true",
+        required=False, help="Use this flag with archetypes if want to run archetype percamera approach with default values")
+
+    parser.add_argument("--archetype-legendre-degree", type=int, default=2,
+        required=False, help="if archetypes are provided legendre polynomials upto deg_legendre-1 will be used (default is 2)")
     
-    parser.add_argument("-n_nearest", type=int, default=None,
+    parser.add_argument("--archetype-nnearest", type=int, default=None,
         required=False, help="number of nearest archetypes (in chi2 space) to be used in archetype modeling, must be greater than 1 (default is None)")
 
-    parser.add_argument("-nz", type=int, default=15,
+    parser.add_argument("-zminfit_npoints", type=int, default=15,
         required=False, help="number of finer redshift to be used around best fit redshifts (default is 15)")
 
-    parser.add_argument("--per-camera", default=False, action="store_true",
+    parser.add_argument("--archetype-legendre-percamera", default=True, action="store_true",
         required=False, help="If True, in archetype mode the fitting will be done for each camera/band")
-
+    
     parser.add_argument("-d", "--details", type=str, default=None,
         required=False, help="output file for full redrock fit details")
 
@@ -593,8 +596,8 @@ def rrdesi(options=None, comm=None):
     parser.add_argument("--nminima", type=int, default=3,
         required=False, help="the number of redshift minima to search")
     
-    parser.add_argument("--prior_sigma", type=float, default=None,
-        required=False, help="sigma to add as prior in solving linear equation, 1/sig**2 will be added")
+    parser.add_argument("--archetype-legendre-prior", type=float, default=0.1,
+        required=False, help="sigma to add as prior in solving linear equation, 1/sig**2 will be added, default is 0.1")
 
     parser.add_argument("--allspec", default=False, action="store_true",
         required=False, help="use individual spectra instead of coadd")
@@ -713,15 +716,7 @@ def rrdesi(options=None, comm=None):
                 
                 if os.path.isfile(args.archetypes):
                     print('Archetype is a file and it exists and readable\n')
-                    print('Archetype will only be applied to that spectype\n')
-                if args.deg_legendre>0:
-                    print('legendre polynomials of degrees %s will be added to Archetypes\n'%([i for i in range(args.deg_legendre)]))
-                else:
-                    print('No Legendre polynomial will be added to archetypes...\n')
-                if args.n_nearest:
-                    print('n_nearest argument is provided so %d nearest neighbour (in chi2 space) to the best archetype will be used for further modeling...\n'%(args.n_nearest-1))
-                if args.prior_sigma:
-                    print('prior_sigma = %s has been provided, so a prior will be added while solving for the coefficients\n'%(args.prior_sigma))
+                    print('Archetype will only be applied to SPECTYPE %s\n'%(os.path.basename(args.archetypes).split('-')[1].split('.')[0].upper()))
             else:
                 print("ERROR: can't find archetypes_dir or it is unreadable\n")
                 sys.stdout.flush()
@@ -836,7 +831,37 @@ def rrdesi(options=None, comm=None):
 
         # Get the dictionary of wavelength grids
         dwave = targets.wavegrids()
+        
+        ncamera = len(list(dwave.keys())) # number of cameras for given instrument
+        if args.archetypes_legendre:
+            print('\n--archetypes-legendre argument is provided so using default values..\n')
+            if ncamera>1: 
+                archetype_legendre_percamera = True
+                print('Number of cameras = %d, percamera fitting will be done\n'%(ncamera))
+            else:
+                archetype_legendre_percamera = False
+                print('No per camera fitting will be done..\n')
+            if args.archetype_legendre_degree>0:
+                print('legendre polynomials of degrees %s will be added to Archetypes\n'%([i for i in range(args.archetype_legendre_degree)]))
+            else:
+                print('No Legendre polynomial will be added to archetypes...\n')
+            archetype_legendre_prior = 0.1
+            print('archetype_legendre_prior = %s has been provided, so a prior will be added while solving for the coefficients\n'%(args.archetype_legendre_prior))
+        else:
+            archetype_legendre_prior = None
+            print('\nNo prior sigma will be added while solving for Archetypes coefficients\n')
+            if args.archetype_legendre_degree>0:
+                print('legendre polynomials of degrees %s will be added to Archetypes\n'%([i for i in range(args.archetype_legendre_degree)]))
+            else:
+                print('No Legendre polynomial will be added to archetypes...\n')
 
+            if ncamera>1:
+                archetype_legendre_percamera = True
+                print('Number of cameras = %d, percamera fitting will be done\n'%(ncamera))
+            else:
+                archetype_legendre_percamera = False
+                print('Number of cameras = %d, No per camera fitting will be done..\n'%(ncamera))
+             
         stop = elapsed(start, "Read and distribution of {} targets"\
             .format(len(targets.all_target_ids)), comm=comm)
 
@@ -852,7 +877,7 @@ def rrdesi(options=None, comm=None):
 
         scandata, zfit = zfind(targets, dtemplates, mpprocs,
             nminima=args.nminima, archetypes=args.archetypes,
-            priors=args.priors, chi2_scan=args.chi2_scan, use_gpu=use_gpu, nz=args.nz, per_camera=args.per_camera, deg_legendre=args.deg_legendre, n_nearest=args.n_nearest, prior_sigma=args.prior_sigma)
+            priors=args.priors, chi2_scan=args.chi2_scan, use_gpu=use_gpu, zminfit_npoints=args.zminfit_npoints, per_camera=archetype_legendre_percamera, deg_legendre=args.archetype_legendre_degree, n_nearest=args.archetype_nnearest, prior_sigma=archetype_legendre_prior, ncamera=ncamera)
 
         stop = elapsed(start, "Computing redshifts", comm=comm)
 

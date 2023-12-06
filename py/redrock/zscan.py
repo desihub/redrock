@@ -238,7 +238,7 @@ def calc_zchi2_one(spectra, weights, flux, wflux, tdata):
 
     return zchi2, zcoeff
 
-def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux, nleg, narch, method=None, n_nbh=None, prior=None, use_gpu=False):
+def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux, nleg, narch, method=None, n_nbh=None, prior=None, use_gpu=False, ncam=None):
     """
     This function calculates coefficients for archetype mode in each camera using normal linear algebra matrix solver or BVLS (bounded value least square) method
 
@@ -260,7 +260,7 @@ def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux
     n_nbh (int): number of nearest best archetypes
     prior (2d matrix); prior added to be the final solution step (1/sigma^2)
     use_gpu (bool): use GPU or not
-
+    ncam (int): number of cameras for given instrument
     Returns
     --------------------
     coefficients and chi2
@@ -268,7 +268,7 @@ def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux
     """
 
     ### TODO - implement BVLS on GPU
-    ncam = 3 # number of cameras in DESI: b, r, z
+    # number of cameras in DESI: b, r, z
     spectra = target.spectra
 
     nbasis = n_nbh+nleg*ncam # n_nbh : for actual physical archetype(s), nleg: number of legendre polynomials, ncamera: number of cameras

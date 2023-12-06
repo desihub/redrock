@@ -116,16 +116,27 @@ def legendre_calculate(nleg, dwave):
 
     return legendre
 
-def prior_on_coeffs(n_nbh, deg_legendre, sigma):
+def prior_on_coeffs(n_nbh, deg_legendre, sigma, ncamera):
+    
+    """
+    Args:
+        n_nbh (int): number of dominant archetypes
+        deg_legendre (int): number of Legendre polynomials 
+        sigma (int): prior sigma to be used for archetype fitting
+        ncamera (int): number of cameras for given instrument
+    Returns:
+        2d array to be added while solving for archetype fitting
 
-    nbasis = n_nbh+deg_legendre*3 # 3 desi cameras
+    """
+    
+    nbasis = n_nbh+deg_legendre*ncamera # 3 desi cameras
     prior = np.zeros((nbasis, nbasis), dtype='float64');np.fill_diagonal(prior, 1/(sigma**2))
     for i in range(n_nbh):
         prior[i][i]=0. ## Do not add prior to the archetypes, added only to the Legendre polynomials
     return prior
 
 
-def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=False, deg_legendre=None, nz=15, per_camera=False, n_nearest=None, prior_sigma=None):
+def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=False, deg_legendre=None, zminfit_npoints=15, per_camera=False, n_nearest=None, prior_sigma=None):
     """Refines redshift measurement around up to nminima minima.
 
     TODO:
@@ -140,7 +151,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
         nminima (int): the number of minima to consider.
         use_gpu (bool): use GPU or not
         deg_legendre (int): in archetype mode polynomials upto deg_legendre-1 will be used
-        nz (int): number of finer redshift pixels to search for final redshift - default 15
+        zminfit_npoints (int): number of finer redshift pixels to search for final redshift - default 15
         per_camera: (bool): True if fitting needs to be done in each camera for archetype mode
         n_nearest: (int): number of nearest neighbours to be used in chi2 space (including best archetype) 
         prior_sigma (float): prior to add in the final solution matrix: added as 1/(prior_sigma**2) only for per-camera mode
@@ -177,8 +188,10 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
 
     results = list()
     #Moved default nz to arg list
-    if (nz is None):
+    if (zminfit_npoints is None):
         nz = 15
+    else:
+        nz = zminfit_npoints
 
     for imin in find_minima(zchi2):
         if len(results) == nminima:
@@ -302,10 +315,14 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
                 coeff=coeff))
         else:
             if prior_sigma is not None:
-                if n_nearest is None:
-                    prior = prior_on_coeffs(1, deg_legendre, prior_sigma)
+                if per_camera:
+                    ncamera = len(list(dwave.keys())) # number of cameras, for e.g. DESI has three cameras
                 else:
-                    prior = prior_on_coeffs(n_nearest, deg_legendre, prior_sigma)
+                    ncamera = 1
+                if n_nearest is None:
+                    prior = prior_on_coeffs(1, deg_legendre, prior_sigma, ncamera)
+                else:
+                    prior = prior_on_coeffs(n_nearest, deg_legendre, prior_sigma, ncamera)
             else:
                 prior=None
             chi2min, coeff, fulltype = archetype.get_best_archetype(target,weights,flux,wflux,dwave,zbest, per_camera, n_nearest, trans=trans, use_gpu=use_gpu, prior=prior)
