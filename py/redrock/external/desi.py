@@ -557,9 +557,6 @@ def rrdesi(options=None, comm=None):
         required=False,
         help="archetype file or directory for final redshift comparison")
     
-    parser.add_argument("--archetypes-legendre", default=False, action="store_true",
-        required=False, help="Use this flag with archetypes if want to run archetype percamera approach with default values")
-
     parser.add_argument("--archetype-legendre-degree", type=int, default=2,
         required=False, help="if archetypes are provided legendre polynomials upto deg_legendre-1 will be used (default is 2)")
     
@@ -572,6 +569,15 @@ def rrdesi(options=None, comm=None):
     parser.add_argument("--archetype-legendre-percamera", default=True, action="store_true",
         required=False, help="If True, in archetype mode the fitting will be done for each camera/band")
     
+    parser.add_argument("--archetype-legendre-prior", type=float, default=0.1,
+        required=False, help="sigma to add as prior in solving linear equation, 1/sig**2 will be added, default is 0.1")
+    
+    parser.add_argument("--archetypes-legendre", default=False, action="store_true",
+        required=False, help="Use this flag with archetypes if want to run archetype percamera approach with default values")
+
+    parser.add_argument("-zminfit_npoints", type=int, default=15,
+        required=False, help="number of finer redshift to be used around best fit redshifts (default is 15)")
+
     parser.add_argument("-d", "--details", type=str, default=None,
         required=False, help="output file for full redrock fit details")
 
@@ -596,9 +602,6 @@ def rrdesi(options=None, comm=None):
     parser.add_argument("--nminima", type=int, default=3,
         required=False, help="the number of redshift minima to search")
     
-    parser.add_argument("--archetype-legendre-prior", type=float, default=0.1,
-        required=False, help="sigma to add as prior in solving linear equation, 1/sig**2 will be added, default is 0.1")
-
     parser.add_argument("--allspec", default=False, action="store_true",
         required=False, help="use individual spectra instead of coadd")
 
@@ -845,8 +848,8 @@ def rrdesi(options=None, comm=None):
                 print('legendre polynomials of degrees %s will be added to Archetypes\n'%([i for i in range(args.archetype_legendre_degree)]))
             else:
                 print('No Legendre polynomial will be added to archetypes...\n')
-            archetype_legendre_prior = 0.1
-            print('archetype_legendre_prior = %s has been provided, so a prior will be added while solving for the coefficients\n'%(args.archetype_legendre_prior))
+            archetype_legendre_prior = args.archetype_legendre_prior
+            print('archetype_legendre_prior = %s has been provided, so a prior will be added while solving for the coefficients\n'%(archetype_legendre_prior))
         else:
             archetype_legendre_prior = None
             print('\nNo prior sigma will be added while solving for Archetypes coefficients\n')
