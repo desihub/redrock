@@ -5,7 +5,9 @@ redrock Change Log
 0.18.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Write test files to temporary directory (PR `#263`_).
+
+.. _`#263`: https://github.com/desihub/redrock/pull/263
 
 0.18.0 (2023-09-14)
 -------------------
