@@ -18,13 +18,17 @@ class TestIO(unittest.TestCase):
     #- Create unique test filename in a subdirectory
     @classmethod
     def setUpClass(cls):
-        cls.testfile = 'test-{uuid}.h5'.format(uuid=uuid1())
+        cls.testDir = tempfile.mkdtemp()        
+        cls.testfile = os.path.join(cls.testDir, 'test-{uuid}.h5'.format(uuid=uuid1()))
 
     #- Cleanup test files if they exist
     @classmethod
     def tearDownClass(cls):
         if os.path.exists(cls.testfile):
             os.remove(cls.testfile)
+
+        if os.path.exists(cls.testDir):
+            rmtree(cls.testDir)
 
     def setUp(self):
         #- remove testfile if leftover from a previous test
