@@ -1,6 +1,6 @@
 from __future__ import division, print_function
 
-import os
+import os, tempfile
 import unittest
 from uuid import uuid1
 import numpy as np
