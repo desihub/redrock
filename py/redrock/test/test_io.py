@@ -1,6 +1,7 @@
 from __future__ import division, print_function
 
 import os, tempfile
+from shutil import rmtree
 import unittest
 from uuid import uuid1
 import numpy as np
