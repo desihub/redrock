@@ -569,10 +569,10 @@ def rrdesi(options=None, comm=None):
     parser.add_argument("--archetype-legendre-prior", type=float, default=0.1,
         required=False, help="sigma to add as prior in solving linear equation, 1/sig**2 will be added, default is 0.1")
     
-    parser.add_argument("--archetypes-legendre", default=False, action="store_true",
-        required=False, help="Use this flag with archetypes if want to run archetype percamera approach with default values")
+    parser.add_argument("--archetypes-no-legendre", default=False, action="store_true",
+        required=False, help="Use this flag with archetypes if want to TURN OFF all archetype related default values")
 
-    parser.add_argument("-zminfit_npoints", type=int, default=15,
+    parser.add_argument("--zminfit_npoints", type=int, default=15,
         required=False, help="number of finer redshift to be used around best fit redshifts (default is 15)")
 
     parser.add_argument("-d", "--details", type=str, default=None,
@@ -842,8 +842,13 @@ def rrdesi(options=None, comm=None):
         dwave = targets.wavegrids()
         
         ncamera = len(list(dwave.keys())) # number of cameras for given instrument
-        if args.archetypes_legendre:
-            print('\n--archetypes-legendre argument is provided so using default values..\n')
+        if args.archetypes_no_legendre:
+            print('\n --archetypes-no-legendre argument is provided, will turn off all the Legendre related arguments')
+            archetype_legendre_prior = None
+            archetype_legendre_degree =0
+            archetype_legendre_percamera = False
+        else:
+            print('\n Will be using default archetype values..\n')
             if ncamera>1: 
                 archetype_legendre_percamera = True
                 print('Number of cameras = %d, percamera fitting will be done\n'%(ncamera))
@@ -856,20 +861,6 @@ def rrdesi(options=None, comm=None):
                 print('No Legendre polynomial will be added to archetypes...\n')
             archetype_legendre_prior = args.archetype_legendre_prior
             print('archetype_legendre_prior = %s has been provided, so a prior will be added while solving for the coefficients\n'%(archetype_legendre_prior))
-        else:
-            archetype_legendre_prior = None
-            print('\nNo prior sigma will be added while solving for Archetypes coefficients\n')
-            if args.archetype_legendre_degree>0:
-                print('legendre polynomials of degrees %s will be added to Archetypes\n'%([i for i in range(args.archetype_legendre_degree)]))
-            else:
-                print('No Legendre polynomial will be added to archetypes...\n')
-
-            if ncamera>1:
-                archetype_legendre_percamera = True
-                print('Number of cameras = %d, percamera fitting will be done\n'%(ncamera))
-            else:
-                archetype_legendre_percamera = False
-                print('Number of cameras = %d, No per camera fitting will be done..\n'%(ncamera))
              
         stop = elapsed(start, "Read and distribution of {} targets"\
             .format(len(targets.all_target_ids)), comm=comm)
