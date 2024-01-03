@@ -6,8 +6,10 @@ redrock Change Log
 -------------------
 
 * Write test files to temporary directory (PR `#263`_).
+* Check template dimension so code works on a single template (PR `#264`_). 
 
 .. _`#263`: https://github.com/desihub/redrock/pull/263
+.. _`#264`: https://github.com/desihub/redrock/pull/264
 
 0.18.0 (2023-09-14)
 -------------------

@@ -553,7 +553,11 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             allzfit.replace_column('spectype',allzfit['spectype'].astype('<U6'))
 
         maxcoeff = np.max([t.template.nbasis for t in templates])
-        ntarg, ncoeff = allzfit['coeff'].shape
+        if allzfit['coeff'].ndim == 1:
+            ntarg = allzfit['coeff'].shape
+            ncoeff = 1
+        else:
+            ntarg, ncoeff = allzfit['coeff'].shape
         if ncoeff != maxcoeff:
             coeff = np.zeros((ntarg, maxcoeff), dtype=allzfit['coeff'].dtype)
             coeff[:,0:ncoeff] = allzfit['coeff']
