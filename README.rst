@@ -2,16 +2,18 @@
 redrock
 =======
 
-.. image:: https://travis-ci.org/desihub/redrock.svg?branch=master
-    :target: https://travis-ci.org/desihub/redrock
-    :alt: Travis Build Status
+|Actions Status| |Coveralls Status| |Documentation Status|
 
-.. image:: https://coveralls.io/repos/github/desihub/redrock/badge.svg?branch=master
-    :target: https://coveralls.io/github/desihub/redrock?branch=master
+.. |Actions Status| image:: https://github.com/desihub/redrock/workflows/CI/badge.svg
+    :target: https://github.com/desihub/redrock/actions
+    :alt: GitHub Actions CI Status
+
+.. |Coveralls Status| image:: https://coveralls.io/repos/desihub/redrock/badge.svg
+    :target: https://coveralls.io/github/desihub/redrock
     :alt: Test Coverage Status
 
-.. image:: https://readthedocs.org/projects/redrock/badge/?version=latest
-    :target: http://redrock.readthedocs.org/en/latest/
+.. |Documentation Status| image:: https://readthedocs.org/projects/redrock/badge/?version=latest
+    :target: https://redrock.readthedocs.io/en/latest/
     :alt: Documentation Status
 
 Introduction

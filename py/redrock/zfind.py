@@ -602,7 +602,13 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                 maxcoeff = max(np.max([t.template.nbasis for t in templates]), ncamera*(deg_legendre)+n_nearest)
             else:
                 maxcoeff = max(np.max([t.template.nbasis for t in templates]), ncamera*(deg_legendre)+1)
-        ntarg, ncoeff = allzfit['coeff'].shape
+
+        if allzfit['coeff'].ndim == 1:
+            ntarg = allzfit['coeff'].shape
+            ncoeff = 1
+        else:
+            ntarg, ncoeff = allzfit['coeff'].shape
+
         if ncoeff != maxcoeff:
             coeff = np.zeros((ntarg, maxcoeff), dtype=allzfit['coeff'].dtype)
             coeff[:,0:ncoeff] = allzfit['coeff']
