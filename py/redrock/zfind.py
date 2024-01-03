@@ -554,8 +554,8 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
 
         maxcoeff = np.max([t.template.nbasis for t in templates])
         if allzfit['coeff'].ndim == 1:
-            ntarg = 1
-            ncoeff = allzfit['coeff'].shape
+            ntarg = allzfit['coeff'].shape
+            ncoeff = 1
         else:
             ntarg, ncoeff = allzfit['coeff'].shape
         if ncoeff != maxcoeff:
