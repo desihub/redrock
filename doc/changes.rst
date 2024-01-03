@@ -5,7 +5,9 @@ redrock Change Log
 0.18.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Check template dimension so code works on a single template (PR `#264`_). 
+
+.. _`#264`: https://github.com/desihub/redrock/pull/264
 
 0.18.0 (2023-09-14)
 -------------------
