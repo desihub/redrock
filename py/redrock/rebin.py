@@ -123,7 +123,7 @@ def centers2edges(centers):
 # of this code have already been tested and shown to perform no better
 # than numba on Intel haswell and KNL architectures.
 
-@numba.jit
+@numba.jit(nopython=True)
 def _trapz_rebin_1d(x, y, edges, results):
     '''
     Numba-friendly version of trapezoidal rebinning
@@ -175,7 +175,7 @@ def _trapz_rebin_1d(x, y, edges, results):
 
     return
 
-@numba.jit
+@numba.jit(nopython=True)
 def _trapz_rebin_batch(x, y, edges, myz, results, redshifted_x):
     '''
     Numba-friendly version of trapezoidal rebinning
