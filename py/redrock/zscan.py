@@ -689,7 +689,7 @@ def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, solve_mat
         #all_M = calc_batch_dot_product_3d3d_gpu(cp.ascontiguousarray(Tbs.swapaxes(-2, -1)), (weights[None, :, None] * Tbs))
         #all_y = (Tbs.swapaxes(-2, -1) @ wflux)
         if prior is not None:
-            all_M += prior
+            all_M += cp.asarray(prior)
 
         #3) Use new helper method solve_matrices to use appropriate method
         #for this template to solve for zcoeff in batch for all_M and all_y.
