@@ -595,7 +595,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
         if allzfit['spectype'].dtype != '<U6':
             allzfit.replace_column('spectype',allzfit['spectype'].astype('<U6'))
 
-        if not per_camera:
+        if archetypes is None or not per_camera:
             maxcoeff = np.max([t.template.nbasis for t in templates])
         else:
             if n_nearest is not None:
