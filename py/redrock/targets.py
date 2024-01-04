@@ -165,6 +165,31 @@ class Target(object):
         self.gpuweights = None
         self.gpuflux = None
         self.gpuwflux = None
+        self._legendre = None
+        self._gpulegendre = None
+        self.nleg = 0
+
+    def legendre(self, nleg, use_gpu=False):
+        if (use_gpu and self.nleg == nleg):
+            if  (self._gpulegendre is not None):
+                return self._gpulegendre
+            elif (self._legendre is not None):
+                import cupy as cp
+                self._gpulegendre = { hs:cp.asarray(self._legendre[hs]) for hs in self._legendre }
+                return self._gpulegendre
+        if (self._legendre is not None and self.nleg == nleg):
+            return self._legendre
+        dwave = { s.wavehash:s.wave for s in self.spectra }
+        wave = np.concatenate([ w for w in dwave.values() ])
+        wmin = wave.min()
+        wmax = wave.max()
+        self._legendre = { hs:np.array([scipy.special.legendre(i)( (w-wmin)/(wmax-wmin)*2.) for i in range(nleg)]) for hs, w in dwave.items() }
+        self.nleg = nleg
+        if (use_gpu):
+            import cupy as cp
+            self._gpulegendre = { hs:cp.asarray(self._legendre[hs]) for hs in self._legendre }
+            return self._gpulegendre
+        return self._legendre
 
     def gpu_spectral_data(self):
         if self.gpuweights is None:

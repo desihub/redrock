@@ -556,6 +556,24 @@ def rrdesi(options=None, comm=None):
     parser.add_argument("--archetypes", type=str, default=None,
         required=False,
         help="archetype file or directory for final redshift comparison")
+    
+    parser.add_argument("--archetype-legendre-degree", type=int, default=2,
+        required=False, help="if archetypes are provided legendre polynomials upto deg_legendre-1 will be used (default is 2)")
+    
+    parser.add_argument("--archetype-nnearest", type=int, default=None,
+        required=False, help="number of nearest archetypes (in chi2 space) to be used in archetype modeling, must be greater than 1 (default is None)")
+
+    parser.add_argument("--archetype-legendre-percamera", default=True, action="store_true",
+        required=False, help="If True, in archetype mode the fitting will be done for each camera/band")
+    
+    parser.add_argument("--archetype-legendre-prior", type=float, default=0.1,
+        required=False, help="sigma to add as prior in solving linear equation, 1/sig**2 will be added, default is 0.1")
+    
+    parser.add_argument("--archetypes-no-legendre", default=False, action="store_true",
+        required=False, help="Use this flag with archetypes if want to TURN OFF all archetype related default values")
+
+    parser.add_argument("--zminfit-npoints", type=int, default=15,
+        required=False, help="number of finer redshift to be used around best fit redshifts (default is 15)")
 
     parser.add_argument("-d", "--details", type=str, default=None,
         required=False, help="output file for full redrock fit details")
@@ -589,7 +607,7 @@ def rrdesi(options=None, comm=None):
 
     parser.add_argument("--nminima", type=int, default=3,
         required=False, help="the number of redshift minima to search")
-
+    
     parser.add_argument("--allspec", default=False, action="store_true",
         required=False, help="use individual spectra instead of coadd")
 
@@ -691,24 +709,31 @@ def rrdesi(options=None, comm=None):
                     sys.exit(1)
         
         if args.archetypes is not None:
+            print('\n===== Archetype argument is provided, doing necessary checks=======\n')
             if os.path.exists(args.archetypes) and os.access(args.archetypes, os.R_OK):
-                if os.listdir(args.archetypes):
-                    print('Archetype file/directory exists and readable and it is not empty..\n')
-                else:
-                    print('ERROR: Archetype file/directory is empty\n')
-                    sys.stdout.flush()
-                    if comm is not None:
-                        comm.Abort()
+                if os.path.isdir(args.archetypes):
+                    if os.listdir(args.archetypes):
+                        print('Archetype directory exists and readable and it is not empty..')
+                        print('Archetype will be applied to all spectype')
                     else:
-                        sys.exit(1)
+                        print('ERROR: Archetype directory is empty')
+                        sys.stdout.flush()
+                        if comm is not None:
+                            comm.Abort()
+                        else:
+                            sys.exit(1)
+                
+                if os.path.isfile(args.archetypes):
+                    print('Archetype is a file and it exists and readable')
+                    print('Archetype will only be applied to SPECTYPE %s'%(os.path.basename(args.archetypes).split('-')[1].split('.')[0].upper()))
             else:
-                print("ERROR: can't find archetypes_dir or it is unreadable\n")
+                print("ERROR: can't find archetypes_dir or it is unreadable")
                 sys.stdout.flush()
                 if comm is not None:
                     comm.Abort()
                 else:
                     sys.exit(1)
-                
+
     targetids = None
     if args.targetids is not None:
         targetids = [ int(x) for x in args.targetids.split(",") ]
@@ -815,7 +840,35 @@ def rrdesi(options=None, comm=None):
 
         # Get the dictionary of wavelength grids
         dwave = targets.wavegrids()
-
+        
+        ncamera = len(list(dwave.keys())) # number of cameras for given instrument
+        if args.archetypes_no_legendre:
+            if comm_rank == 0:
+                print('--archetypes-no-legendre argument is provided, will turn off all the Legendre related arguments')
+            archetype_legendre_prior = None
+            archetype_legendre_degree =0
+            archetype_legendre_percamera = False
+        else:
+            if comm_rank == 0 and args.archetypes is not None:
+                print('Will be using default archetype values.')
+            if ncamera>1: 
+                archetype_legendre_percamera = True
+                if comm_rank == 0 and args.archetypes is not None:
+                    print('Number of cameras = %d, percamera fitting will be done'%(ncamera))
+            else:
+                archetype_legendre_percamera = False
+                if comm_rank == 0 and args.archetypes is not None:
+                    print('No per camera fitting will be done.')
+            if args.archetype_legendre_degree>0:
+                if comm_rank == 0 and args.archetypes is not None:
+                    print('legendre polynomials of degrees %s will be added to Archetypes'%([i for i in range(args.archetype_legendre_degree)]))
+            else:
+                if comm_rank == 0 and args.archetypes is not None:
+                    print('No Legendre polynomial will be added to archetypes.')
+            archetype_legendre_prior = args.archetype_legendre_prior
+            if comm_rank == 0 and args.archetypes is not None:
+                print('archetype_legendre_prior = %s has been provided, so a prior will be added while solving for the coefficients'%(archetype_legendre_prior))
+             
         stop = elapsed(start, "Read and distribution of {} targets"\
             .format(len(targets.all_target_ids)), comm=comm)
 
@@ -836,7 +889,7 @@ def rrdesi(options=None, comm=None):
 
         scandata, zfit = zfind(targets, dtemplates, mpprocs,
             nminima=args.nminima, archetypes=args.archetypes,
-            priors=args.priors, chi2_scan=args.chi2_scan, use_gpu=use_gpu)
+            priors=args.priors, chi2_scan=args.chi2_scan, use_gpu=use_gpu, zminfit_npoints=args.zminfit_npoints, per_camera=archetype_legendre_percamera, deg_legendre=args.archetype_legendre_degree, n_nearest=args.archetype_nnearest, prior_sigma=archetype_legendre_prior, ncamera=ncamera)
 
         stop = elapsed(start, "Computing redshifts", comm=comm)
 
@@ -896,7 +949,8 @@ def rrdesi(options=None, comm=None):
                 template_version = {t._template.full_type:t._template._version for t in dtemplates}
                 archetype_version = None
                 if not args.archetypes is None:
-                    archetypes = All_archetypes(archetypes_dir=args.archetypes).archetypes
+                    archetypes = All_archetypes(archetypes_dir=args.archetypes,
+                                                verbose=(comm_rank==0)).archetypes
                     archetype_version = {name:arch._version for name, arch in archetypes.items() }
 
                 write_zbest(args.outfile, zbest,
