@@ -345,7 +345,7 @@ class All_archetypes():
         archetypes_dir (str): Directory to the archetypes
 
     """
-    def __init__(self, lstfilename=None, archetypes_dir=None):
+    def __init__(self, lstfilename=None, archetypes_dir=None, verbose=False):
 
         # Get list of path to archetype
         if lstfilename is None:
@@ -355,7 +355,9 @@ class All_archetypes():
         self.archetypes = {}
         for f in lstfilename:
             archetype = Archetype(f)
-            print('DEBUG: Found {} archetypes for SPECTYPE {} in file {}'.format(archetype._narch, archetype._rrtype, f) )
+            if verbose:
+                print('DEBUG: Found {} archetypes for SPECTYPE {} in file {}'.format(archetype._narch, archetype._rrtype, f) )
+
             self.archetypes[archetype._rrtype] = archetype
 
         return

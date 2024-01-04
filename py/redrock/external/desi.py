@@ -572,7 +572,7 @@ def rrdesi(options=None, comm=None):
     parser.add_argument("--archetypes-no-legendre", default=False, action="store_true",
         required=False, help="Use this flag with archetypes if want to TURN OFF all archetype related default values")
 
-    parser.add_argument("--zminfit_npoints", type=int, default=15,
+    parser.add_argument("--zminfit-npoints", type=int, default=15,
         required=False, help="number of finer redshift to be used around best fit redshifts (default is 15)")
 
     parser.add_argument("-d", "--details", type=str, default=None,
@@ -713,10 +713,10 @@ def rrdesi(options=None, comm=None):
             if os.path.exists(args.archetypes) and os.access(args.archetypes, os.R_OK):
                 if os.path.isdir(args.archetypes):
                     if os.listdir(args.archetypes):
-                        print('Archetype directory exists and readable and it is not empty..\n')
-                        print('Archetype will be applied to all spectype\n')
+                        print('Archetype directory exists and readable and it is not empty..')
+                        print('Archetype will be applied to all spectype')
                     else:
-                        print('ERROR: Archetype directory is empty\n')
+                        print('ERROR: Archetype directory is empty')
                         sys.stdout.flush()
                         if comm is not None:
                             comm.Abort()
@@ -724,10 +724,10 @@ def rrdesi(options=None, comm=None):
                             sys.exit(1)
                 
                 if os.path.isfile(args.archetypes):
-                    print('Archetype is a file and it exists and readable\n')
-                    print('Archetype will only be applied to SPECTYPE %s\n'%(os.path.basename(args.archetypes).split('-')[1].split('.')[0].upper()))
+                    print('Archetype is a file and it exists and readable')
+                    print('Archetype will only be applied to SPECTYPE %s'%(os.path.basename(args.archetypes).split('-')[1].split('.')[0].upper()))
             else:
-                print("ERROR: can't find archetypes_dir or it is unreadable\n")
+                print("ERROR: can't find archetypes_dir or it is unreadable")
                 sys.stdout.flush()
                 if comm is not None:
                     comm.Abort()
@@ -843,24 +843,31 @@ def rrdesi(options=None, comm=None):
         
         ncamera = len(list(dwave.keys())) # number of cameras for given instrument
         if args.archetypes_no_legendre:
-            print('\n --archetypes-no-legendre argument is provided, will turn off all the Legendre related arguments')
+            if comm_rank == 0:
+                print('--archetypes-no-legendre argument is provided, will turn off all the Legendre related arguments')
             archetype_legendre_prior = None
             archetype_legendre_degree =0
             archetype_legendre_percamera = False
         else:
-            print('\n Will be using default archetype values..\n')
+            if comm_rank == 0 and args.archetypes is not None:
+                print('Will be using default archetype values.')
             if ncamera>1: 
                 archetype_legendre_percamera = True
-                print('Number of cameras = %d, percamera fitting will be done\n'%(ncamera))
+                if comm_rank == 0 and args.archetypes is not None:
+                    print('Number of cameras = %d, percamera fitting will be done'%(ncamera))
             else:
                 archetype_legendre_percamera = False
-                print('No per camera fitting will be done..\n')
+                if comm_rank == 0 and args.archetypes is not None:
+                    print('No per camera fitting will be done.')
             if args.archetype_legendre_degree>0:
-                print('legendre polynomials of degrees %s will be added to Archetypes\n'%([i for i in range(args.archetype_legendre_degree)]))
+                if comm_rank == 0 and args.archetypes is not None:
+                    print('legendre polynomials of degrees %s will be added to Archetypes'%([i for i in range(args.archetype_legendre_degree)]))
             else:
-                print('No Legendre polynomial will be added to archetypes...\n')
+                if comm_rank == 0 and args.archetypes is not None:
+                    print('No Legendre polynomial will be added to archetypes.')
             archetype_legendre_prior = args.archetype_legendre_prior
-            print('archetype_legendre_prior = %s has been provided, so a prior will be added while solving for the coefficients\n'%(archetype_legendre_prior))
+            if comm_rank == 0 and args.archetypes is not None:
+                print('archetype_legendre_prior = %s has been provided, so a prior will be added while solving for the coefficients'%(archetype_legendre_prior))
              
         stop = elapsed(start, "Read and distribution of {} targets"\
             .format(len(targets.all_target_ids)), comm=comm)
@@ -942,7 +949,8 @@ def rrdesi(options=None, comm=None):
                 template_version = {t._template.full_type:t._template._version for t in dtemplates}
                 archetype_version = None
                 if not args.archetypes is None:
-                    archetypes = All_archetypes(archetypes_dir=args.archetypes).archetypes
+                    archetypes = All_archetypes(archetypes_dir=args.archetypes,
+                                                verbose=(comm_rank==0)).archetypes
                     archetype_version = {name:arch._version for name, arch in archetypes.items() }
 
                 write_zbest(args.outfile, zbest,
