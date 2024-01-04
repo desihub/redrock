@@ -605,7 +605,7 @@ def rrdesi(options=None, comm=None):
     parser.add_argument("-n", "--ntargets", type=int,
         required=False, help="the number of targets to process in each file")
 
-    parser.add_argument("--nminima", type=int, default=3,
+    parser.add_argument("--nminima", type=int, default=None,
         required=False, help="the number of redshift minima to search")
     
     parser.add_argument("--allspec", default=False, action="store_true",
@@ -659,7 +659,16 @@ def rrdesi(options=None, comm=None):
 
     # Check arguments- all processes have this, so just check on the first
     # process
-
+    
+    # if user sets --nminima, use that
+    if args.nminima is not None:
+        nminima = args.nminima
+    # otherwise use different defaults for archetypes vs. non-archetypes
+    elif args.archetypes is None:
+        nminima = 3    # default for non-archetypes
+    else:
+        nminima = 9    # default for archetypes
+    
     if comm_rank == 0:
         if args.debug and comm_size != 1:
             print("--debug can only be used if the communicator has one "
@@ -707,7 +716,7 @@ def rrdesi(options=None, comm=None):
                     comm.Abort()
                 else:
                     sys.exit(1)
-        
+         
         if args.archetypes is not None:
             print('\n===== Archetype argument is provided, doing necessary checks=======\n')
             if os.path.exists(args.archetypes) and os.access(args.archetypes, os.R_OK):
@@ -733,8 +742,6 @@ def rrdesi(options=None, comm=None):
                     comm.Abort()
                 else:
                     sys.exit(1)
-        else:
-            nminima = args.nminima # default for PCA based run only
 
     targetids = None
     if args.targetids is not None:
@@ -850,14 +857,10 @@ def rrdesi(options=None, comm=None):
             archetype_legendre_prior = None
             archetype_legendre_degree =0
             archetype_legendre_percamera = False
-            nminima = args.nminima 
         else:
             if comm_rank == 0 and args.archetypes is not None:
                 print('Will be using default archetype values.') 
-                if args.nminima==parser.get_default('nminima'):
-                    nminima = 9 #default for archetype
-                else:
-                    nminima = args.nminima
+                print('number of minimum redshift for which archetype redshift fitting will be done = %d'%(nminima))
 
             if ncamera>1: 
                 archetype_legendre_percamera = True
@@ -894,7 +897,7 @@ def rrdesi(options=None, comm=None):
         # refinement.  This function only returns data on the rank 0 process.
 
         start = elapsed(None, "", comm=comm)
-    
+        
         scandata, zfit = zfind(targets, dtemplates, mpprocs,
             nminima=nminima, archetypes=args.archetypes,
             priors=args.priors, chi2_scan=args.chi2_scan, use_gpu=use_gpu, zminfit_npoints=args.zminfit_npoints, per_camera=archetype_legendre_percamera, deg_legendre=args.archetype_legendre_degree, n_nearest=args.archetype_nnearest, prior_sigma=archetype_legendre_prior, ncamera=ncamera)
