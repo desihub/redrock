@@ -733,6 +733,8 @@ def rrdesi(options=None, comm=None):
                     comm.Abort()
                 else:
                     sys.exit(1)
+        else:
+            nminima = args.nminima # default for PCA based run only
 
     targetids = None
     if args.targetids is not None:
@@ -848,9 +850,15 @@ def rrdesi(options=None, comm=None):
             archetype_legendre_prior = None
             archetype_legendre_degree =0
             archetype_legendre_percamera = False
+            nminima = args.nminima 
         else:
             if comm_rank == 0 and args.archetypes is not None:
-                print('Will be using default archetype values.')
+                print('Will be using default archetype values.') 
+                if args.nminima==parser.get_default('nminima'):
+                    nminima = 9 #default for archetype
+                else:
+                    nminima = args.nminima
+
             if ncamera>1: 
                 archetype_legendre_percamera = True
                 if comm_rank == 0 and args.archetypes is not None:
@@ -886,9 +894,9 @@ def rrdesi(options=None, comm=None):
         # refinement.  This function only returns data on the rank 0 process.
 
         start = elapsed(None, "", comm=comm)
-
+    
         scandata, zfit = zfind(targets, dtemplates, mpprocs,
-            nminima=args.nminima, archetypes=args.archetypes,
+            nminima=nminima, archetypes=args.archetypes,
             priors=args.priors, chi2_scan=args.chi2_scan, use_gpu=use_gpu, zminfit_npoints=args.zminfit_npoints, per_camera=archetype_legendre_percamera, deg_legendre=args.archetype_legendre_degree, n_nearest=args.archetype_nnearest, prior_sigma=archetype_legendre_prior, ncamera=ncamera)
 
         stop = elapsed(start, "Computing redshifts", comm=comm)
