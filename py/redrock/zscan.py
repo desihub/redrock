@@ -256,7 +256,7 @@ def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux
         narch (int): number of archetypes
         method (string): 'PCA' or 'bvls' or 'nnls'
         n_nbh (int): number of nearest best archetypes
-        prior (2d matrix); prior added to be the final solution step (1/sigma^2)
+        prior (array): prior matrix added to the Legendre coefficients (1/sigma^2)
         use_gpu (bool): use GPU or not
         ncam (int): number of cameras for given instrument
     
