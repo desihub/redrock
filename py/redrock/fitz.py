@@ -149,6 +149,8 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
             of Spectrum objects at different wavelength grids.
         template (Template): the template for this fit.
         nminima (int): the number of minima to consider.
+        archetype (object, optional): A single Archetype object (of given spectype)
+            to use for final fitz choice of best chi2 vs. z minimum.
         use_gpu (bool): use GPU or not
         deg_legendre (int): in archetype mode polynomials upto deg_legendre-1 will be used
         zminfit_npoints (int): number of finer redshift pixels to search for final redshift - default 15
