@@ -851,9 +851,9 @@ def rrdesi(options=None, comm=None):
         dwave = targets.wavegrids()
         
         ncamera = len(list(dwave.keys())) # number of cameras for given instrument
-        if args.archetypes_no_legendre:
+        if args.archetypes_no_legendre or args.archetypes is None:
             if comm_rank == 0:
-                print('--archetypes-no-legendre argument is provided, will turn off all the Legendre related arguments')
+                print('no archetypes or --archetypes-no-legendre; will turn off all the Legendre related arguments')
             archetype_legendre_prior = None
             archetype_legendre_degree =0
             archetype_legendre_percamera = False
