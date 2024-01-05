@@ -239,31 +239,29 @@ def calc_zchi2_one(spectra, weights, flux, wflux, tdata):
     return zchi2, zcoeff
 
 def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux, nleg, narch, method=None, n_nbh=None, prior=None, use_gpu=False, ncam=None):
-    """
-    This function calculates coefficients for archetype mode in each camera using normal linear algebra matrix solver or BVLS (bounded value least square) method
+    
+    """This function calculates coefficients for archetype mode in each camera using normal linear algebra matrix solver or BVLS (bounded value least square) method
 
     BVLS described in : https://www.stat.berkeley.edu/~stark/Preprints/bvls.pdf
 
     Scipy: https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.lsq_linear.html
 
-    Parameters
-    ---------------------
-
-    target (object): target object
-    tdata (dict): template data for model fit for ALL archetypes
-    weights (array): concatenated spectral weights (ivar).
-    flux (array): concatenated flux values.
-    wflux (array): concatenated weighted flux values.
-    nleg (int): number of Legendre polynomials
-    narch (int): number of archetypes
-    method (string): 'PCA' or 'bvls' or 'nnls'
-    n_nbh (int): number of nearest best archetypes
-    prior (2d matrix); prior added to be the final solution step (1/sigma^2)
-    use_gpu (bool): use GPU or not
-    ncam (int): number of cameras for given instrument
-    Returns
-    --------------------
-    coefficients and chi2
+    Args:
+        target (object): target object
+        tdata (dict): template data for model fit for ALL archetypes
+        weights (array): concatenated spectral weights (ivar).
+        flux (array): concatenated flux values.
+        wflux (array): concatenated weighted flux values.
+        nleg (int): number of Legendre polynomials
+        narch (int): number of archetypes
+        method (string): 'PCA' or 'bvls' or 'nnls'
+        n_nbh (int): number of nearest best archetypes
+        prior (2d matrix); prior added to be the final solution step (1/sigma^2)
+        use_gpu (bool): use GPU or not
+        ncam (int): number of cameras for given instrument
+    
+    Returns:
+        coefficients and chi2
 
     """
 

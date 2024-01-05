@@ -163,33 +163,29 @@ class Archetype():
     
     def nearest_neighbour_model(self, target,weights,flux,wflux,dwave,z, n_nearest, zzchi2, trans, per_camera, dedges=None, binned=None, use_gpu=False, prior=None, ncam=None):
         
-        """
+        """Nearest neighbour archetype approach; fitting with a combinating of nearest archetypes in chi2 space
         
-        Parameters:
-        ------------------
-        target (Target): the target object that contains spectra
-        weights (array): concatenated spectral weights (ivar).
-        flux (array): concatenated flux values.
-        wflux (array): concatenated weighted flux values.
-        dwave (dict): dictionary of wavelength grids
-        z (float): best redshift
-        n_nearest (int): number of nearest neighbours to be used in chi2 space (including best archetype)
-        zchi2 (array); chi2 array for all archetypes
-        trans (dict); dictionary of transmission Ly-a arrays
-        per_camera (bool): If True model will be solved in each camera
-        dedges (dict): in GPU mode, use pre-computed dict of wavelength bin edges, already on GPU
-        binned (dict): already computed dictionary of rebinned fluxes
-        use_gpu (bool): use GPU or not
-        prior (2d array): prior matrix on coefficients (1/sig**2)
-        ncam (int): Number of camera for given Instrument
-
+        Args:
+            target (Target): the target object that contains spectra
+            weights (array): concatenated spectral weights (ivar).
+            flux (array): concatenated flux values.
+            wflux (array): concatenated weighted flux values.
+            dwave (dict): dictionary of wavelength grids
+            z (float): best redshift
+            n_nearest (int): number of nearest neighbours to be used in chi2 space (including best archetype)
+            zchi2 (array); chi2 array for all archetypes
+            trans (dict); dictionary of transmission Ly-a arrays
+            per_camera (bool): If True model will be solved in each camera
+            dedges (dict): in GPU mode, use pre-computed dict of wavelength bin edges, already on GPU
+            binned (dict): already computed dictionary of rebinned fluxes
+            use_gpu (bool): use GPU or not
+            prior (2d array): prior matrix on coefficients (1/sig**2)
+            ncam (int): Number of camera for given Instrument
         
         Returns:
-        -----------------
-
-        chi2 (float): chi2 of best fit model
-        zcoeff (array): zcoeff of best fit model
-        fulltype (str): fulltype of best archetypes
+            chi2 (float): chi2 of best fit model
+            zcoeff (array): zcoeff of best fit model
+            fulltype (str): fulltype of best archetypes
 
         """
 
