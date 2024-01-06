@@ -8,7 +8,7 @@ import numpy as np
 
 from .. import utils as rrutils
 from ..results import read_zscan, write_zscan
-from ..templates import DistTemplate, find_templates, load_dist_templates
+from ..templates import DistTemplate, find_templates, load_templates, load_dist_templates
 from ..zfind import zfind
 
 from . import util
@@ -22,13 +22,40 @@ class TestIO(unittest.TestCase):
         cls.testDir = tempfile.mkdtemp()        
         cls.testfile = os.path.join(cls.testDir, 'test-{uuid}.h5'.format(uuid=uuid1()))
 
+        # create dummy template files in a separate dir
+        cls.testTemplateDir = tempfile.mkdtemp()
+        cls.default_templates = (
+                'rrtemplate-galaxy-v2.fits',
+                'rrtemplate-qso-v1.fits',
+                )
+        cls.alternate_templates = (
+                'rrtemplate-galaxy-v1.fits',
+                'rrtemplate-blat-v1.fits',
+                )
+
+        for filename in cls.default_templates + cls.alternate_templates:
+            with open(f'{cls.testTemplateDir}/{filename}', 'w'):
+                pass
+
+        with open(cls.testTemplateDir + '/default_templates.txt', 'w') as fx:
+            fx.write('# Header comment\n')
+            fx.write('\n')
+            for filename in cls.default_templates:
+                fx.write(f'{filename}\n')
+
+        with open(cls.testTemplateDir + '/alternate_templates.txt', 'w') as fx:
+            fx.write('# Header comment\n')
+            fx.write('\n')
+            for filename in cls.alternate_templates:
+                fx.write(f'{filename}\n')
+
     #- Cleanup test files if they exist
     @classmethod
     def tearDownClass(cls):
         if os.path.exists(cls.testfile):
             os.remove(cls.testfile)
 
-        if os.path.exists(cls.testDir):
+        if os.path.isdir(cls.testDir):
             rmtree(cls.testDir)
 
     def setUp(self):
@@ -54,8 +81,32 @@ class TestIO(unittest.TestCase):
         templates = find_templates(template_dir = template_dir)
         self.assertTrue(len(templates) > 0)
 
+        template_dir = os.path.dirname(templates[0])
+        templates = find_templates(template_dir = template_dir)
+        self.assertTrue(len(templates) > 0)
+
+        templates = find_templates(template_dir=self.testTemplateDir)
+        self.assertEqual(len(templates), len(self.default_templates))
+        for filename in templates:
+            self.assertIn(os.path.basename(filename), self.default_templates)
+
+        templates = find_templates(template_dir=self.testTemplateDir,
+                                   default_templates_file=self.testTemplateDir+'/alternate_templates.txt')
+        self.assertEqual(len(templates), len(self.alternate_templates))
+        for filename in templates:
+            self.assertIn(os.path.basename(filename), self.alternate_templates)
+
+
+    def test_load_templates(self):
+        templates = load_templates()
+        self.assertTrue(len(templates) > 0)
+
+        template_files = find_templates()
+        templates = load_templates(template_files[0:2])
+        self.assertEqual(len(templates), 2)
+
     ### @unittest.skipIf('RR_TEMPLATE_DIR' not in os.environ, '$RR_TEMPLATE_DIR not set')
-    def test_read_templates(self):
+    def test_load_dist_templates(self):
         dtarg = util.fake_targets()
         dwave = dtarg.wavegrids()
         for dtp in load_dist_templates(dwave):

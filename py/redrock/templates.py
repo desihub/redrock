@@ -191,18 +191,17 @@ class Template(object):
         return trapz_rebin(self.wave*(1+z), flux, wave)
 
 
-
-
-def find_templates(template_dir=None):
-    """Return list of redrock-\*.fits template files
+def find_templates(template_dir=None, default_templates_file=None):
+    """Return list of Redrock template files
 
     Search directories in this order, returning results from first one found:
         - template_dir
         - $RR_TEMPLATE_DIR
         - <redrock_code>/templates/
 
-    Args:
-        template_dir (str): optional directory containing the templates.
+    Options:
+        template_dir (str): directory containing the templates.
+        default_templates_file (str): filename containing list of which template files to use
 
     Returns:
         list: a list of template files.
@@ -222,22 +221,60 @@ def find_templates(template_dir=None):
     else:
         print('DEBUG: Read templates from {}'.format(template_dir) )
 
-    template_files = list()
-    with open(f'{template_dir}/default_templates.txt') as fx:
-        for line in fx.readlines():
-            line = line.strip()
-            if len(line) < 2 or line.startswith('#'):
-                continue
-            else:
-                if not filename.startswith('/'):
-                    filename = f'{template_dir}/{line}'
+    if default_templates_file is None:
+        default_templates_file = f'{template_dir}/default_templates.txt'
 
-                if os.path.exists(filename):
-                    template_files.append(filename)
+    if os.path.exists(default_templates_file):
+        #- New style: default_templates.txt says which to use
+        template_files = list()
+        with open(default_templates_file) as fx:
+            for line in fx.readlines():
+                line = line.strip()
+                if len(line) < 2 or line.startswith('#'):
+                    continue
                 else:
-                    raise ValueError(f'missing {filename} given in templates config file')
+                    if line.startswith('/'):
+                        filename = line
+                    else:
+                        filename = f'{template_dir}/{line}'
+
+                    if os.path.exists(filename):
+                        template_files.append(filename)
+                    else:
+                        raise ValueError(f'missing {filename} given in {default_templates_file}')
+    else:
+        #- Old style: use all templates found in template directory
+        template_files = sorted(glob(os.path.join(template_dir, 'rrtemplate-*.fits')))
 
     return template_files
+
+
+def load_templates(template_files=None, template_dir=None, default_templates_file=None):
+    """
+    Return list of Template objects
+
+    Options:
+        template_files (list): list of template filenames
+        template_dir (str): directory with template files
+        default_templates_file (str): file with list of template files to load
+
+    Returns: list of Template objects
+
+    If template_files is None, template files to load is determined with
+    `find_templates(template_dir, default_templates_file)`.
+    """
+    if template_files is None:
+        template_files = find_templates(template_dir=template_dir,
+                                        default_templates_file=default_templates_file)
+
+    templates = list()
+    for filename in template_files:
+        if template_dir is not None and not filename.startswith('/'):
+            filename = os.path.join(template_dir, filename)
+
+        templates.append(Template(filename))
+
+    return templates
 
 
 class DistTemplatePiece(object):
