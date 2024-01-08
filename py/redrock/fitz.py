@@ -242,10 +242,14 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
             binned[k] *= T[:,:,None]
         if (use_gpu):
             #Use gpu arrays for weights, flux, wflux
-            (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, binned, gpuweights, gpuflux, gpuwflux, nz, nbasis, use_gpu=use_gpu)
+            (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, binned, gpuweights, gpuflux, gpuwflux, nz, nbasis,
+                                                 solve_matrices_algorithm=template.solve_matrices_algorithm,
+                                                 use_gpu=use_gpu)
         else:
             #Use numpy CPU arrays for weights, flux, wflux 
-            (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, binned, weights, flux, wflux, nz, nbasis, use_gpu=use_gpu)
+            (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, binned, weights, flux, wflux, nz, nbasis,
+                                                 solve_matrices_algorithm=template.solve_matrices_algorithm,
+                                                 use_gpu=use_gpu)
 
         #- fit parabola to 3 points around minimum
         i = min(max(np.argmin(zzchi2),1), len(zz)-2)
@@ -276,7 +280,9 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
                 #Vectorize multiplication
                 binned[k] *= T[:,:,None]
             #Use CPU always with one redshift
-            (chi2, coeff) = calc_zchi2_batch(spectra, binned, weights, flux, wflux, 1, nbasis, use_gpu=False)
+            (chi2, coeff) = calc_zchi2_batch(spectra, binned, weights, flux, wflux, 1, nbasis,
+                                             solve_matrices_algorithm=template.solve_matrices_algorithm,
+                                             use_gpu=False)
             coeff = coeff[0,:]
         except ValueError as err:
             if zmin<redshifts[0] or redshifts[-1]<zmin:

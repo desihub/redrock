@@ -19,6 +19,8 @@ from .utils import native_endian, elapsed, transmission_Lyman
 
 from .rebin import rebin_template, trapz_rebin
 
+valid_template_methods = ('PCA', 'NMF')
+
 class Template(object):
     """A spectral Template PCA object.
 
@@ -31,7 +33,7 @@ class Template(object):
 
     """
     def __init__(self, filename=None, spectype=None, redshifts=None,
-                 wave=None, flux=None, subtype=None,
+                 wave=None, flux=None, subtype=None, method=None,
                  zscan_galaxy=None, zscan_qso=None, zscan_star=None):
 
         if filename is not None:
@@ -60,6 +62,11 @@ class Template(object):
                 dtype=np.float64)
 
             self._redshifts = None
+
+            if 'RRMETHOD' in hdr:
+                self._method = hdr['RRMETHOD'].upper()
+            else:
+                self._method = 'PCA'
 
             ## find out if redshift info is present in the file
             old_style_templates = True
@@ -116,6 +123,10 @@ class Template(object):
             self.wave = wave
             self.flux = flux
             self._subtype = subtype
+            if method is None:
+                self._method = 'PCA'
+            else:
+                self._method = method
 
         self._nbasis = self.flux.shape[0]
         self._nwave = self.flux.shape[1]
@@ -126,6 +137,13 @@ class Template(object):
         self.maxwave = self.wave[-1]
         self.gpuwave = None
         self.gpuflux = None
+
+        if self._method not in valid_template_methods:
+            raise ValueError(f'Template method {self._method} unrecognized; '
+                              'should be one of {valid_template_methods')
+
+        print(f'INFO: {self._rrtype}:::{self._subtype} templates using {self._method}')
+
 
 
     @property
@@ -167,7 +185,7 @@ class Template(object):
         keywords etc so that different templates seamlessly use different
         algorithms.
         """
-        return "PCA"
+        return self._method
 
 
     def eval(self, coeff, wave, z):
