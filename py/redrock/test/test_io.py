@@ -78,20 +78,19 @@ class TestIO(unittest.TestCase):
         templates = find_templates()
         self.assertTrue(len(templates) > 0)
         template_dir = os.path.dirname(templates[0])
-        templates = find_templates(template_dir = template_dir)
+        templates = find_templates(template_dir)
         self.assertTrue(len(templates) > 0)
 
         template_dir = os.path.dirname(templates[0])
-        templates = find_templates(template_dir = template_dir)
+        templates = find_templates(template_dir)
         self.assertTrue(len(templates) > 0)
 
-        templates = find_templates(template_dir=self.testTemplateDir)
+        templates = find_templates(self.testTemplateDir)
         self.assertEqual(len(templates), len(self.default_templates))
         for filename in templates:
             self.assertIn(os.path.basename(filename), self.default_templates)
 
-        templates = find_templates(template_dir=self.testTemplateDir,
-                                   default_templates_file=self.testTemplateDir+'/alternate_templates.txt')
+        templates = find_templates(self.testTemplateDir+'/alternate_templates.txt')
         self.assertEqual(len(templates), len(self.alternate_templates))
         for filename in templates:
             self.assertIn(os.path.basename(filename), self.alternate_templates)
@@ -104,6 +103,7 @@ class TestIO(unittest.TestCase):
         template_files = find_templates()
         templates = load_templates(template_files[0:2])
         self.assertEqual(len(templates), 2)
+
 
     ### @unittest.skipIf('RR_TEMPLATE_DIR' not in os.environ, '$RR_TEMPLATE_DIR not set')
     def test_load_dist_templates(self):

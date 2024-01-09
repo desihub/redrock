@@ -209,52 +209,54 @@ class Template(object):
         return trapz_rebin(self.wave*(1+z), flux, wave)
 
 
-def find_templates(template_dir=None, default_templates_file=None):
+def find_templates(template_path=None):
     """Return list of Redrock template files
 
-    Search directories in this order, returning results from first one found:
-        - template_dir
-        - $RR_TEMPLATE_DIR
-        - <redrock_code>/templates/
+    `template_path` can be one of 4 things:
 
-    Options:
-        template_dir (str): directory containing the templates.
-        default_templates_file (str): filename containing list of which template files to use
-
-    Returns:
-        list: a list of template files.
-
+       * path to directory containing template files
+       * path to single template file to use
+       * path to text file listing which template files to use
+       * None (use $RR_TEMPLATE_DIR instead)
     """
-    if template_dir is None:
+    if template_path is None:
         if 'RR_TEMPLATE_DIR' in os.environ:
-            template_dir = os.environ['RR_TEMPLATE_DIR']
+            template_path = os.environ['RR_TEMPLATE_DIR']
         else:
             thisdir = os.path.dirname(__file__)
             tempdir = os.path.join(os.path.abspath(thisdir), 'templates')
             if os.path.exists(tempdir):
-                template_dir = tempdir
+                template_path = tempdir
 
-    if template_dir is None:
-        raise IOError("ERROR: can't find template_dir, $RR_TEMPLATE_DIR, or {rrcode}/templates/")
+    if template_path is None:
+        raise IOError("ERROR: can't find template_path, $RR_TEMPLATE_DIR, or {rrcode}/templates/")
     else:
-        print('DEBUG: Read templates from {}'.format(template_dir) )
+        print(f'DEBUG: Reading templates from {template_path}')
 
-    if default_templates_file is None:
-        default_templates_file = f'{template_dir}/default_templates.txt'
+    if os.path.isdir(template_path):
+        default_templates_file = f'{template_path}/default_templates.txt'
+        template_dir = template_path
+    elif template_path.endswith('.txt'):
+        default_templates_file = template_path
+        template_dir = os.path.dirname(template_path)
+    elif template_path.endswith( ('.fits', '.fits.gz', '.fits.fz') ):
+        #- single template file, return that as a list
+        return [template_path,]
 
     if os.path.exists(default_templates_file):
-        #- New style: default_templates.txt says which to use
+        #- New style (Jan 2024): default_templates.txt says which to use
         template_files = list()
         with open(default_templates_file) as fx:
             for line in fx.readlines():
+                #- Strip comment lines and blank lines
                 line = line.strip()
                 if len(line) < 2 or line.startswith('#'):
                     continue
                 else:
-                    if line.startswith('/'):
-                        filename = line
-                    else:
-                        filename = f'{template_dir}/{line}'
+                    filename = line.split()[0] #- allow trailing comments
+                    #- support absolute path and relative paths
+                    if not line.startswith('/'):
+                        filename = f'{template_dir}/{filename}'
 
                     if os.path.exists(filename):
                         template_files.append(filename)
@@ -267,29 +269,27 @@ def find_templates(template_dir=None, default_templates_file=None):
     return template_files
 
 
-def load_templates(template_files=None, template_dir=None, default_templates_file=None):
+def load_templates(template_path=None):
     """
     Return list of Template objects
 
-    Options:
-        template_files (list): list of template filenames
-        template_dir (str): directory with template files
-        default_templates_file (str): file with list of template files to load
+    `template_path` is list of template file paths, or path to provide to
+    find_templates, i.e. a path to a directory with templates, a path to
+    a text file containing a list of templates, a path to a single template
+    file, or None to use $RR_TEMPLATE_DIR instead.
 
     Returns: list of Template objects
 
-    If template_files is None, template files to load is determined with
-    `find_templates(template_dir, default_templates_file)`.
+    Note: this always returns a list, even if template_path is a path to a
+    single template file.
     """
-    if template_files is None:
-        template_files = find_templates(template_dir=template_dir,
-                                        default_templates_file=default_templates_file)
+    if isinstance(template_path, (str, type(None))):
+        template_path = find_templates(template_path)
+
+    print(f'Reading templates from {template_path}')
 
     templates = list()
-    for filename in template_files:
-        if template_dir is not None and not filename.startswith('/'):
-            filename = os.path.join(template_dir, filename)
-
+    for filename in template_path:
         templates.append(Template(filename))
 
     return templates
@@ -565,24 +565,8 @@ def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1,
     timer = elapsed(None, "", comm=comm)
 
     template_files = None
-
     if (comm is None) or (comm.rank == 0):
-        # Only one process needs to do this
-        if templates is not None:
-            if os.path.isfile(templates):
-                # we are using just a single file
-                template_files = [ templates ]
-            elif os.path.isdir(templates):
-                # this is a template dir
-                template_files = find_templates(template_dir=templates)
-            else:
-                print("{} is neither a file nor a directory"\
-                    .format(templates))
-                sys.stdout.flush()
-                if comm is not None:
-                    comm.Abort()
-        else:
-            template_files = find_templates()
+        template_files = find_templates(templates)
 
     if comm is not None:
         template_files = comm.bcast(template_files, root=0)
