@@ -417,7 +417,7 @@ def transmission_Lyman_CaluraKamble(zObj,lObs, use_gpu=False,
     return T
 
 
-igm_models = ('Calura12', 'Kamble20', 'Inoue14')
+igm_models = ('Calura12', 'Kamble20', 'Inoue14', 'None')
 
 def transmission_Lyman(zObj,lObs, use_gpu=False, model='Calura12', always_return_array=True):
     """Calculate the transmitted flux fraction from the Lyman series
@@ -454,6 +454,20 @@ def transmission_Lyman(zObj,lObs, use_gpu=False, model='Calura12', always_return
     elif model == 'Inoue14':
         return transmission_IGM_Inoue14(zObj,lObs, use_gpu,
                                         always_return_array=always_return_array)
+    elif model == 'None' or model is None:
+        if always_return_array:
+            if np.isscalar(zObj):
+                if np.isscalar(lObs):
+                    return 1.0
+                else:
+                    return np.ones(len(lObs))
+            else:
+                if np.isscalar(lObs):
+                    return np.ones(len(zObj))
+                else:
+                    return np.ones(len(zObj), len(lObs))
+        else:
+            return None
     else:
         raise ValueError(f'Unrecognized model {model}; should be one of {igm_models}')
 

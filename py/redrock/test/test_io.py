@@ -95,6 +95,15 @@ class TestIO(unittest.TestCase):
         for filename in templates:
             self.assertIn(os.path.basename(filename), self.alternate_templates)
 
+        with self.assertRaises(ValueError):
+            templates = find_templates(self.testTemplateDir+'/blat.txt')
+
+        with self.assertRaises(ValueError):
+            templates = find_templates('blat.txt')
+
+        with self.assertRaises(ValueError):
+            templates = find_templates('blat.foo')
+
 
     def test_load_templates(self):
         templates = load_templates()

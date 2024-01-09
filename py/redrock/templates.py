@@ -33,7 +33,8 @@ class Template(object):
 
     """
     def __init__(self, filename=None, spectype=None, redshifts=None,
-                 wave=None, flux=None, subtype=None, method=None,
+                 wave=None, flux=None, subtype=None, method='PCA',
+                 igm_model='Inoue14',
                  zscan_galaxy=None, zscan_qso=None, zscan_star=None):
 
         if filename is not None:
@@ -117,16 +118,31 @@ class Template(object):
             else:
                 self._subtype = ''
 
+            if 'RRIGM' in hdr:
+                self._igm_model = hdr['RRIGM']
+            else:
+                #- auto-derive IGM model from known versions of pre-2024
+                #- templates without RRIGM keyword
+                if self._rrtype == 'STAR':
+                    self._igm_model = 'None'
+                elif self._rrtype == 'GALAXY' and self._version == '2.6':
+                    # not actually needed for these galaxy templates that
+                    # only go to z=1.7, but set anyway
+                    self._igm_model = 'Calura12'
+                elif self._rrtype == 'QSO' and self._version in ('0.1', '1.0'):
+                    self._igm_model = 'Calura12'
+                elif self._rrtype == 'QSO' and self._version == '1.1':
+                    self._igm_model = 'Kamble20'
+                else:
+                    raise ValueError('Missing keyword RRIGM specifying IGM model to use')
         else:
             self._rrtype = spectype
             self._redshifts = redshifts
             self.wave = wave
             self.flux = flux
             self._subtype = subtype
-            if method is None:
-                self._method = 'PCA'
-            else:
-                self._method = method
+            self._igm_model = igm_model
+            self._method = method
 
         self._nbasis = self.flux.shape[0]
         self._nwave = self.flux.shape[1]
@@ -140,7 +156,7 @@ class Template(object):
 
         if self._method not in valid_template_methods:
             raise ValueError(f'Template method {self._method} unrecognized; '
-                              'should be one of {valid_template_methods')
+                              f'should be one of {valid_template_methods}')
 
         print(f'INFO: {self._rrtype}:::{self._subtype} templates using {self._method}')
 
@@ -237,11 +253,15 @@ def find_templates(template_path=None):
         default_templates_file = f'{template_path}/default_templates.txt'
         template_dir = template_path
     elif template_path.endswith('.txt'):
+        if not os.path.exists(template_path):
+            raise ValueError(f'Missing {template_path=}')
         default_templates_file = template_path
         template_dir = os.path.dirname(template_path)
     elif template_path.endswith( ('.fits', '.fits.gz', '.fits.fz') ):
         #- single template file, return that as a list
         return [template_path,]
+    else:
+        raise ValueError(f'Unrecognized {template_path=}')
 
     if os.path.exists(default_templates_file):
         #- New style (Jan 2024): default_templates.txt says which to use
