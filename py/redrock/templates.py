@@ -15,8 +15,8 @@ import traceback
 import numpy as np
 from astropy.io import fits
 
-from .utils import native_endian, elapsed, transmission_Lyman
-
+from .utils import native_endian, elapsed
+from .igm import transmission_Lyman
 from .rebin import rebin_template, trapz_rebin
 
 valid_template_methods = ('PCA', 'NMF')

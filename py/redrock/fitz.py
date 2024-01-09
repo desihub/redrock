@@ -19,7 +19,7 @@ from .zscan import calc_zchi2_one, spectral_data, calc_zchi2_batch
 
 from .zwarning import ZWarningMask as ZW
 
-from .utils import transmission_Lyman
+from .igm import transmission_Lyman
 
 def get_dv(z, zref):
     """Returns velocity difference in km/s for two redshifts

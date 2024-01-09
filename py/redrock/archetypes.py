@@ -15,7 +15,7 @@ from .zscan import calc_zchi2_one, calc_zchi2_batch
 
 from .rebin import trapz_rebin
 
-from .utils import transmission_Lyman
+from .igm import transmission_Lyman
 
 from .zscan import per_camera_coeff_with_least_square_batch
 
