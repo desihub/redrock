@@ -233,7 +233,8 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
         for k in list(dwave.keys()):
             #New algorithm accepts all z as an array and returns T, a 2-d
             # matrix (nz, nlambda) as a cupy or numpy array
-            T = transmission_Lyman(zz,dwave[k], use_gpu=use_gpu, always_return_array=False)
+            T = transmission_Lyman(zz,dwave[k], use_gpu=use_gpu, always_return_array=False,
+                                   model=template.igm_model)
             if (T is None):
                 #Return value of None means that wavelenght regime
                 #does not overlap Lyman transmission - continue here
@@ -271,7 +272,8 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
                     #because faster with only 1 redshift
                     binned[k] = binned[k].get()
                 #Use CPU always
-                T = transmission_Lyman(np.array([zmin]),dwave[k], use_gpu=False, always_return_array=False)
+                T = transmission_Lyman(np.array([zmin]),dwave[k], use_gpu=False, always_return_array=False,
+                                       model=template.igm_model)
                 trans[k] = T
                 if (T is None):
                     #Return value of None means that wavelenght regime

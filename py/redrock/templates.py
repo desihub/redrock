@@ -158,8 +158,8 @@ class Template(object):
             raise ValueError(f'Template method {self._method} unrecognized; '
                               f'should be one of {valid_template_methods}')
 
-        print(f'INFO: {self._rrtype}:::{self._subtype} templates using {self._method}')
-
+        print(f'INFO: {self.full_type} templates using {self._method} for fitting')
+        print(f'INFO: {self.full_type} templates using {self._igm_model} IGM model')
 
 
     @property
@@ -202,6 +202,10 @@ class Template(object):
         algorithms.
         """
         return self._method
+
+    @property
+    def igm_model(self):
+        return self._igm_model
 
 
     def eval(self, coeff, wave, z):
@@ -427,7 +431,8 @@ class DistTemplate(object):
         for k in list(self._dwave.keys()):
             #New algorithm accepts all z as an array and returns T, a 2-d
             # matrix (nz, nlambda) as a cupy or numpy array
-            T = transmission_Lyman(myz,self._dwave[k], use_gpu=use_gpu, always_return_array=False)
+            T = transmission_Lyman(myz,self._dwave[k], use_gpu=use_gpu, always_return_array=False,
+                                   model=template.igm_model)
             if (T is None):
                 #Return value of None means that wavelenght regime
                 #does not overlap Lyman transmission - continue here

@@ -60,6 +60,10 @@ class Archetype():
         #and copy to GPU and store here rather than doing this every time
         self._gpuwave = None
         self._gpuflux = None
+
+        # TODO: Allow Archetype files to specify their IGM model
+        self.igm_model = 'Inoue14'
+
         return
 
     @property
@@ -155,7 +159,7 @@ class Archetype():
         wave_min = w.min()
         wave_max = w.max()
         legendre = np.array([scipy.special.legendre(i)( (wave-wave_min)/(wave_max-wave_min)*2.-1. ) for i in range(deg_legendre)])
-        binned = trapz_rebin((1+z)*self.wave, self.flux[index], wave)*transmission_Lyman(z,wave)
+        binned = trapz_rebin((1+z)*self.wave, self.flux[index], wave)*transmission_Lyman(z,wave,model=self.igm_model)
         flux = np.append(binned[None,:],legendre, axis=0)
         flux = flux.T.dot(coeff).T / (1+z)
 
@@ -291,7 +295,7 @@ class Archetype():
 
         if (trans is None):
             #Calculate Lyman transmission if not passed as dict
-            trans = { hs:transmission_Lyman(z,w, use_gpu=False, always_return_array=False) for hs, w in dwave.items() }
+            trans = { hs:transmission_Lyman(z,w, use_gpu=False, always_return_array=False, model=self.igm_model) for hs, w in dwave.items() }
         else:
             #Use previously calculated Lyman transmission
             for hs in trans:
