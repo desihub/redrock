@@ -1141,7 +1141,7 @@ def solve_matrices(M, y, solve_algorithm="PCA", solver_args=None, use_gpu=False)
             #Copy to CPU, run scipy.optimize.lsq_linear, copy back to GPU
             for j in range(nz):
                 try:
-                    res = lsq_linear(Mcpu[j,:,:], ycpu[j,:], bounds=bounds, method='BVLS')
+                    res = lsq_linear(Mcpu[j,:,:], ycpu[j,:], bounds=bounds, method='bvls')
                     zcoeff[j,:] = res.x
                 except np.linalg.LinAlgError:
                     zcoeff[j,:] = 9e99

@@ -295,7 +295,7 @@ class Archetype():
 
         if (trans is None):
             #Calculate Lyman transmission if not passed as dict
-            trans = { hs:transmission_Lyman(z,w, use_gpu=False, always_return_array=False, model=self.igm_model) for hs, w in dwave.items() }
+            trans = { hs:transmission_Lyman(z,w, use_gpu=False, model=self.igm_model) for hs, w in dwave.items() }
         else:
             #Use previously calculated Lyman transmission
             for hs in trans:
