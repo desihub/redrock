@@ -280,8 +280,7 @@ class Inoue14(object):
         self.interpolate = CubicSpline(zgrid, igm_grid)
 
 
-IGM = Inoue14()
-
+IGM = None
 def transmission_IGM_Inoue14(zObj, lObs, use_gpu=False):
     """Calculate the transmitted flux fraction from the Lyman series
     and due to the IGM.  This returns the transmitted flux fraction:
@@ -296,6 +295,10 @@ def transmission_IGM_Inoue14(zObj, lObs, use_gpu=False):
     Returns:
         array of float: transmitted flux fraction T[nz, nlambda]
     """
+    global IGM
+    if IGM is None:
+        IGM = Inoue14()
+
     if use_gpu:
         xp = cp
     else:
