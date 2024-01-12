@@ -304,40 +304,21 @@ def transmission_IGM_Inoue14(zObj, lObs, use_gpu=False, always_return_array=True
 
     """
     if use_gpu:
-        import cupy as cp
-        tile = cp.tile
-        asarray = cp.asarray
+        import cupy as xp
     else:
-        tile = np.tile
-        asarray = np.asarray
+        xp = np
 
-    min_wave = 0
-    if np.isscalar(zObj):
-        #zObj is a float
-        min_wave = np.array([lObs.min()/(1.+zObj)])
-    else:
-        if len(zObj) == 0:
-            #Empty z array
-            return np.ones((0, len(lObs)), dtype=np.float64)
-        #This is an array of float
-        min_wave = lObs.min()/(1+zObj.max())
-        if min_wave > 1220.0 and not always_return_array: 
-            #Return None if wavelength range doesn't overlap with Lyman series
-            #No need to perform any calculations in this case
-            return None
-        #Calculate min wave for every z
-        min_wave = lObs.min()/(1+zObj)
-        if not use_gpu and type(zObj) != np.ndarray:
-            #Cupy array passed??
-            zObj = zObj.get()
-        lObs = tile(lObs, (zObj.size, 1))
-    T = np.ones_like(lObs)
-    # Only process wavelengths at or shorter than Lya. Now, Lya is at 1215.67,
-    # but let the IGM class figure out the exact transmission around the line.
-    i = min_wave < 1220.
-    T[i, :] = IGM.full_IGM(asarray(zObj[i]), lObs[i,:], use_gpu=use_gpu)
-    if np.isscalar(zObj) and use_gpu:
-        T = asarray(T)
+    #- tile observer frame wavelengths lObs to match lRest dimensions
+    lObs = xp.tile(lObs, (zObj.size, 1))
+
+    # Transmission array to fill in
+    T = xp.ones(lObs.shape)
+
+    # Only process redshifts with restframe wavelenths at or shorter than LyA.
+    min_restwave_per_z = lObs.min()/(1.+zObj)
+    ii = min_restwave_per_z < constants.LyA_wavelength
+    T[ii, :] = IGM.full_IGM(zObj[ii], lObs[ii,:], use_gpu=use_gpu)
+
     return T
 
 
@@ -370,50 +351,33 @@ def transmission_Lyman_CaluraKamble(zObj,lObs, use_gpu=False,
         array of float: transmitted flux fraction (nlambda in case of
         scalar input; nz x nlambda in case of array input)
     """
-    if (use_gpu):
-        import cupy as cp
-        tile = cp.tile
-        asarray = cp.asarray
+    if use_gpu:
+        import cupy as xp
     else:
-        tile = np.tile
-        asarray = np.asarray
+        xp = np
 
     Lyman_series = constants.Lyman_series[model]
-    min_wave = 0
-    if (np.isscalar(zObj)):
-        #zObj is a float
-        min_wave = lObs.min()/(1+zObj)
-        if (min_wave > Lyman_series['Lya']['line'] and not always_return_array):
-            #Return None if wavelength range doesn't overlap with Lyman series
-            #No need to perform any calculations in this case
-            return None
-        lRF = lObs/(1.+zObj)
-    else:
-        if (len(zObj) == 0):
-            #Empty z array
-            return np.ones((0, len(lObs)), dtype=np.float64)
-        #This is an array of float
-        min_wave = lObs.min()/(1+zObj.max())
-        #if (lObs.min()/(1+zObj.max()) > Lyman_series['Lya']['line']):
-        if (min_wave > Lyman_series['Lya']['line'] and not always_return_array):
-            #Return None if wavelength range doesn't overlap with Lyman series
-            #No need to perform any calculations in this case
-            return None
-        if (not use_gpu and type(zObj) != np.ndarray):
-            #Cupy array passed??
-            zObj = zObj.get()
-        lObs = tile(lObs, (zObj.size, 1))
-        lRF = lObs/(1.+asarray(zObj)[:,None])
-    T = np.ones_like(lRF)
+
+    #- lRest[num_redshifts, num_wavelengths]
+    #- restframe wavelengths for lObs for each zObj
+    lRest = xp.outer(1.0/(1.0+zObj), lObs)
+    min_wave = lRest.min()
+
+    #- tile observer frame wavelengths lObs to match lRest dimensions
+    lObs = xp.tile(lObs, (zObj.size, 1))
+
+    #- Transmission array to fill in
+    T = xp.ones(lRest.shape)
+
     for l in list(Lyman_series.keys()):
         if (min_wave > Lyman_series[l]['line']):
             continue
-        w      = lRF<Lyman_series[l]['line']
+
+        w      = lRest<Lyman_series[l]['line']
         zpix   = lObs[w]/Lyman_series[l]['line']-1.
         tauEff = Lyman_series[l]['A']*(1.+zpix)**Lyman_series[l]['B']
         T[w]  *= np.exp(-tauEff)
-    if (np.isscalar(zObj) and use_gpu):
-        T = asarray(T)
+
     return T
 
 
@@ -448,26 +412,51 @@ def transmission_Lyman(zObj,lObs, use_gpu=False, model='Calura12', always_return
     if always_return_array is False, returns None if there is no IGM absoption
     for this redshift (faster).
     """
-    if model in ('Calura12', 'Kamble20'):
-        return transmission_Lyman_CaluraKamble(zObj,lObs, use_gpu, model=model,
-                                             always_return_array=always_return_array)
-    elif model == 'Inoue14':
-        return transmission_IGM_Inoue14(zObj,lObs, use_gpu,
-                                        always_return_array=always_return_array)
-    elif model == 'None' or model is None:
+    if model is not None and model not in igm_models:
+        raise ValueError(f'Unrecognized model {model}; should be one of {igm_models}')
+
+    if use_gpu:
+        import cupy as xp
+    else:
+        xp = np
+
+    scalar_zObj = xp.isscalar(zObj)
+    scalar_lObs = xp.isscalar(lObs)
+
+    zObj = xp.atleast_1d(zObj)
+    lObs = xp.atleast_1d(lObs)
+
+    nz = len(zObj)
+    nwave = len(lObs)
+
+    #- lowest observed wavelength at any redshift
+    min_wave = lObs.min()/(1.+zObj.max())
+    if min_wave > constants.LyA_wavelength or model == 'None' or model is None:
         if always_return_array:
-            if np.isscalar(zObj):
-                if np.isscalar(lObs):
-                    return 1.0
-                else:
-                    return np.ones(len(lObs))
-            else:
-                if np.isscalar(lObs):
-                    return np.ones(len(zObj))
-                else:
-                    return np.ones(len(zObj), len(lObs))
+            T = xp.ones( (nz, nwave) )
         else:
             return None
+
+    elif model in ('Calura12', 'Kamble20'):
+        T = transmission_Lyman_CaluraKamble(zObj,lObs, use_gpu, model=model,
+                                            always_return_array=always_return_array)
+    elif model == 'Inoue14':
+        T = transmission_IGM_Inoue14(zObj,lObs, use_gpu,
+                                     always_return_array=always_return_array)
     else:
+        # should have been caught by first check, but complain here just in case
         raise ValueError(f'Unrecognized model {model}; should be one of {igm_models}')
+
+    #- convert transmission T back to dimensionality of input
+    if scalar_zObj and scalar_lObs:
+        assert T.shape == (1,1)
+        T = T[0,0]
+    elif scalar_zObj:
+        assert T.shape[0] == 1
+        T = T[0]
+    elif scalar_lObs:
+        assert T.shape[1] == 1
+        T = T[:,0]
+
+    return T
 
