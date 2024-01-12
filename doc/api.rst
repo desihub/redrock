@@ -35,6 +35,9 @@ If you're loading a module here, and don't see some functions, try adding the
 .. automodule:: redrock.fitz
     :members:
 
+.. automodule:: redrock.igm
+    :members:
+
 .. automodule:: redrock.plotspec
     :members:
 
