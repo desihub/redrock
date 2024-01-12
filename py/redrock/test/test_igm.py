@@ -36,7 +36,7 @@ class TestUtils(unittest.TestCase):
                 for w in (self.obswave[0], self.obswave[-1]):
                     print(f'{model=} {z=} {w=}')
                     t = igm.transmission_Lyman(z, w, model=model, always_return_array=False)                        
-                    if w/(1+z) > LyA_wavelength or model == 'None':
+                    if w/(1+z) > LyA_wavelength or model in ('None', None):
                         self.assertEqual(t, None)
                     else:
                         self.assertTrue(np.isscalar(t))
@@ -44,7 +44,7 @@ class TestUtils(unittest.TestCase):
 
                     t = igm.transmission_Lyman(z, w, model=model, always_return_array=True)
                     self.assertTrue(np.isscalar(t))
-                    if w/(1+z) > LyA_wavelength or model == 'None':
+                    if w/(1+z) > LyA_wavelength or model in ('None', None):
                         self.assertEqual(t, 1.0)
                     else:
                         self.assertLess(t, 1.0)
@@ -61,7 +61,7 @@ class TestUtils(unittest.TestCase):
                 print(f'{model=} {z=}')
                 t = igm.transmission_Lyman(z, obswave, model=model,
                                            use_gpu=use_gpu, always_return_array=False)                
-                if self.obswave[0]/(1+z) > LyA_wavelength or model == 'None':
+                if self.obswave[0]/(1+z) > LyA_wavelength or model in ('None', None):
                     self.assertEqual(t, None)
                 else:
                     self.assertEqual(t.shape, (self.nwave,) )
@@ -70,7 +70,7 @@ class TestUtils(unittest.TestCase):
                 t = igm.transmission_Lyman(z, obswave, model=model,
                                            use_gpu=use_gpu, always_return_array=True)
                 self.assertEqual(t.shape, (self.nwave,) )
-                if self.obswave[0]/(1+z) > LyA_wavelength or model == 'None':
+                if self.obswave[0]/(1+z) > LyA_wavelength or model in ('None', None):
                     self.assertTrue(np.all(t == 1.0))
                 else:
                     self.assertTrue(np.any(t < 1.0))
@@ -86,7 +86,7 @@ class TestUtils(unittest.TestCase):
                 print(f'{model=} {w=}')
                 t = igm.transmission_Lyman(redshifts, w, model=model,
                                            use_gpu=use_gpu, always_return_array=False)
-                if w/(1+self.redshifts[-1]) > LyA_wavelength or model == 'None':
+                if w/(1+self.redshifts[-1]) > LyA_wavelength or model in ('None', None):
                     self.assertEqual(t, None)
                 else:
                     self.assertEqual(t.shape, (self.nz,) )
@@ -95,7 +95,7 @@ class TestUtils(unittest.TestCase):
                 t = igm.transmission_Lyman(redshifts, w, model=model,
                                            use_gpu=use_gpu, always_return_array=True)
                 self.assertEqual(t.shape, (self.nz,) )
-                if w/(1+self.redshifts[-1]) > LyA_wavelength or model == 'None':
+                if w/(1+self.redshifts[-1]) > LyA_wavelength or model in ('None', None):
                     self.assertTrue(np.all(t == 1.0))
                 else:
                     self.assertTrue(np.any(t < 1.0))
@@ -113,7 +113,7 @@ class TestUtils(unittest.TestCase):
             print(f'{model=}')
             t = igm.transmission_Lyman(self.redshifts, self.obswave, model=model,
                                        use_gpu=use_gpu, always_return_array=False)
-            if model == 'None':
+            if model in ('None', None):
                 self.assertEqual(t, None)
             else:
                 self.assertEqual(t.shape, (self.nz, self.nwave) )
@@ -124,7 +124,7 @@ class TestUtils(unittest.TestCase):
 
             t = igm.transmission_Lyman(self.redshifts, self.obswave, model=model,
                                        use_gpu=use_gpu, always_return_array=True)
-            if model == 'None':
+            if model in ('None', None):
                 self.assertTrue(np.all(t == 1.0))
             else:
                 self.assertEqual(t.shape, (self.nz, self.nwave) )

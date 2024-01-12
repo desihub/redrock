@@ -10,6 +10,11 @@ import os
 
 import numpy as np
 
+try:
+    import cupy as cp
+except ImportError:
+    cp = None
+
 from . import constants
 
 class Inoue14(object):
@@ -277,34 +282,22 @@ class Inoue14(object):
 
 IGM = Inoue14()
 
-def transmission_IGM_Inoue14(zObj, lObs, use_gpu=False, always_return_array=True):
+def transmission_IGM_Inoue14(zObj, lObs, use_gpu=False):
     """Calculate the transmitted flux fraction from the Lyman series
     and due to the IGM.  This returns the transmitted flux fraction:
     1 -> everything is transmitted (medium is transparent)
     0 -> nothing is transmitted (medium is opaque)
 
-    This method will handle 3 options:
-    1 -> For GPU mode, zObj is an array of all z for a template and the return
-    value will be a cupy array (nz x nlambda)
-    2-> In CPU mode, it can auto-detect if zObj is a numpy array and if so,
-    again, all z will be processed as a vector and the return value
-    will be a numpy array (nz x nlambda)
-    3-> For legacy, it is still supported to pass zObj as a float and
-    in this case, the return value will be a 1-d numpy array (nlambda).
-
     Args:
-        zObj (float or array of float): Redshift(s) of object
+        zObj (array of float): Redshifts of objects
         lObs (array of float): wavelength grid
         use_gpu (boolean): whether to use CUPY
-        always_return_array (boolean): whether to return an array of ones
-            or None if there is no overlap with the Lyman region
-    Returns:
-        array of float: transmitted flux fraction (nlambda in case of
-        scalar input; nz x nlambda in case of array input)
 
+    Returns:
+        array of float: transmitted flux fraction T[nz, nlambda]
     """
     if use_gpu:
-        import cupy as xp
+        xp = cp
     else:
         xp = np
 
@@ -323,36 +316,23 @@ def transmission_IGM_Inoue14(zObj, lObs, use_gpu=False, always_return_array=True
 
 
 def transmission_Lyman_CaluraKamble(zObj,lObs, use_gpu=False,
-                                    model='Calura12',
-                                    always_return_array=True):
+                                    model='Calura12'):
     """Calculate the transmitted flux fraction from the Lyman series
     This returns the transmitted flux fraction:
     1 -> everything is transmitted (medium is transparent)
     0 -> nothing is transmitted (medium is opaque)
 
-    This method will handle 3 options:
-    1 -> For GPU mode, zObj is an array of all z for a template and the return
-    value will be a cupy array (nz x nlambda)
-    2-> In CPU mode, it can auto-detect if zObj is a numpy array and if so,
-    again, all z will be processed as a vector and the return value
-    will be a numpy array (nz x nlambda)
-    3-> For legacy, it is still supported to pass zObj as a float and
-    in this case, the return value will be a 1-d numpy array (nlambda).
-
     Args:
-        zObj (float or array of float): Redshift(s) of object
+        zObj (array of float): Redshifts of objects
         lObs (array of float): wavelength grid
         use_gpu (boolean): whether to use CUPY
-        always_return_array (boolean): whether to return an array of ones
-            or None if there is no overlap with the Lyman region
-        model (str): Calura12 or Kamble20 IGM model constants to use
+        model (str): Calura12 or Kamble20, IGM model constants to use
 
     Returns:
-        array of float: transmitted flux fraction (nlambda in case of
-        scalar input; nz x nlambda in case of array input)
+        array of float: transmitted flux fraction T[nz, nlambda]
     """
     if use_gpu:
-        import cupy as xp
+        xp = cp
     else:
         xp = np
 
@@ -381,7 +361,7 @@ def transmission_Lyman_CaluraKamble(zObj,lObs, use_gpu=False,
     return T
 
 
-igm_models = ('Calura12', 'Kamble20', 'Inoue14', 'None')
+igm_models = ('Calura12', 'Kamble20', 'Inoue14', 'None', None)
 
 def transmission_Lyman(zObj,lObs, use_gpu=False, model='Calura12', always_return_array=True):
     """Calculate the transmitted flux fraction from the Lyman series
@@ -412,11 +392,21 @@ def transmission_Lyman(zObj,lObs, use_gpu=False, model='Calura12', always_return
     if always_return_array is False, returns None if there is no IGM absoption
     for this redshift (faster).
     """
-    if model is not None and model not in igm_models:
+    if model not in igm_models:
         raise ValueError(f'Unrecognized model {model}; should be one of {igm_models}')
 
+    #- Handle no-op cases quickly
+    if (model == 'None' or model is None) and not always_return_array:
+        return None
+
+    #- lowest observed wavelength at any redshift
+    min_wave = np.min(lObs) / (1. + np.max(zObj))
+    if min_wave > constants.LyA_wavelength and not always_return_array:
+        return None
+
+    #- Proceed with slower calculations
     if use_gpu:
-        import cupy as xp
+        xp = cp
     else:
         xp = np
 
@@ -429,20 +419,12 @@ def transmission_Lyman(zObj,lObs, use_gpu=False, model='Calura12', always_return
     nz = len(zObj)
     nwave = len(lObs)
 
-    #- lowest observed wavelength at any redshift
-    min_wave = lObs.min()/(1.+zObj.max())
-    if min_wave > constants.LyA_wavelength or model == 'None' or model is None:
-        if always_return_array:
-            T = xp.ones( (nz, nwave) )
-        else:
-            return None
-
+    if always_return_array and (min_wave > constants.LyA_wavelength or model is None or model == 'None'):
+        T = xp.ones( (nz, nwave) )
     elif model in ('Calura12', 'Kamble20'):
-        T = transmission_Lyman_CaluraKamble(zObj,lObs, use_gpu, model=model,
-                                            always_return_array=always_return_array)
+        T = transmission_Lyman_CaluraKamble(zObj, lObs, use_gpu=use_gpu, model=model)
     elif model == 'Inoue14':
-        T = transmission_IGM_Inoue14(zObj,lObs, use_gpu,
-                                     always_return_array=always_return_array)
+        T = transmission_IGM_Inoue14(zObj, lObs, use_gpu=use_gpu)
     else:
         # should have been caught by first check, but complain here just in case
         raise ValueError(f'Unrecognized model {model}; should be one of {igm_models}')
