@@ -312,6 +312,7 @@ def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux
 
     # saving leading archetype coefficients in correct order
     ret_zcoeff['alpha'] = [zzcoeff[:,k] for k in range(n_nbh)] # archetype coefficient(s)
+    # logic in case nearest neighbour is used
     if n_nbh>1:
         ret_zcoeff['alpha'] = np.array([ret_zcoeff['alpha'][jj][0] for jj in range(n_nbh)])[None,:]
     else:

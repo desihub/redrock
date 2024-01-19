@@ -307,10 +307,11 @@ class Archetype():
         
         ## Prior must be redefined to remove nearest neighbour approach, 
         # because prior was defined based on n_nearest argument..
-        # this is needed because the first fitting is done with just one archetype
+        # this logic is needed because the first fitting is done with just one archetype 
+        #and then nearest neighbour approach is implemented
         if n_nearest is not None:
-            nnearest_prior = prior.copy()
-            prior = prior[n_nearest-1:,][:,n_nearest-1:] # just remove first few rows corresponding to the nearest_archetypes
+            nnearest_prior = prior.copy() # prior corresponding to nearest_nbh method
+            prior = prior[n_nearest-1:,][:,n_nearest-1:] # removing first rows/columns corresponding to the nearest_archetypes, and keeping just one row for one archetype
 
         for hs, wave in dwave.items():
             if (trans[hs] is not None):
