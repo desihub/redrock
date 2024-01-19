@@ -312,8 +312,10 @@ def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux
 
     # saving leading archetype coefficients in correct order
     ret_zcoeff['alpha'] = [zzcoeff[:,k] for k in range(n_nbh)] # archetype coefficient(s)
-    ret_zcoeff['alpha'] = ret_zcoeff['alpha'][0][:,None]
-
+    if n_nbh>1:
+        ret_zcoeff['alpha'] = np.array([ret_zcoeff['alpha'][jj][0] for jj in range(n_nbh)])[None,:]
+    else:
+        ret_zcoeff['alpha'] = ret_zcoeff['alpha'][0][:,None]
     if nleg>=1:
         split_coeff =  np.split(zzcoeff[:,n_nbh:], ncam, axis=1) # n_camera = 3
         # In target spectra redrock saves values as 'b', 'z', 'r'.
@@ -322,7 +324,6 @@ def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux
 
         for band in ['b', 'r', 'z']:# 3 cameras
             ret_zcoeff[band] = old_coeff[band]
-
     coeff = np.concatenate(list(ret_zcoeff.values()), axis=1)
     #print(f'{time.time()-start} [sec] took for per camera BVLS method\n')
     return zzchi2, coeff

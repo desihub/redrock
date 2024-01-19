@@ -217,9 +217,10 @@ class Archetype():
             if (nleg > 0):
                 tdata[hs] = np.append(tdata[hs], legendre[hs].transpose()[None,:,:], axis=2)
             nbasis = tdata[hs].shape[2]
+            
         if per_camera:
             #Use CPU mode since small tdata
-            (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(spectra, tdata, weights, flux, wflux, nleg, n_nearest, method='bvls', n_nbh=n_nearest, prior=prior, use_gpu=False, ncam=ncam)
+            (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux, nleg, 1, method='bvls', n_nbh=n_nearest, prior=prior, use_gpu=False, ncam=ncam)
         else:
             #Use CPU mode for calc_zchi2 since small tdata
             (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, weights, flux, wflux, 1, nbasis, use_gpu=False)
@@ -303,6 +304,14 @@ class Archetype():
 
         tdata = dict()
         nbasis = 1
+        
+        ## Prior must be redefined to remove nearest neighbour approach, 
+        # because prior was defined based on n_nearest argument..
+        # this is needed because the first fitting is done with just one archetype
+        if n_nearest is not None:
+            nnearest_prior = prior.copy()
+            prior = prior[n_nearest-1:,][:,n_nearest-1:] # just remove first few rows corresponding to the nearest_archetypes
+
         for hs, wave in dwave.items():
             if (trans[hs] is not None):
                 #Only multiply if trans[hs] is not None
@@ -325,7 +334,8 @@ class Archetype():
                 (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, weights, flux, wflux, self._narch, nbasis, use_gpu=use_gpu)
 
         if n_nearest is not None:
-            best_chi2, best_coeff, best_fulltype = self.nearest_neighbour_model(target,weights,flux,wflux,dwave,z, n_nearest, zzchi2, trans, per_camera, dedges=dedges, binned=binned, use_gpu=use_gpu, prior=prior, ncam=ncam)
+            best_chi2, best_coeff, best_fulltype = self.nearest_neighbour_model(target,weights,flux,wflux,dwave,z, n_nearest, zzchi2, trans, per_camera, dedges=dedges, binned=binned, use_gpu=use_gpu, prior=nnearest_prior, ncam=ncam)
+            #print(best_chi2, best_coeff, best_fulltype)
             return best_chi2, best_coeff, best_fulltype
         else:
             iBest = np.argmin(zzchi2)
