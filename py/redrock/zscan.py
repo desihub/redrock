@@ -627,6 +627,7 @@ def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, solve_mat
         use_gpu (bool): use GPU or not
         fullprecision (bool): Whether or not to ensure reproducibly identical
             results.  See calc_batch_dot_product_3d3d_gpu.
+        prior (2d array): prior matrix on coefficients (1/sig**2)     
 
     Returns:
         zchi2 (array): array with one element per redshift for this target
