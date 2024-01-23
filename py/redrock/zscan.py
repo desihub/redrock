@@ -313,8 +313,11 @@ def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux
 
     # saving leading archetype coefficients in correct order
     ret_zcoeff['alpha'] = [zzcoeff[:,k] for k in range(n_nbh)] # archetype coefficient(s)
-    ret_zcoeff['alpha'] = ret_zcoeff['alpha'][0][:,None]
-
+    # logic in case nearest neighbour is used
+    if n_nbh>1:
+        ret_zcoeff['alpha'] = np.array([ret_zcoeff['alpha'][jj][0] for jj in range(n_nbh)])[None,:]
+    else:
+        ret_zcoeff['alpha'] = ret_zcoeff['alpha'][0][:,None]
     if nleg>=1:
         split_coeff =  np.split(zzcoeff[:,n_nbh:], ncam, axis=1) # n_camera = 3
         # In target spectra redrock saves values as 'b', 'z', 'r'.
@@ -323,7 +326,6 @@ def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux
 
         for band in ['b', 'r', 'z']:# 3 cameras
             ret_zcoeff[band] = old_coeff[band]
-
     coeff = np.concatenate(list(ret_zcoeff.values()), axis=1)
     #print(f'{time.time()-start} [sec] took for per camera BVLS method\n')
     return zzchi2, coeff
@@ -626,6 +628,7 @@ def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, solve_mat
         use_gpu (bool): use GPU or not
         fullprecision (bool): Whether or not to ensure reproducibly identical
             results.  See calc_batch_dot_product_3d3d_gpu.
+        prior (2d array): prior matrix on coefficients (1/sig**2)     
 
     Returns:
         zchi2 (array): array with one element per redshift for this target

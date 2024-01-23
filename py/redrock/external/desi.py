@@ -879,7 +879,10 @@ def rrdesi(options=None, comm=None):
             archetype_legendre_prior = args.archetype_legendre_prior
             if comm_rank == 0 and args.archetypes is not None:
                 print('archetype_legendre_prior = %s has been provided, so a prior will be added while solving for the coefficients'%(archetype_legendre_prior))
-             
+            if args.archetype_nnearest is not None:
+                if comm_rank == 0 and args.archetypes is not None:
+                    print('nearest neighbour = %d is provided, will do the final fitting for N-best nearest archetypes in chi2 space..'%(args.archetype_nnearest))
+        
         stop = elapsed(start, "Read and distribution of {} targets"\
             .format(len(targets.all_target_ids)), comm=comm)
 
