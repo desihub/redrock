@@ -1148,7 +1148,7 @@ def solve_matrices(M, y, solve_algorithm="PCA", solver_args=None, use_gpu=False)
             return cp.asarray(zcoeff)
         else:
             try:
-                res = lsq_linear(M, y, bounds=bounds, method='BVLS')
+                res = lsq_linear(M, y, bounds=bounds, method='bvls')
                 zcoeff = res.x
             except np.linalg.LinAlgError:
                 raise
