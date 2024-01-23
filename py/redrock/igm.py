@@ -366,31 +366,24 @@ def transmission_Lyman_CaluraKamble(zObj,lObs, use_gpu=False,
 
 igm_models = ('Calura12', 'Kamble20', 'Inoue14', 'None', None)
 
-def transmission_Lyman(zObj,lObs, use_gpu=False, model='Calura12', always_return_array=True):
+def transmission_Lyman(zObj, lObs, use_gpu=False, model='Calura12', always_return_array=True):
     """Calculate the transmitted flux fraction from the Lyman series
     This returns the transmitted flux fraction:
     1 -> everything is transmitted (medium is transparent)
     0 -> nothing is transmitted (medium is opaque)
 
-    This method will handle 3 options:
-    1 -> For GPU mode, zObj is an array of all z for a template and the return
-    value will be a cupy array (nz x nlambda)
-    2-> In CPU mode, it can auto-detect if zObj is a numpy array and if so,
-    again, all z will be processed as a vector and the return value
-    will be a numpy array (nz x nlambda)
-    3-> For legacy, it is still supported to pass zObj as a float and
-    in this case, the return value will be a 1-d numpy array (nlambda).
-
     Args:
         zObj (float or array of float): Redshift(s) of object
-        lObs (array of float): wavelength grid
+        lObs (float or array of float): wavelength grid
         use_gpu (boolean): whether to use CUPY
         model: which IGM model to use; Calura12, Kamble20, or Inoue14
         always_return_array: if True (default), always return array even if all ones
 
     Returns:
-        array of float: transmitted flux fraction (nlambda in case of
-        scalar input; nz x nlambda in case of array input)
+        float or array of float: transmitted flux fraction
+        if both zObj and lObs are scalar, this returns a float.
+        If one is scalar and other is array, this returns array
+        If both are arrays, this returns 2D array[nz, nwave]
 
     if always_return_array is False, returns None if there is no IGM absoption
     for this redshift (faster).
