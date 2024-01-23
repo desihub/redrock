@@ -162,7 +162,7 @@ cuda_source = r'''
 
 #This is used by original CPU algorithm
 #It is called by archeypes so keep for now
-def _zchi2_one(Tb, weights, flux, wflux, zcoeff, solve_matrices_algorithm="PCA"):
+def _zchi2_one(Tb, weights, flux, wflux, zcoeff, solve_matrices_algorithm):
     """Calculate a single chi2.
 
     For one redshift and a set of spectral data, compute the chi2 for template
@@ -206,7 +206,7 @@ def spectral_data(spectra):
 
 #This is used by original CPU algorithm
 #It is called by archeypes so keep for now
-def calc_zchi2_one(spectra, weights, flux, wflux, tdata):
+def calc_zchi2_one(spectra, weights, flux, wflux, tdata, solve_matrices_algorithm):
     """Calculate a single chi2.
 
     For one redshift and a set of spectra, compute the chi2 for template
@@ -234,7 +234,7 @@ def calc_zchi2_one(spectra, weights, flux, wflux, tdata):
         Tb.append(s.Rcsr.dot(tdata[key]))
     Tb = np.vstack(Tb)
     zcoeff = np.zeros(nbasis, dtype=np.float64)
-    zchi2 = _zchi2_one(Tb, weights, flux, wflux, zcoeff)
+    zchi2 = _zchi2_one(Tb, weights, flux, wflux, zcoeff, solve_matrices_algorithm)
 
     return zchi2, zcoeff
 
@@ -254,7 +254,7 @@ def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux
         wflux (array): concatenated weighted flux values.
         nleg (int): number of Legendre polynomials
         narch (int): number of archetypes
-        method (string): 'PCA' or 'bvls' or 'nnls'
+        method (string): 'PCA', 'BVLS', 'NMF', or 'NNLS' (same as NMF)
         n_nbh (int): number of nearest best archetypes
         prior (array): prior matrix added to the Legendre coefficients (1/sigma^2)
         use_gpu (bool): use GPU or not
@@ -273,8 +273,9 @@ def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux
     ret_zcoeff= {'alpha':[], 'b':[], 'r':[], 'z':[]}
 
     #Setup dict of solver args to pass bounds to solver
+    method = method.upper()
     solver_args = dict()
-    if (method == 'bvls'):
+    if (method == 'BVLS'):
         #only positive coefficients are allowed for the archetypes
         bounds = np.zeros((2, nbasis))
         bounds[0][n_nbh:]=-np.inf #constant and slope terms in archetype method (can be positive or negative)
@@ -291,7 +292,7 @@ def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux
             tdata2[:,:,:n_nbh] = tdata[hs][:,:,:n_nbh]
             tdata2[:,:,n_nbh+i*nleg:n_nbh+(i+1)*nleg] = tdata[hs][:,:,n_nbh:]
             tdata[hs] = tdata2
-        (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, weights, flux, wflux, narch, nbasis, solve_matrices_algorithm=method.upper(), solver_args=solver_args, prior=prior, use_gpu=use_gpu)
+        (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, weights, flux, wflux, narch, nbasis, solve_matrices_algorithm=method, solver_args=solver_args, prior=prior, use_gpu=use_gpu)
     else:
         #Create zzchi2, zcoeff, and tdata2 dict here
         tdata2 = dict()
@@ -308,7 +309,7 @@ def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux
                     for k in range(n_nbh, n_nbh+nleg):
                         tdata2[hs][:,k+nleg*i] = tdata[hs][j,:,k] # Legendre polynomials terms
                 tdata2[hs] = tdata2[hs][None,:,:]
-            zzchi2[j], zzcoeff[j] = calc_zchi2_batch(spectra, tdata2, weights, flux, wflux, 1, nbasis, solve_matrices_algorithm=method.upper(), solver_args=solver_args, prior=prior, use_gpu=use_gpu)
+            zzchi2[j], zzcoeff[j] = calc_zchi2_batch(spectra, tdata2, weights, flux, wflux, 1, nbasis, solve_matrices_algorithm=method, solver_args=solver_args, prior=prior, use_gpu=use_gpu)
 
     # saving leading archetype coefficients in correct order
     ret_zcoeff['alpha'] = [zzcoeff[:,k] for k in range(n_nbh)] # archetype coefficient(s)
@@ -603,7 +604,7 @@ def calc_batch_dot_product_3d3d_gpu(a, b, transpose_a=False, fullprecision=True)
 ###    are very obviously analagous though and should be highly
 ###    maintainable.  The main difference is the extra loop on the CPU version
 
-def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, solve_matrices_algorithm="PCA", solver_args=None, use_gpu=False, fullprecision=True, prior=None):
+def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, solve_matrices_algorithm=None, solver_args=None, use_gpu=False, fullprecision=True, prior=None):
     
     """Calculate a batch of chi2.
     For many redshifts and a set of spectral data, compute the chi2 for
@@ -694,7 +695,8 @@ def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, solve_mat
         #There is no Error thrown by cupy's version of linalg.solve so just
         #need to catch NotImplementedError.
         try:
-            zcoeff = solve_matrices(all_M, all_y, solve_algorithm=solve_matrices_algorithm, solver_args=solver_args, use_gpu=True)
+            zcoeff = solve_matrices(all_M, all_y, solve_algorithm=solve_matrices_algorithm,
+                                    solver_args=solver_args, use_gpu=True)
         except NotImplementedError:
             zchi2[:] = 9e99
             zcoeff = np.zeros((nz, nbasis))
@@ -1102,7 +1104,7 @@ def solve_matrices(M, y, solve_algorithm="PCA", solver_args=None, use_gpu=False)
                 return np.linalg.solve(M, y)
             except np.linalg.LinAlgError:
                 raise
-    elif solve_algorithm == "NNLS":
+    elif solve_algorithm in ("NMF", "NNLS"):
         if (use_gpu):
             nz = y.shape[0]
             Mcpu = M.get()

@@ -15,9 +15,11 @@ import traceback
 import numpy as np
 from astropy.io import fits
 
-from .utils import native_endian, elapsed, transmission_Lyman
-
+from .utils import native_endian, elapsed
+from .igm import transmission_Lyman
 from .rebin import rebin_template, trapz_rebin
+
+valid_template_methods = ('PCA', 'NMF')
 
 class Template(object):
     """A spectral Template PCA object.
@@ -31,7 +33,8 @@ class Template(object):
 
     """
     def __init__(self, filename=None, spectype=None, redshifts=None,
-                 wave=None, flux=None, subtype=None,
+                 wave=None, flux=None, subtype=None, method='PCA',
+                 igm_model='Inoue14',
                  zscan_galaxy=None, zscan_qso=None, zscan_star=None):
 
         if filename is not None:
@@ -60,6 +63,11 @@ class Template(object):
                 dtype=np.float64)
 
             self._redshifts = None
+
+            if 'RRMETHOD' in hdr:
+                self._method = hdr['RRMETHOD'].upper()
+            else:
+                self._method = 'PCA'
 
             ## find out if redshift info is present in the file
             old_style_templates = True
@@ -110,12 +118,31 @@ class Template(object):
             else:
                 self._subtype = ''
 
+            if 'RRIGM' in hdr:
+                self._igm_model = hdr['RRIGM']
+            else:
+                #- auto-derive IGM model from known versions of pre-2024
+                #- templates without RRIGM keyword
+                if self._rrtype == 'STAR':
+                    self._igm_model = 'None'
+                elif self._rrtype == 'GALAXY' and self._version == '2.6':
+                    # not actually needed for these galaxy templates that
+                    # only go to z=1.7, but set anyway
+                    self._igm_model = 'Calura12'
+                elif self._rrtype == 'QSO' and self._version in ('0.1', '1.0'):
+                    self._igm_model = 'Calura12'
+                elif self._rrtype == 'QSO' and self._version == '1.1':
+                    self._igm_model = 'Kamble20'
+                else:
+                    raise ValueError('Missing keyword RRIGM specifying IGM model to use')
         else:
             self._rrtype = spectype
             self._redshifts = redshifts
             self.wave = wave
             self.flux = flux
             self._subtype = subtype
+            self._igm_model = igm_model
+            self._method = method
 
         self._nbasis = self.flux.shape[0]
         self._nwave = self.flux.shape[1]
@@ -126,6 +153,13 @@ class Template(object):
         self.maxwave = self.wave[-1]
         self.gpuwave = None
         self.gpuflux = None
+
+        if self._method not in valid_template_methods:
+            raise ValueError(f'Template method {self._method} unrecognized; '
+                              f'should be one of {valid_template_methods}')
+
+        print(f'INFO: {self.full_type} templates using {self._method} for fitting')
+        print(f'INFO: {self.full_type} templates using {self._igm_model} IGM model')
 
 
     @property
@@ -167,7 +201,11 @@ class Template(object):
         keywords etc so that different templates seamlessly use different
         algorithms.
         """
-        return "PCA"
+        return self._method
+
+    @property
+    def igm_model(self):
+        return self._igm_model
 
 
     def eval(self, coeff, wave, z):
@@ -191,38 +229,94 @@ class Template(object):
         return trapz_rebin(self.wave*(1+z), flux, wave)
 
 
+def find_templates(template_path=None):
+    """Return list of Redrock template files
 
+    `template_path` can be one of 4 things:
 
-def find_templates(template_dir=None):
-    """Return list of redrock-\*.fits template files
-
-    Search directories in this order, returning results from first one found:
-        - template_dir
-        - $RR_TEMPLATE_DIR
-        - <redrock_code>/templates/
-
-    Args:
-        template_dir (str): optional directory containing the templates.
-
-    Returns:
-        list: a list of template files.
-
+       * path to directory containing template files
+       * path to single template file to use
+       * path to text file listing which template files to use
+       * None (use $RR_TEMPLATE_DIR instead)
     """
-    if template_dir is None:
+    if template_path is None:
         if 'RR_TEMPLATE_DIR' in os.environ:
-            template_dir = os.environ['RR_TEMPLATE_DIR']
+            template_path = os.environ['RR_TEMPLATE_DIR']
         else:
             thisdir = os.path.dirname(__file__)
             tempdir = os.path.join(os.path.abspath(thisdir), 'templates')
             if os.path.exists(tempdir):
-                template_dir = tempdir
+                template_path = tempdir
 
-    if template_dir is None:
-        raise IOError("ERROR: can't find template_dir, $RR_TEMPLATE_DIR, or {rrcode}/templates/")
+    if template_path is None:
+        raise IOError("ERROR: can't find template_path, $RR_TEMPLATE_DIR, or {rrcode}/templates/")
     else:
-        print('DEBUG: Read templates from {}'.format(template_dir) )
+        print(f'DEBUG: Reading templates from {template_path}')
 
-    return sorted(glob(os.path.join(template_dir, 'rrtemplate-*.fits')))
+    if os.path.isdir(template_path):
+        default_templates_file = f'{template_path}/default_templates.txt'
+        template_dir = template_path
+    elif template_path.endswith('.txt'):
+        if not os.path.exists(template_path):
+            raise ValueError(f'Missing {template_path=}')
+        default_templates_file = template_path
+        template_dir = os.path.dirname(template_path)
+    elif template_path.endswith( ('.fits', '.fits.gz', '.fits.fz') ):
+        #- single template file, return that as a list
+        return [template_path,]
+    else:
+        raise ValueError(f'Unrecognized {template_path=}')
+
+    if os.path.exists(default_templates_file):
+        #- New style (Jan 2024): default_templates.txt says which to use
+        template_files = list()
+        with open(default_templates_file) as fx:
+            for line in fx.readlines():
+                #- Strip comment lines and blank lines
+                line = line.strip()
+                if len(line) < 2 or line.startswith('#'):
+                    continue
+                else:
+                    filename = line.split()[0] #- allow trailing comments
+                    #- support absolute path and relative paths
+                    if not line.startswith('/'):
+                        filename = f'{template_dir}/{filename}'
+
+                    if os.path.exists(filename):
+                        template_files.append(filename)
+                    else:
+                        raise ValueError(f'missing {filename} given in {default_templates_file}')
+    else:
+        #- Old style: use all templates found in template directory
+        template_files = sorted(glob(os.path.join(template_dir, 'rrtemplate-*.fits')))
+
+    return template_files
+
+
+def load_templates(template_path=None):
+    """
+    Return list of Template objects
+
+    `template_path` is list of template file paths, or path to provide to
+    find_templates, i.e. a path to a directory with templates, a path to
+    a text file containing a list of templates, a path to a single template
+    file, or None to use $RR_TEMPLATE_DIR instead.
+
+    Returns: list of Template objects
+
+    Note: this always returns a list, even if template_path is a path to a
+    single template file.
+    """
+    if isinstance(template_path, (str, type(None))):
+        template_path = find_templates(template_path)
+
+    print(f'Reading templates from {template_path}')
+
+    templates = list()
+    for filename in template_path:
+        templates.append(Template(filename))
+
+    return templates
 
 
 class DistTemplatePiece(object):
@@ -337,7 +431,8 @@ class DistTemplate(object):
         for k in list(self._dwave.keys()):
             #New algorithm accepts all z as an array and returns T, a 2-d
             # matrix (nz, nlambda) as a cupy or numpy array
-            T = transmission_Lyman(myz,self._dwave[k], use_gpu=use_gpu, always_return_array=False)
+            T = transmission_Lyman(myz,self._dwave[k], use_gpu=use_gpu, always_return_array=False,
+                                   model=template.igm_model)
             if (T is None):
                 #Return value of None means that wavelenght regime
                 #does not overlap Lyman transmission - continue here
@@ -495,24 +590,8 @@ def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1,
     timer = elapsed(None, "", comm=comm)
 
     template_files = None
-
     if (comm is None) or (comm.rank == 0):
-        # Only one process needs to do this
-        if templates is not None:
-            if os.path.isfile(templates):
-                # we are using just a single file
-                template_files = [ templates ]
-            elif os.path.isdir(templates):
-                # this is a template dir
-                template_files = find_templates(template_dir=templates)
-            else:
-                print("{} is neither a file nor a directory"\
-                    .format(templates))
-                sys.stdout.flush()
-                if comm is not None:
-                    comm.Abort()
-        else:
-            template_files = find_templates()
+        template_files = find_templates(templates)
 
     if comm is not None:
         template_files = comm.bcast(template_files, root=0)

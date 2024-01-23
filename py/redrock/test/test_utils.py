@@ -8,6 +8,7 @@ except Exception:
     cp_available = False
 
 from .. import utils
+from .. import igm
 
 class TestUtils(unittest.TestCase):
     """Test redrock utils.
@@ -36,37 +37,6 @@ class TestUtils(unittest.TestCase):
         capacities = [1, 3]
         dist = utils.distribute_work(nproc, ids, capacities=capacities)
         self.assertEqual(list(map(len, dist)), [1, 3])
-
-    def test_Lyman_transmission_batch(self):
-        '''Test the 2D version of Lyman transmission in batch versus
-        the legacy 1D mode'''
-        x = np.arange(300)+800.
-        myz = np.arange(11)*0.1
-
-        c = utils.transmission_Lyman(myz,x)
-        self.assertTrue(type(c) == np.ndarray)
-        for i in range(len(myz)):
-            a = utils.transmission_Lyman(myz[i], x)
-            self.assertTrue(np.allclose(c[i], a))
-            self.assertTrue(type(a) == np.ndarray)
-
-    @unittest.skipUnless(cp_available, "Skipping test_Lyman_transmission_GPU because no GPU found.")
-    def test_Lyman_transmission_GPU(self):
-        '''Test the GPU version of Lyman transmission in batch versus
-        both the 2D mode and the legacy 1D mode'''
-        x = np.arange(300)+800.
-        myz = np.arange(11)*0.1
-
-        g = utils.transmission_Lyman(myz,x,use_gpu=True)
-        self.assertTrue(type(g) == cp.ndarray)
-        c = utils.transmission_Lyman(myz,x)
-        self.assertTrue(type(c) == np.ndarray)
-        self.assertTrue(np.allclose(c, g))
-        for i in range(len(myz)):
-            a = utils.transmission_Lyman(myz[i], x)
-            self.assertTrue(np.allclose(g[i], a))
-            self.assertTrue(type(a) == np.ndarray)
-
 
 def test_suite():
     """Allows testing of only this module with the command::
