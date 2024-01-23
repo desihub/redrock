@@ -2,14 +2,27 @@
 redrock Change Log
 ==================
 
-0.18.1 (unreleased)
+0.19.0 (unreleased)
 -------------------
 
 * Write test files to temporary directory (PR `#263`_).
 * Check template dimension so code works on a single template (PR `#264`_). 
+* Versioned templates, NMF support, and updated IGM models (PR `#271`_).
+* Archetype updates:
+
+  * Added default --nminima for archetypes (PR `#265`_).
+  * Adjust coeff size for Legendre for archetypes (PR `#266`_).
+  * Docstring cleanup (PR `#267`_).
+  * Fix --archetype_nnearest option (PR `#272`_).
+
 
 .. _`#263`: https://github.com/desihub/redrock/pull/263
 .. _`#264`: https://github.com/desihub/redrock/pull/264
+.. _`#265`: https://github.com/desihub/redrock/pull/265
+.. _`#266`: https://github.com/desihub/redrock/pull/266
+.. _`#267`: https://github.com/desihub/redrock/pull/267
+.. _`#271`: https://github.com/desihub/redrock/pull/271
+.. _`#272`: https://github.com/desihub/redrock/pull/272
 
 0.18.0 (2023-09-14)
 -------------------
