@@ -29,7 +29,7 @@ from ..utils import elapsed, get_mp, distribute_work, getGPUCountMPI
 
 from ..targets import (Spectrum, Target, DistTargets)
 
-from ..templates import load_dist_templates
+from ..templates import load_dist_templates, get_spectra_and_model
 
 from ..results import write_zscan
 
@@ -580,6 +580,9 @@ def rrdesi(options=None, comm=None):
 
     parser.add_argument("-o", "--outfile", type=str, default=None,
         required=False, help="output FITS file with best redshift per target")
+    
+    parser.add_argument("--model", type=str, default=None,
+        required=False, help="output FITS file containing spectral model")
 
     parser.add_argument("--targetids", type=str, default=None,
         required=False, help="comma-separated list of target IDs")
@@ -973,6 +976,11 @@ def rrdesi(options=None, comm=None):
                         template_version, archetype_version,
                         spec_header=targets.header0)
 
+
+            if args.model is not None:
+                #import pdb;pdb.set_trace()
+                all_model = get_spectra_and_model(targets=targets, redrockdata=zbest, templates=None)
+            import pdb;pdb.set_trace()
             stop = elapsed(start, f"Writing {args.outfile} took", comm=comm)
 
     except Exception as err:

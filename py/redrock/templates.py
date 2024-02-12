@@ -14,10 +14,12 @@ import traceback
 
 import numpy as np
 from astropy.io import fits
+from fitsio import FITS
 
 from .utils import native_endian, elapsed
 from .igm import transmission_Lyman
 from .rebin import rebin_template, trapz_rebin
+from .zscan import spectral_data
 
 valid_template_methods = ('PCA', 'NMF')
 
@@ -676,3 +678,59 @@ def eval_model(data, wave, R=None, templates=None):
         else:
             out[i] = R[i].dot(mx)
     return out
+
+def get_spectra_and_model(targets=None, redrockdata=None, templates=None):
+    
+    from scipy.sparse import csr_matrix
+    dwave = targets.wavegrids()
+    if targets is not None:
+        if templates is None:
+            templates = dict()
+            templatefn = find_templates()
+            for fn in templatefn:
+                tx = Template(fn)
+                templates[(tx.template_type, tx.sub_type)] = tx
+        local_targets = targets.local()
+
+        all_tids = []
+        all_model = {}
+
+        for tg in local_targets:
+            all_tids.append(tg.id)
+
+        all_tids = np.array(all_tids, dtype='int64')
+        i = 0
+        for tg in local_targets:
+            (weights, flux, wflux) = spectral_data(tg.spectra)
+            all_Rcsr = {}
+            k = 0
+            for s in tg.spectra:
+                key = s.wavehash
+                M = tg.spectra[k].nwave
+                mat = csr_matrix((tg.spectra[k].Rcsr_data, tg.spectra[k].Rcsr_indices, tg.spectra[k].Rcsr_indptr), shape=(M, M))
+                all_Rcsr[key] = mat.toarray()
+                k = k+1
+                
+            #all_spectra[tg.id] = flux
+            #all_ivar[tg.id] = weights
+            all_model[tg.id] = eval_model_for_one_spectra(redrockdata[i], dwave, flux, R=all_Rcsr, templates=templates)
+            i = i+1
+        return all_model
+    else:
+        print('Either one of the files is None or does not exist..')
+        return
+
+
+def eval_model_for_one_spectra(data, dwave, flux, R=None, templates=None):
+    
+    tx = templates[(data['SPECTYPE'], data['SUBTYPE'])]
+    coeff = data['COEFF'][0:tx.nbasis]
+    tmodel = tx.flux.T.dot(coeff).T
+    model = {}
+    for key, wave in dwave.items():
+        mx = trapz_rebin(tx.wave*(1+data['Z']), tmodel, wave)
+        if R is None:
+            model[key] = mx
+        else:
+            model[key] = R[key].dot(mx)
+    return model
