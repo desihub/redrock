@@ -347,6 +347,29 @@ class Archetype():
             #print(z, zzchi2[iBest], zzcoeff[iBest], self._full_type[iBest])
             return zzchi2[iBest], zzcoeff[iBest], self._full_type[iBest]
 
+    def get_spectra_and_archetype_model(self, targets=None, redrockdata=None, deg_legendre=None):
+
+        arrtype = np
+        dedges = None
+
+        dwave = targets.wavegrid()
+        local_targets = targets.local()
+        all_model = {}
+        i = 0
+        for tg in local_targets:
+            z = redrockdata[i]['Z']
+            binned = self.rebin_template_batch(z, dwave, trapz=True, dedges=dedges, use_gpu=False)
+            legendre = tg.legendre(nleg=deg_legendre, use_gpu=False)
+            tdata = dict()
+            nbasis = 1
+            for hs, wave in dwave.items():
+                if deg_legendre > 0:
+                    tdata[hs] = arrtype.append(binned[hs].transpose()[:,:,None], arrtype.tile(arrtype.asarray(legendre[hs]).transpose()[None,:,:], (self._narch, 1, 1)), axis=2)
+                else:
+                    tdata[hs] = binned[hs].transpose()[:,:,None]
+                nbasis = tdata[hs].shape[2] 
+            i = i+1
+
 
 class All_archetypes():
     """Class to store all different archetypes of all the different spectype.
@@ -408,3 +431,6 @@ def find_archetypes(archetypes_dir=None):
             lstfilename = sorted([ f.replace(archetypes_dir_expand,archetypes_dir) for f in lstfilename])
 
     return lstfilename
+
+
+

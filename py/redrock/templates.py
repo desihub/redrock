@@ -683,7 +683,6 @@ def eval_model(data, wave, R=None, templates=None):
 
 def get_spectra_and_model(targets=None, redrockdata=None, templates=None):
     
-    from scipy.sparse import csr_matrix
     dwave = targets.wavegrids()
     if targets is not None:
         if templates is None:
