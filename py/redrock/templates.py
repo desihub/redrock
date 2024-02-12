@@ -707,8 +707,9 @@ def get_spectra_and_model(targets=None, redrockdata=None, templates=None):
             for s in tg.spectra:
                 key = s.wavehash
                 M = tg.spectra[k].nwave
-                mat = csr_matrix((tg.spectra[k].Rcsr_data, tg.spectra[k].Rcsr_indices, tg.spectra[k].Rcsr_indptr), shape=(M, M))
-                all_Rcsr[key] = mat.toarray()
+                all_Rcsr[key] = tg.spectra[k].Rcsr
+                #mat = csr_matrix((tg.spectra[k].Rcsr_data, tg.spectra[k].#Rcsr_indices, tg.spectra[k].Rcsr_indptr), shape=(M, M))
+                #all_Rcsr[key] = mat.toarray()
                 k = k+1
                 
             #all_spectra[tg.id] = flux

@@ -976,7 +976,7 @@ def rrdesi(options=None, comm=None):
                         template_version, archetype_version,
                         spec_header=targets.header0)
 
-
+            print(zbest)
             if args.model is not None:
                 #import pdb;pdb.set_trace()
                 all_model = get_spectra_and_model(targets=targets, redrockdata=zbest, templates=None)
