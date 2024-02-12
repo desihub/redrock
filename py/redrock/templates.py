@@ -21,6 +21,8 @@ from .igm import transmission_Lyman
 from .rebin import rebin_template, trapz_rebin
 from .zscan import spectral_data
 
+from desispec.coaddition import coadd_cameras
+
 valid_template_methods = ('PCA', 'NMF')
 
 class Template(object):
@@ -692,13 +694,7 @@ def get_spectra_and_model(targets=None, redrockdata=None, templates=None):
                 templates[(tx.template_type, tx.sub_type)] = tx
         local_targets = targets.local()
 
-        all_tids = []
         all_model = {}
-
-        for tg in local_targets:
-            all_tids.append(tg.id)
-
-        all_tids = np.array(all_tids, dtype='int64')
         i = 0
         for tg in local_targets:
             (weights, flux, wflux) = spectral_data(tg.spectra)
@@ -706,19 +702,14 @@ def get_spectra_and_model(targets=None, redrockdata=None, templates=None):
             k = 0
             for s in tg.spectra:
                 key = s.wavehash
-                M = tg.spectra[k].nwave
+                M = s.nwave
                 all_Rcsr[key] = tg.spectra[k].Rcsr
-                #mat = csr_matrix((tg.spectra[k].Rcsr_data, tg.spectra[k].#Rcsr_indices, tg.spectra[k].Rcsr_indptr), shape=(M, M))
-                #all_Rcsr[key] = mat.toarray()
                 k = k+1
-                
-            #all_spectra[tg.id] = flux
-            #all_ivar[tg.id] = weights
-            all_model[tg.id] = eval_model_for_one_spectra(redrockdata[i], dwave, flux, R=all_Rcsr, templates=templates)
-            i = i+1
+        all_model[tg.id] = eval_model_for_one_spectra(redrockdata[i], dwave, flux, R=all_Rcsr, templates=templates)
+        i = i+1
         return all_model
     else:
-        print('Either one of the files is None or does not exist..')
+        print('Target object not provided..\n')
         return
 
 

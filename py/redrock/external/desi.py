@@ -976,12 +976,12 @@ def rrdesi(options=None, comm=None):
                         template_version, archetype_version,
                         spec_header=targets.header0)
 
-            print(zbest)
-            if args.model is not None:
-                #import pdb;pdb.set_trace()
-                all_model = get_spectra_and_model(targets=targets, redrockdata=zbest, templates=None)
+        if args.model is not None and comm_rank==0:
+            #import pdb;pdb.set_trace()
+            all_model = get_spectra_and_model(targets=targets, redrockdata=zbest, templates=None)
             import pdb;pdb.set_trace()
-            stop = elapsed(start, f"Writing {args.outfile} took", comm=comm)
+            print(all_model)
+        stop = elapsed(start, f"Writing {args.outfile} took", comm=comm)
 
     except Exception as err:
         exc_type, exc_value, exc_traceback = sys.exc_info()
