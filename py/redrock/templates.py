@@ -696,15 +696,13 @@ def get_spectra_and_model(targets=None, redrockdata=None, templates=None):
         all_model = {}
         i = 0
         for tg in local_targets:
-            (weights, flux, wflux) = spectral_data(tg.spectra)
             all_Rcsr = {}
             k = 0
             for s in tg.spectra:
                 key = s.wavehash
-                M = s.nwave
                 all_Rcsr[key] = tg.spectra[k].Rcsr
                 k = k+1
-        all_model[tg.id] = eval_model_for_one_spectra(redrockdata[i], dwave, flux, R=all_Rcsr, templates=templates)
+        all_model[tg.id] = eval_model_for_one_spectra(redrockdata[i], dwave, R=all_Rcsr, templates=templates)
         i = i+1
         return all_model
     else:
@@ -712,7 +710,7 @@ def get_spectra_and_model(targets=None, redrockdata=None, templates=None):
         return
 
 
-def eval_model_for_one_spectra(data, dwave, flux, R=None, templates=None):
+def eval_model_for_one_spectra(data, dwave, R=None, templates=None):
     
     tx = templates[(data['SPECTYPE'], data['SUBTYPE'])]
     coeff = data['COEFF'][0:tx.nbasis]

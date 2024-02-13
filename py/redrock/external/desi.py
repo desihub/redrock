@@ -39,7 +39,7 @@ from ..zwarning import ZWarningMask
 
 from .._version import __version__
 
-from ..archetypes import All_archetypes
+from ..archetypes import All_archetypes, Archetype
 
 
 def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
@@ -978,7 +978,9 @@ def rrdesi(options=None, comm=None):
 
         if args.model is not None and comm_rank==0:
             #import pdb;pdb.set_trace()
-            all_model = get_spectra_and_model(targets=targets, redrockdata=zbest, templates=None)
+            #all_model = get_spectra_and_model(targets=targets, redrockdata=zbest, templates=None)
+            archetype = Archetype(args.archetypes)
+            all_model = archetype.get_spectra_and_archetype_model(targets=targets, redrockdata=zbest, deg_legendre=args.archetype_legendre_degree, ncam=ncamera)
             import pdb;pdb.set_trace()
             print(all_model)
         stop = elapsed(start, f"Writing {args.outfile} took", comm=comm)
