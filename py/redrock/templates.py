@@ -14,6 +14,7 @@ import traceback
 
 import numpy as np
 from astropy.io import fits
+from astropy.table import Table
 from fitsio import FITS
 
 from .utils import native_endian, elapsed
@@ -693,33 +694,43 @@ def get_spectra_and_model(targets=None, redrockdata=None, templates=None):
                 templates[(tx.template_type, tx.sub_type)] = tx
         local_targets = targets.local()
 
-        all_model = {}
-        i = 0
+        wavehashes = [s.wavehash for s in local_targets[0].spectra] #getting the wavehashes
+
+        #define dictionary to save the model data
+        if len(wavehashes)>1:
+            model_flux  = {'TARGETID':[], 'B_MODEL':[], 'R_MODEL':[], 'Z_MODEL':[]} 
+            hashkeys = {wavehashes[0]:'B_MODEL', wavehashes[1]:'Z_MODEL', wavehashes[-1]:'R_MODEL'} #because the order of camera are not right in target class
+            wavelength = {'B_WAVELENGTH':dwave[wavehashes[0]], 'Z_WAVELENGTH':dwave[wavehashes[1]], 'R_WAVELENGTH':dwave[wavehashes[-1]]}
+        else:
+            model_flux  = {'TARGETID':[], 'BRZ_MODEL':[]} #dictionary for saving the model data
+            hashkeys = {wavehashes[0]:'BRZ_MODEL'}
+            wavelength = {'BRZ_WAVELENGTH':dwave[wavehashes[0]]}
+
+        i = 0 # counter for redrockdata
         for tg in local_targets:
+            model_flux['TARGETID'].append(tg.id)
             all_Rcsr = {}
-            k = 0
             for s in tg.spectra:
                 key = s.wavehash
-                all_Rcsr[key] = tg.spectra[k].Rcsr
-                k = k+1
-        all_model[tg.id] = eval_model_for_one_spectra(redrockdata[i], dwave, R=all_Rcsr, templates=templates)
-        i = i+1
-        return all_model
+                all_Rcsr[key] = s.Rcsr
+            model_flux= eval_model_for_one_spectra(redrockdata[i], dwave, R=all_Rcsr, model_flux=model_flux, hashkeys=hashkeys, templates=templates)
+            i = i+1
+        return Table(model_flux), Table(wavelength)
     else:
         print('Target object not provided..\n')
         return
 
 
-def eval_model_for_one_spectra(data, dwave, R=None, templates=None):
+def eval_model_for_one_spectra(data, dwave, R=None, model_flux=None,hashkeys=None, templates=None):
     
     tx = templates[(data['SPECTYPE'], data['SUBTYPE'])]
     coeff = data['COEFF'][0:tx.nbasis]
     tmodel = tx.flux.T.dot(coeff).T
-    model = {}
     for key, wave in dwave.items():
+        ukey = hashkeys[key]
         mx = trapz_rebin(tx.wave*(1+data['Z']), tmodel, wave)
         if R is None:
-            model[key] = mx
+            model_flux[ukey].append(mx)
         else:
-            model[key] = R[key].dot(mx)
-    return model
+            model_flux[ukey].append(R[key].dot(mx))
+    return model_flux

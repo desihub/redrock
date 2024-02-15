@@ -108,6 +108,55 @@ def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
 
     return
 
+def write_bestmodel(outfile, zbest, modeldict, wavedict, template_version, archetype_version):
+    """
+    Writes best fit redrock model in the outfile, the file format is same as input coadd file
+
+    Args:
+        outfile (str): output file name (fits)
+        zbest (best fit redshift table)
+        modeldict (dict): dictionary containing best-fit model (across cameras or coadded), fir each targetid, main keys: targetids
+        wavedict (dict): wavelength dictionary
+        template_version (str): template version used
+        archetype_version (str): archetype version used
+    """
+    header = fits.Header()
+    header['LONGSTRN'] = 'OGIP 1.0'
+    header['RRVER'] = (__version__, 'Redrock version')
+    for i, fulltype in enumerate(template_version.keys()):
+        header['TEMNAM'+str(i).zfill(2)] = fulltype
+        header['TEMVER'+str(i).zfill(2)] = template_version[fulltype]
+    if not archetype_version is None:
+        for i, fulltype in enumerate(archetype_version.keys()):
+            header['ARCNAM'+str(i).zfill(2)] = fulltype
+            header['ARCVER'+str(i).zfill(2)] = archetype_version[fulltype]
+    # record code versions and key environment variables
+    add_dependencies(header)
+    for key in ['RR_TEMPLATE_DIR', 'RR_ARCHETYPE_DIR']:
+        if key in os.environ:
+            setdep(header, key, os.environ[key])
+    
+    assert zbest['TARGETID'].data==np.array(modeldict['TARGETID'])
+    zbest.meta['EXTNAME'] = 'REDSHIFTS'
+    hx = fits.HDUList()
+    hx.append(fits.PrimaryHDU(header=header))
+    hx.append(fits.convenience.table_to_hdu(zbest))
+
+    for key1, key2 in zip(modeldict.keys()[1:],wavedict.keys()[1:]) :
+        modeldict[key1].meta['EXTNAME'] = key1
+        wavedict[key2].meta['EXTNAME'] = key2
+        hx.append(fits.convenience.table_to_hdu(Table(modeldict[key1])))
+        hx.append(fits.convenience.table_to_hdu(Table(wavedict[key2])))
+
+    outfile = os.path.expandvars(outfile)
+    outdir = os.path.dirname(os.path.abspath(outfile))
+    if not os.path.exists(outdir):
+        os.makedirs(outdir)
+
+    hx.writeto(outfile, overwrite=True)
+
+    return
+
 
 class DistTargetsDESI(DistTargets):
     """Distributed targets for DESI.
@@ -969,7 +1018,6 @@ def rrdesi(options=None, comm=None):
                     archetypes = All_archetypes(archetypes_dir=args.archetypes,
                                                 verbose=(comm_rank==0)).archetypes
                     archetype_version = {name:arch._version for name, arch in archetypes.items() }
-                    stop = elapsed(start, f"Estimating model took", comm=comm)
 
                 write_zbest(args.outfile, zbest,
                         targets.fibermap, targets.exp_fibermap,
@@ -977,15 +1025,18 @@ def rrdesi(options=None, comm=None):
                         template_version, archetype_version,
                         spec_header=targets.header0)
         stop = elapsed(start, f"Writing {args.outfile} took", comm=comm)
-        
+      
         if args.model is not None and comm_rank==0:
             if args.archetypes is not None:
                 print('MODEL: Estimating Archetype best-fit models for the targets')
                 archetype = Archetype(args.archetypes)
-                all_model = archetype.get_spectra_and_archetype_model(targets=targets, redrockdata=zbest, deg_legendre=args.archetype_legendre_degree, ncam=ncamera)
+                all_model, wavedict = archetype.get_spectra_and_archetype_model(targets=targets, redrockdata=zbest, deg_legendre=args.archetype_legendre_degree, ncam=ncamera)
             else:
                 print('MODEL: Estimating redrock PCA best-fit models for the targets')
-                all_model = get_spectra_and_model(targets=targets, redrockdata=zbest, templates=None)
+                all_model, wavedict = get_spectra_and_model(targets=targets, redrockdata=zbest, templates=None)
+            
+            write_bestmodel(args.model, zbest, all_model, wavedict, template_version, archetype_version)
+            stop = elapsed(start, f"Estimating model took", comm=comm)
 
     except Exception as err:
         exc_type, exc_value, exc_traceback = sys.exc_info()

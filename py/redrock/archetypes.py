@@ -7,6 +7,7 @@ Classes and functions for archetypes.
 import os
 from glob import glob
 from astropy.io import fits
+from astropy.table import Table
 import numpy as np
 from scipy.interpolate import interp1d
 import scipy.special
@@ -388,23 +389,29 @@ class Archetype():
         dedges = None
     
         local_targets = targets.local()
-        all_model = {}
+        wavehashes = [s.wavehash for s in local_targets[0].spectra] #getting the wavehashes
+
+        #define dictionary to save the model data
+        if len(wavehashes)>1:
+            model_flux  = {'TARGETID':[], 'B_MODEL':[], 'R_MODEL':[], 'Z_MODEL':[]} 
+            hashkeys = {wavehashes[0]:'B_MODEL', wavehashes[1]:'Z_MODEL', wavehashes[-1]:'R_MODEL'} #because the order of camera are not right in target class
+            wavelength = {'B_WAVELENGTH':dwave[wavehashes[0]], 'Z_WAVELENGTH':dwave[wavehashes[1]], 'R_WAVELENGTH':dwave[wavehashes[-1]]}
+        else:
+            model_flux  = {'TARGETID':[], 'BRZ_MODEL':[]} #dictionary for saving the model data
+            hashkeys = {wavehashes[0]:'BRZ_MODEL'}
+            wavelength = {'BRZ_WAVELENGTH':dwave[wavehashes[0]]}
         
-        i = 0
-        model_flux  = dict()
+        i = 0 # counter for redrockdata
+
         for tg in local_targets:
-            model_flux[tg.id] = {}
+            model_flux['TARGETID'].append(tg.id)
             coeff, arch_inds, tdata  = self.return_coeff_per_camera(i, tg, arrtype, dedges, dwave, redrockdata, deg_legendre, ncam)
-            all_Rcsr = {}
-            k = 0
             for s in tg.spectra:
-                key = s.wavehash
-                Res = tg.spectra[k].Rcsr
-                res_mod = Res.dot(tdata[key])
-                model_flux[tg.id][key] = res_mod.dot(coeff)
-                k = k+1
+                key = hashkeys[s.wavehash]
+                res_mod = s.Rcsr.dot(tdata[s.wavehash])
+                model_flux[key].append(res_mod.dot(coeff))
             i = i+1  
-        return model_flux   
+        return Table(model_flux), Table(wavelength)
 
 class All_archetypes():
     """Class to store all different archetypes of all the different spectype.
