@@ -699,8 +699,8 @@ def get_spectra_and_model(targets=None, redrockdata=None, templates=None):
         #define dictionary to save the model data
         if len(wavehashes)>1:
             model_flux  = {'TARGETID':[], 'B_MODEL':[], 'R_MODEL':[], 'Z_MODEL':[]} 
-            hashkeys = {wavehashes[0]:'B_MODEL', wavehashes[1]:'Z_MODEL', wavehashes[-1]:'R_MODEL'} #because the order of camera are not right in target class
-            wavelength = {'B_WAVELENGTH':dwave[wavehashes[0]], 'Z_WAVELENGTH':dwave[wavehashes[1]], 'R_WAVELENGTH':dwave[wavehashes[-1]]}
+            hashkeys = {wavehashes[0]:'B_MODEL', wavehashes[-1]:'R_MODEL', wavehashes[1]:'Z_MODEL'} #because the order of camera are not right in target class
+            wavelength = {'B_WAVELENGTH':dwave[wavehashes[0]], 'R_WAVELENGTH':dwave[wavehashes[-1]], 'Z_WAVELENGTH':dwave[wavehashes[1]]}
         else:
             model_flux  = {'TARGETID':[], 'BRZ_MODEL':[]} #dictionary for saving the model data
             hashkeys = {wavehashes[0]:'BRZ_MODEL'}
@@ -715,7 +715,7 @@ def get_spectra_and_model(targets=None, redrockdata=None, templates=None):
                 all_Rcsr[key] = s.Rcsr
             model_flux= eval_model_for_one_spectra(redrockdata[i], dwave, R=all_Rcsr, model_flux=model_flux, hashkeys=hashkeys, templates=templates)
             i = i+1
-        return Table(model_flux), Table(wavelength)
+        return Table(model_flux), wavelength
     else:
         print('Target object not provided..\n')
         return

@@ -137,17 +137,21 @@ def write_bestmodel(outfile, zbest, modeldict, wavedict, template_version, arche
             setdep(header, key, os.environ[key])
     
     assert zbest['TARGETID'].data==np.array(modeldict['TARGETID'])
+    assert all(modeldict.keys()[1:])==all(wavedict.keys())
     zbest.meta['EXTNAME'] = 'REDSHIFTS'
     hx = fits.HDUList()
     hx.append(fits.PrimaryHDU(header=header))
     hx.append(fits.convenience.table_to_hdu(zbest))
-
-    for key1, key2 in zip(modeldict.keys()[1:],wavedict.keys()[1:]) :
-        modeldict[key1].meta['EXTNAME'] = key1
-        wavedict[key2].meta['EXTNAME'] = key2
-        hx.append(fits.convenience.table_to_hdu(Table(modeldict[key1])))
-        hx.append(fits.convenience.table_to_hdu(Table(wavedict[key2])))
-
+    print(wavedict.keys())
+    for key1, key2 in zip(modeldict.keys()[1:],wavedict.keys()):
+        hdu = fits.ImageHDU(name=key1)
+        hdu.data = modeldict[key1].data
+        hx.append(hdu)
+        hdu = fits.ImageHDU(name=key2)
+        hdu.data = wavedict[key2]
+        hdu.header["BUNIT"] = "Angstrom"
+        hx.append(hdu)
+        
     outfile = os.path.expandvars(outfile)
     outdir = os.path.dirname(os.path.abspath(outfile))
     if not os.path.exists(outdir):
