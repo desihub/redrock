@@ -975,15 +975,16 @@ def rrdesi(options=None, comm=None):
                         targets.tsnr2,
                         template_version, archetype_version,
                         spec_header=targets.header0)
-
-        if args.model is not None and comm_rank==0:
-            #import pdb;pdb.set_trace()
-            #all_model = get_spectra_and_model(targets=targets, redrockdata=zbest, templates=None)
-            archetype = Archetype(args.archetypes)
-            all_model = archetype.get_spectra_and_archetype_model(targets=targets, redrockdata=zbest, deg_legendre=args.archetype_legendre_degree, ncam=ncamera)
-            import pdb;pdb.set_trace()
-            print(all_model)
         stop = elapsed(start, f"Writing {args.outfile} took", comm=comm)
+        
+        if args.model is not None and comm_rank==0:
+            if args.archetypes is not None:
+                print('MODEL: Estimating Archetype best-fit models for the targets')
+                archetype = Archetype(args.archetypes)
+                all_model = archetype.get_spectra_and_archetype_model(targets=targets, redrockdata=zbest, deg_legendre=args.archetype_legendre_degree, ncam=ncamera)
+            else:
+                print('MODEL: Estimating redrock PCA best-fit models for the targets')
+                all_model = get_spectra_and_model(targets=targets, redrockdata=zbest, templates=None)
 
     except Exception as err:
         exc_type, exc_value, exc_traceback = sys.exc_info()

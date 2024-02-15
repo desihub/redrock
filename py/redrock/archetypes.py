@@ -347,24 +347,39 @@ class Archetype():
             #print(z, zzchi2[iBest], zzcoeff[iBest], self._full_type[iBest])
             return zzchi2[iBest], zzcoeff[iBest], self._full_type[iBest]
 
-    def return_coeff_per_camera(self, i, tg, arrtype, dedges, dwave, redrockdata, deg_legendre, ncam):
+
+    def eval_tdata(self, arrtype, legendre, binned, dwave, nleg, ngals, ncam):
+
+        tdata, tdata2 = dict(), dict()
+        nbasis = ngals + nleg*ncam
+        for hs, wave in dwave.items():
+            if nleg > 0:
+                tdata[hs] = arrtype.append(binned[hs].T, legendre[hs], axis=0).T
+            else:
+                tdata[hs] = binned[hs]
+        for i, hs in enumerate(tdata):
+            tdata2[hs] = np.zeros((tdata[hs].shape[0], nbasis))
+            for k in range(ngals):
+                tdata2[hs][:,k] = tdata[hs][:,k] # these are nearest archetype
+            if nleg>0:
+                for k in range(ngals, ngals+nleg):
+                    tdata2[hs][:,k+nleg*i] = tdata[hs][:,k] # Legendre polynomials terms
+        return tdata2
+
+    def return_coeff_per_camera(self, i, tg, arrtype, dedges, dwave, redrockdata, deg_legendre, ncam, ngals=1):
 
         z = redrockdata['Z'][i]
+
         arch_inds = np.array(redrockdata['SUBTYPE'][i].split('_')[1:], dtype='int32')
+        print(arch_inds)
         nbasis = ncam*deg_legendre + len(arch_inds)
         coeff = redrockdata['COEFF'][i][0:nbasis]
-        if deg_legendre==0:
-            coeff = {hs:np.array([coeff[0]]) for hs in dwave.keys()}
-        else:
-            a0 = [coeff[kk] for kk in range(len(arch_inds))]
-            split_coeff = np.split(coeff[len(arch_inds):], ncam)
-            coeff = {hs:np.array(a0+split_coeff[0].tolist()) for hs in dwave.keys()}
         trans = { hs:transmission_Lyman(z,w) for hs, w in dwave.items() }
         binned = self.rebin_template_batch(z, dwave, trapz=True, dedges=dedges, indx=arch_inds, use_gpu=False)
-        binned = {hs:trans[hs]*binned[hs] for hs, w in dwave.items() }
+        binned = {hs:trans[hs][:,None]*binned[hs] for hs, w in dwave.items() }
         legendre = tg.legendre(nleg=deg_legendre, use_gpu=False)
-        tdata = {hs:arrtype.append(binned[hs][:,None],legendre[hs].transpose(), axis=1 ) for hs, wave in dwave.items() }
-
+        tdata = self.eval_tdata(arrtype, legendre, binned, dwave, deg_legendre, ngals, ncam)
+    
         return coeff, arch_inds, tdata
 
     def get_spectra_and_archetype_model(self, targets=None, redrockdata=None, deg_legendre=None, ncam=3):
@@ -379,19 +394,18 @@ class Archetype():
         i = 0
         model_flux  = dict()
         for tg in local_targets:
+            model_flux[tg.id] = {}
             coeff, arch_inds, tdata  = self.return_coeff_per_camera(i, tg, arrtype, dedges, dwave, redrockdata, deg_legendre, ncam)
             all_Rcsr = {}
             k = 0
             for s in tg.spectra:
                 key = s.wavehash
-                print(s.Rcsr)
-                model_flux[tg.id][key] = tg.spectra[k].Rcsr.dot(tdata[key])
-                model_flux[tg.id][key] = model_flux[key].dot(coeff[key])
+                Res = tg.spectra[k].Rcsr
+                res_mod = Res.dot(tdata[key])
+                model_flux[tg.id][key] = res_mod.dot(coeff)
                 k = k+1
             i = i+1  
         return model_flux   
-            
-
 
 class All_archetypes():
     """Class to store all different archetypes of all the different spectype.
