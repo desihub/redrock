@@ -43,7 +43,6 @@ class Spectrum(object):
             self.wavehash = hash((len(wave), wave[0], wave[1], wave[-2], wave[-1], R.data.shape[0]))
         else:
             self.wavehash = hash((len(wave), wave[0], wave[1], wave[-2], wave[-1]))
-
         #It is much more efficient to calculate edges once if rebinning
         #and copy to GPU and store here rather than doing this every time
         self._gpuwave = None

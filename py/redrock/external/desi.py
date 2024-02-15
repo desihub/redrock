@@ -1028,9 +1028,11 @@ def rrdesi(options=None, comm=None):
                         targets.tsnr2,
                         template_version, archetype_version,
                         spec_header=targets.header0)
+                #zbest = comm.bcast(zbest, root=1)
+        
         stop = elapsed(start, f"Writing {args.outfile} took", comm=comm)
       
-        if args.model is not None and comm_rank==0:
+        if args.model is not None:
             if args.archetypes is not None:
                 print('MODEL: Estimating Archetype best-fit models for the targets')
                 archetype = Archetype(args.archetypes)
@@ -1039,8 +1041,14 @@ def rrdesi(options=None, comm=None):
                 print('MODEL: Estimating redrock PCA best-fit models for the targets')
                 all_model, wavedict = get_spectra_and_model(targets=targets, redrockdata=zbest, templates=None)
             
-            write_bestmodel(args.model, zbest, all_model, wavedict, template_version, archetype_version)
-            stop = elapsed(start, f"Estimating model took", comm=comm)
+        # if targets.comm is not None:
+        #     all_model= targets.comm.gather(all_model, root=0)
+        # else:
+        #     all_model = [ all_model ]
+    
+        
+        write_bestmodel(args.model, zbest, all_model, wavedict, template_version, archetype_version)
+        stop = elapsed(start, f"Estimating model took", comm=comm)
 
     except Exception as err:
         exc_type, exc_value, exc_traceback = sys.exc_info()
