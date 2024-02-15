@@ -969,6 +969,7 @@ def rrdesi(options=None, comm=None):
                     archetypes = All_archetypes(archetypes_dir=args.archetypes,
                                                 verbose=(comm_rank==0)).archetypes
                     archetype_version = {name:arch._version for name, arch in archetypes.items() }
+                    stop = elapsed(start, f"Estimating model took", comm=comm)
 
                 write_zbest(args.outfile, zbest,
                         targets.fibermap, targets.exp_fibermap,

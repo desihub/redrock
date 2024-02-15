@@ -371,7 +371,6 @@ class Archetype():
         z = redrockdata['Z'][i]
 
         arch_inds = np.array(redrockdata['SUBTYPE'][i].split('_')[1:], dtype='int32')
-        print(arch_inds)
         nbasis = ncam*deg_legendre + len(arch_inds)
         coeff = redrockdata['COEFF'][i][0:nbasis]
         trans = { hs:transmission_Lyman(z,w) for hs, w in dwave.items() }
