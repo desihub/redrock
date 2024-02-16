@@ -1032,12 +1032,7 @@ def rrdesi(options=None, comm=None):
             zbest = comm.bcast(zbest, root=0)
         
             stop = elapsed(start, f"Writing {args.outfile} took", comm=comm)
-      
         if args.model is not None:
-            if args.archetypes is not None and comm==0:
-                print('MODEL: Estimating Archetype best-fit models for the targets')
-            else:
-                print('MODEL: Estimating redrock PCA best-fit models for the targets')
             if args.archetypes is not None:
                 archetype = Archetype(args.archetypes)
                 all_model, wavedict = archetype.get_spectra_and_archetype_model(targets=targets, redrockdata=zbest, deg_legendre=args.archetype_legendre_degree, ncam=ncamera)
@@ -1049,6 +1044,10 @@ def rrdesi(options=None, comm=None):
             else:
                 all_model = [ all_model ]
             if comm_rank == 0:
+                if args.archetypes is not None:
+                    print('MODEL: Estimating Archetype best-fit models for the targets')
+                else:
+                    print('MODEL: Estimating redrock PCA best-fit models for the targets')
                 all_model = vstack(all_model)
                 xsorted = np.argsort(all_model['TARGETID'])
                 ypos = np.searchsorted(all_model['TARGETID'][xsorted], zbest['TARGETID'])
