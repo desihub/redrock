@@ -1048,7 +1048,7 @@ def rrdesi(options=None, comm=None):
                 all_model = [ all_model ]
             if comm_rank == 0:
                 all_model = vstack(all_model)
-                _, inds,_ = np.intersect1d(all_model['TARGETID'], zbest['TARGETID'], return_indices=True)
+                _, inds,_ = np.intersect1d(zbest['TARGETID'], all_model['TARGETID'], return_indices=True)
                 write_bestmodel(args.model, zbest, all_model[inds], wavedict, template_version, archetype_version)
                 del all_model    
             stop = elapsed(start, f"Estimating model took", comm=comm)
