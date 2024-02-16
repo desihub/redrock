@@ -136,7 +136,7 @@ def write_bestmodel(outfile, zbest, modeldict, wavedict, template_version, arche
         if key in os.environ:
             setdep(header, key, os.environ[key])
     
-    assert zbest['TARGETID'].data==np.array(modeldict['TARGETID'])
+    np.testing.assert_array_equal(zbest['TARGETID'].data==modeldict['TARGETID'])
     assert all(modeldict.keys()[1:])==all(wavedict.keys())
     zbest.meta['EXTNAME'] = 'REDSHIFTS'
     hx = fits.HDUList()
@@ -963,6 +963,7 @@ def rrdesi(options=None, comm=None):
 
         stop = elapsed(start, "Computing redshifts", comm=comm)
 
+        zbest = None
         # Set some DESI-specific ZWARN bits from input fibermap
         if comm_rank == 0:
             fiberstatus = targets.fibermap['COADD_FIBERSTATUS']
@@ -1028,27 +1029,27 @@ def rrdesi(options=None, comm=None):
                         targets.tsnr2,
                         template_version, archetype_version,
                         spec_header=targets.header0)
-                #zbest = comm.bcast(zbest, root=1)
+            zbest = comm.bcast(zbest, root=0)
         
-        stop = elapsed(start, f"Writing {args.outfile} took", comm=comm)
+            stop = elapsed(start, f"Writing {args.outfile} took", comm=comm)
       
-        if args.model is not None:
-            if args.archetypes is not None:
-                print('MODEL: Estimating Archetype best-fit models for the targets')
-                archetype = Archetype(args.archetypes)
-                all_model, wavedict = archetype.get_spectra_and_archetype_model(targets=targets, redrockdata=zbest, deg_legendre=args.archetype_legendre_degree, ncam=ncamera)
+            if args.model is not None:
+                if args.archetypes is not None:
+                    print('MODEL: Estimating Archetype best-fit models for the targets')
+                    archetype = Archetype(args.archetypes)
+                    all_model, wavedict = archetype.get_spectra_and_archetype_model(targets=targets, redrockdata=zbest, deg_legendre=args.archetype_legendre_degree, ncam=ncamera)
+                else:
+                    print('MODEL: Estimating redrock PCA best-fit models for the targets')
+                    all_model, wavedict = get_spectra_and_model(targets=targets, redrockdata=zbest, templates=None)
+                
+            if targets.comm is not None:
+                all_model= targets.comm.gather(all_model, root=0)
             else:
-                print('MODEL: Estimating redrock PCA best-fit models for the targets')
-                all_model, wavedict = get_spectra_and_model(targets=targets, redrockdata=zbest, templates=None)
-            
-        # if targets.comm is not None:
-        #     all_model= targets.comm.gather(all_model, root=0)
-        # else:
-        #     all_model = [ all_model ]
+                all_model = [ all_model ]
     
         
-        write_bestmodel(args.model, zbest, all_model, wavedict, template_version, archetype_version)
-        stop = elapsed(start, f"Estimating model took", comm=comm)
+            write_bestmodel(args.model, zbest, all_model, wavedict, template_version, archetype_version)
+            stop = elapsed(start, f"Estimating model took", comm=comm)
 
     except Exception as err:
         exc_type, exc_value, exc_traceback = sys.exc_info()
