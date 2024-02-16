@@ -136,7 +136,7 @@ def write_bestmodel(outfile, zbest, modeldict, wavedict, template_version, arche
         if key in os.environ:
             setdep(header, key, os.environ[key])
     
-    np.testing.assert_array_equal(zbest['TARGETID'].data, modeldict['TARGETID'])
+    np.testing.assert_array_equal(zbest['TARGETID'].data, modeldict['TARGETID'].data)
     assert all(modeldict.keys()[1:])==all(wavedict.keys())
     zbest.meta['EXTNAME'] = 'REDSHIFTS'
     hx = fits.HDUList()
@@ -1034,12 +1034,14 @@ def rrdesi(options=None, comm=None):
             stop = elapsed(start, f"Writing {args.outfile} took", comm=comm)
       
         if args.model is not None:
-            if args.archetypes is not None:
+            if args.archetypes is not None and comm==0:
                 print('MODEL: Estimating Archetype best-fit models for the targets')
+            else:
+                print('MODEL: Estimating redrock PCA best-fit models for the targets')
+            if args.archetypes is not None:
                 archetype = Archetype(args.archetypes)
                 all_model, wavedict = archetype.get_spectra_and_archetype_model(targets=targets, redrockdata=zbest, deg_legendre=args.archetype_legendre_degree, ncam=ncamera)
             else:
-                print('MODEL: Estimating redrock PCA best-fit models for the targets')
                 all_model, wavedict = get_spectra_and_model(targets=targets, redrockdata=zbest, templates=None)
             
             if targets.comm is not None:
@@ -1048,8 +1050,10 @@ def rrdesi(options=None, comm=None):
                 all_model = [ all_model ]
             if comm_rank == 0:
                 all_model = vstack(all_model)
-                _, inds,_ = np.intersect1d(zbest['TARGETID'], all_model['TARGETID'], return_indices=True)
-                write_bestmodel(args.model, zbest, all_model[inds], wavedict, template_version, archetype_version)
+                xsorted = np.argsort(all_model['TARGETID'])
+                ypos = np.searchsorted(all_model['TARGETID'][xsorted], zbest['TARGETID'])
+                indices = xsorted[ypos]
+                write_bestmodel(args.model, zbest, all_model[indices], wavedict, template_version, archetype_version)
                 del all_model    
             stop = elapsed(start, f"Estimating model took", comm=comm)
 
