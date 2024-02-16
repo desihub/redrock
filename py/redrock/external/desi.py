@@ -15,7 +15,7 @@ import argparse
 import numpy as np
 
 from astropy.io import fits
-from astropy.table import Table
+from astropy.table import Table, vstack
 
 from desiutil.io import encode_table
 from desiutil.depend import add_dependencies, setdep
@@ -136,20 +136,20 @@ def write_bestmodel(outfile, zbest, modeldict, wavedict, template_version, arche
         if key in os.environ:
             setdep(header, key, os.environ[key])
     
-    np.testing.assert_array_equal(zbest['TARGETID'].data==modeldict['TARGETID'])
+    np.testing.assert_array_equal(zbest['TARGETID'].data, modeldict['TARGETID'])
     assert all(modeldict.keys()[1:])==all(wavedict.keys())
     zbest.meta['EXTNAME'] = 'REDSHIFTS'
     hx = fits.HDUList()
     hx.append(fits.PrimaryHDU(header=header))
     hx.append(fits.convenience.table_to_hdu(zbest))
     print(wavedict.keys())
-    for key1, key2 in zip(modeldict.keys()[1:],wavedict.keys()):
+    for key1, key2 in zip(wavedict.keys(), modeldict.keys()[1:]):
         hdu = fits.ImageHDU(name=key1)
-        hdu.data = modeldict[key1].data
+        hdu.data = wavedict[key1]
+        hdu.header["BUNIT"] = "Angstrom"
         hx.append(hdu)
         hdu = fits.ImageHDU(name=key2)
-        hdu.data = wavedict[key2]
-        hdu.header["BUNIT"] = "Angstrom"
+        hdu.data = modeldict[key2].data
         hx.append(hdu)
         
     outfile = os.path.expandvars(outfile)
@@ -1033,22 +1033,24 @@ def rrdesi(options=None, comm=None):
         
             stop = elapsed(start, f"Writing {args.outfile} took", comm=comm)
       
-            if args.model is not None:
-                if args.archetypes is not None:
-                    print('MODEL: Estimating Archetype best-fit models for the targets')
-                    archetype = Archetype(args.archetypes)
-                    all_model, wavedict = archetype.get_spectra_and_archetype_model(targets=targets, redrockdata=zbest, deg_legendre=args.archetype_legendre_degree, ncam=ncamera)
-                else:
-                    print('MODEL: Estimating redrock PCA best-fit models for the targets')
-                    all_model, wavedict = get_spectra_and_model(targets=targets, redrockdata=zbest, templates=None)
-                
+        if args.model is not None:
+            if args.archetypes is not None:
+                print('MODEL: Estimating Archetype best-fit models for the targets')
+                archetype = Archetype(args.archetypes)
+                all_model, wavedict = archetype.get_spectra_and_archetype_model(targets=targets, redrockdata=zbest, deg_legendre=args.archetype_legendre_degree, ncam=ncamera)
+            else:
+                print('MODEL: Estimating redrock PCA best-fit models for the targets')
+                all_model, wavedict = get_spectra_and_model(targets=targets, redrockdata=zbest, templates=None)
+            
             if targets.comm is not None:
                 all_model= targets.comm.gather(all_model, root=0)
             else:
                 all_model = [ all_model ]
-    
-        
-            write_bestmodel(args.model, zbest, all_model, wavedict, template_version, archetype_version)
+            if comm_rank == 0:
+                all_model = vstack(all_model)
+                _, inds,_ = np.intersect1d(all_model['TARGETID'], zbest['TARGETID'], return_indices=True)
+                write_bestmodel(args.model, zbest, all_model[inds], wavedict, template_version, archetype_version)
+                del all_model    
             stop = elapsed(start, f"Estimating model took", comm=comm)
 
     except Exception as err:
