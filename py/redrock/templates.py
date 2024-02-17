@@ -682,20 +682,21 @@ def eval_model(data, wave, R=None, templates=None):
             out[i] = R[i].dot(mx)
     return out
 
+def get_templates():
+    templates = dict()
+    templatefn = find_templates()
+    for fn in templatefn:
+        tx = Template(fn)
+        templates[(tx.template_type, tx.sub_type)] = tx
+    return templates
+
 def get_spectra_and_model(targets=None, redrockdata=None, templates=None):
     
     dwave = targets.wavegrids()
+    wave = np.concatenate([w for w in dwave.values()])
+    wavehashes = list(dwave.keys())
     if targets is not None:
-        if templates is None:
-            templates = dict()
-            templatefn = find_templates()
-            for fn in templatefn:
-                tx = Template(fn)
-                templates[(tx.template_type, tx.sub_type)] = tx
         local_targets = targets.local()
-
-        wavehashes = [s.wavehash for s in local_targets[0].spectra] #getting the wavehashes
-
         #define dictionary to save the model data
         if len(wavehashes)>1:
             model_flux  = {'TARGETID':[], 'B_MODEL':[], 'R_MODEL':[], 'Z_MODEL':[]} 
@@ -706,15 +707,15 @@ def get_spectra_and_model(targets=None, redrockdata=None, templates=None):
             hashkeys = {wavehashes[0]:'BRZ_MODEL'}
             wavelength = {'BRZ_WAVELENGTH':dwave[wavehashes[0]]}
 
-        i = 0 # counter for redrockdata
         for tg in local_targets:
+            i = np.where(redrockdata['TARGETID'].data==tg.id)[0][0]
             model_flux['TARGETID'].append(tg.id)
             all_Rcsr = {}
             for s in tg.spectra:
                 key = s.wavehash
                 all_Rcsr[key] = s.Rcsr
             model_flux= eval_model_for_one_spectra(redrockdata[i], dwave, R=all_Rcsr, model_flux=model_flux, hashkeys=hashkeys, templates=templates)
-            i = i+1
+            
         return Table(model_flux), wavelength
     else:
         print('Target object not provided..\n')

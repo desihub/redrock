@@ -20,6 +20,8 @@ from .igm import transmission_Lyman
 
 from .zscan import per_camera_coeff_with_least_square_batch
 
+from .templates import eval_model_for_one_spectra
+
 class Archetype():
     """Class to store all different archetypes from the same spectype.
 
@@ -360,6 +362,7 @@ class Archetype():
                 tdata[hs] = binned[hs]
         for i, hs in enumerate(tdata):
             tdata2[hs] = np.zeros((tdata[hs].shape[0], nbasis))
+            
             for k in range(ngals):
                 tdata2[hs][:,k] = tdata[hs][:,k] # these are nearest archetype
             if nleg>0:
@@ -382,15 +385,14 @@ class Archetype():
     
         return coeff, arch_inds, tdata
 
-    def get_spectra_and_archetype_model(self, targets=None, redrockdata=None, deg_legendre=None, ncam=3):
-        
+    def get_spectra_and_archetype_model(self, targets=None, redrockdata=None, deg_legendre=None, ncam=3, templates=None):
+
         dwave = targets.wavegrids()
+        wavehashes = list(dwave.keys())
         arrtype = np
         dedges = None
     
         local_targets = targets.local()
-        wavehashes = [s.wavehash for s in local_targets[0].spectra] #getting the wavehashes
-
         #define dictionary to save the model data
         if len(wavehashes)>1:
             model_flux  = {'TARGETID':[], 'B_MODEL':[], 'R_MODEL':[], 'Z_MODEL':[]} 
@@ -400,17 +402,22 @@ class Archetype():
             model_flux  = {'TARGETID':[], 'BRZ_MODEL':[]} #dictionary for saving the model data
             hashkeys = {wavehashes[0]:'BRZ_MODEL'}
             wavelength = {'BRZ_WAVELENGTH':dwave[wavehashes[0]]}
-        
-        i = 0 # counter for redrockdata
 
         for tg in local_targets:
+            i = np.where(redrockdata['TARGETID'].data==tg.id)[0][0]
             model_flux['TARGETID'].append(tg.id)
-            coeff, arch_inds, tdata  = self.return_coeff_per_camera(i, tg, arrtype, dedges, dwave, redrockdata, deg_legendre, ncam)
-            for s in tg.spectra:
-                key = hashkeys[s.wavehash]
-                res_mod = s.Rcsr.dot(tdata[s.wavehash])
-                model_flux[key].append(res_mod.dot(coeff))
-            i = i+1  
+            if redrockdata[i]['SPECTYPE']!=self._rrtype:
+                all_Rcsr = {}
+                for s in tg.spectra:
+                    key = s.wavehash
+                    all_Rcsr[key] = s.Rcsr
+                model_flux= eval_model_for_one_spectra(redrockdata[i], dwave, R=all_Rcsr, model_flux=model_flux, hashkeys=hashkeys, templates=templates)
+            else:
+                coeff, arch_inds, tdata  = self.return_coeff_per_camera(i, tg, arrtype, dedges, dwave, redrockdata, deg_legendre, ncam)
+                for s in tg.spectra:
+                    key = hashkeys[s.wavehash]
+                    res_mod = s.Rcsr.dot(tdata[s.wavehash])
+                    model_flux[key].append(res_mod.dot(coeff))
         return Table(model_flux), wavelength
 
 class All_archetypes():

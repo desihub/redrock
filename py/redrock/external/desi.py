@@ -29,7 +29,7 @@ from ..utils import elapsed, get_mp, distribute_work, getGPUCountMPI
 
 from ..targets import (Spectrum, Target, DistTargets)
 
-from ..templates import load_dist_templates, get_spectra_and_model
+from ..templates import load_dist_templates, get_spectra_and_model, get_templates
 
 from ..results import write_zscan
 
@@ -142,7 +142,7 @@ def write_bestmodel(outfile, zbest, modeldict, wavedict, template_version, arche
     hx = fits.HDUList()
     hx.append(fits.PrimaryHDU(header=header))
     hx.append(fits.convenience.table_to_hdu(zbest))
-    print(wavedict.keys())
+
     for key1, key2 in zip(wavedict.keys(), modeldict.keys()[1:]):
         hdu = fits.ImageHDU(name=key1)
         hdu.data = wavedict[key1]
@@ -1033,28 +1033,35 @@ def rrdesi(options=None, comm=None):
         
             stop = elapsed(start, f"Writing {args.outfile} took", comm=comm)
         if args.model is not None:
+            templates = None
+            if comm_rank==0:
+                templates = get_templates()
+            templates = comm.bcast(templates, root=0)
+
             if args.archetypes is not None:
+                if comm_rank==0:
+                    print('\nMODEL: Estimating Archetype best-fit models for the targets')
                 archetype = Archetype(args.archetypes)
-                all_model, wavedict = archetype.get_spectra_and_archetype_model(targets=targets, redrockdata=zbest, deg_legendre=args.archetype_legendre_degree, ncam=ncamera)
+                allmodels, wavedict = archetype.get_spectra_and_archetype_model(targets=targets, redrockdata=zbest, deg_legendre=args.archetype_legendre_degree, ncam=ncamera, templates=templates)
             else:
-                all_model, wavedict = get_spectra_and_model(targets=targets, redrockdata=zbest, templates=None)
+                if comm_rank==0:
+                    print('\nMODEL: Estimating redrock PCA best-fit models for the targets')
+                allmodels, wavedict = get_spectra_and_model(targets=targets, redrockdata=zbest, templates=templates)
             
             if targets.comm is not None:
-                all_model= targets.comm.gather(all_model, root=0)
+                all_model= targets.comm.gather(allmodels, root=0)
             else:
-                all_model = [ all_model ]
-            if comm_rank == 0:
-                if args.archetypes is not None:
-                    print('MODEL: Estimating Archetype best-fit models for the targets')
-                else:
-                    print('MODEL: Estimating redrock PCA best-fit models for the targets')
-                all_model = vstack(all_model)
+                all_model = [ allmodels ]
+            if comm_rank==0:
+                all_model = vstack(all_model) #combining all targets
+                #matching model targets to zebst target order
                 xsorted = np.argsort(all_model['TARGETID'])
                 ypos = np.searchsorted(all_model['TARGETID'][xsorted], zbest['TARGETID'])
                 indices = xsorted[ypos]
                 write_bestmodel(args.model, zbest, all_model[indices], wavedict, template_version, archetype_version)
-                del all_model    
-            stop = elapsed(start, f"Estimating model took", comm=comm)
+                del all_model
+    
+            stop = elapsed(start, f"Writing {args.model} took", comm=comm)
 
     except Exception as err:
         exc_type, exc_value, exc_traceback = sys.exc_info()
