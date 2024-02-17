@@ -1029,15 +1029,17 @@ def rrdesi(options=None, comm=None):
                         targets.tsnr2,
                         template_version, archetype_version,
                         spec_header=targets.header0)
-            zbest = comm.bcast(zbest, root=0)
-        
+            
+            if comm is not None:
+                zbest = comm.bcast(zbest, root=0)
+
             stop = elapsed(start, f"Writing {args.outfile} took", comm=comm)
         if args.model is not None:
             templates = None
             if comm_rank==0:
                 templates = get_templates()
-            templates = comm.bcast(templates, root=0)
-
+            if comm is not None:
+                templates = comm.bcast(templates, root=0)
             if args.archetypes is not None:
                 if comm_rank==0:
                     print('\nMODEL: Estimating Archetype best-fit models for the targets')
@@ -1052,6 +1054,7 @@ def rrdesi(options=None, comm=None):
                 all_model= targets.comm.gather(allmodels, root=0)
             else:
                 all_model = [ allmodels ]
+
             if comm_rank==0:
                 all_model = vstack(all_model) #combining all targets
                 #matching model targets to zebst target order
