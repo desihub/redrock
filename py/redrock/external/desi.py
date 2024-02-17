@@ -1056,7 +1056,15 @@ def rrdesi(options=None, comm=None):
                 all_model = [ allmodels ]
 
             if comm_rank==0:
-                all_model = vstack(all_model) #combining all targets
+                if args.ntargets is not None:
+                    cc_model = []
+                    for pp in all_model:
+                        if len(pp)>0: # to take care if number of processes is bugger than ntargets
+                            cc_model.append(pp)
+                else:
+                    cc_model =all_model.copy()
+                
+                all_model = vstack(cc_model) #combining all targets
                 #matching model targets to zebst target order
                 xsorted = np.argsort(all_model['TARGETID'])
                 ypos = np.searchsorted(all_model['TARGETID'][xsorted], zbest['TARGETID'])
