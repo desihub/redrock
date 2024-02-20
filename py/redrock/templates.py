@@ -690,7 +690,7 @@ def get_templates():
         templates[(tx.template_type, tx.sub_type)] = tx
     return templates
 
-def get_spectra_and_model(targets=None, redrockdata=None, templates=None):
+def get_spectra_and_model(targets=None, redrockdata=None, templates=None, comm=None):
     
     dwave = targets.wavegrids()
     wave = np.concatenate([w for w in dwave.values()])

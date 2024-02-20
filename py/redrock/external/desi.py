@@ -1034,6 +1034,7 @@ def rrdesi(options=None, comm=None):
                 zbest = comm.bcast(zbest, root=0)
 
             stop = elapsed(start, f"Writing {args.outfile} took", comm=comm)
+            
         if args.model is not None:
             templates = None
             if comm_rank==0:
@@ -1056,10 +1057,10 @@ def rrdesi(options=None, comm=None):
                 all_model = [ allmodels ]
 
             if comm_rank==0:
-                if args.ntargets is not None:
+                if args.ntargets is not None or args.targetids is not None:
                     cc_model = []
                     for pp in all_model:
-                        if len(pp)>0: # to take care if number of processes is bugger than ntargets
+                        if len(pp)>0: # to take care if number of processes is bigger than ntargets
                             cc_model.append(pp)
                 else:
                     cc_model =all_model.copy()
