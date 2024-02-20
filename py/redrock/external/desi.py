@@ -134,6 +134,7 @@ class DistTargetsDESI(DistTargets):
         cache_Rcsr: pre-calculate and cache sparse CSR format of resolution
             matrix R
         cosmics_nsig (float): cosmic rejection threshold used in coaddition
+        negflux_nsig (float): mask negative flux significance threshold
         capacities (list): (optional) list of process capacities. If None,
             use equal capacity per process. A process with higher capacity
             can handle more work.
@@ -142,7 +143,7 @@ class DistTargetsDESI(DistTargets):
     ### @profile
     def __init__(self, spectrafiles, coadd=True, targetids=None,
                  first_target=None, n_target=None, comm=None, cache_Rcsr=False,
-                 cosmics_nsig=0, capacities=None):
+                 cosmics_nsig=0, negflux_nsig=5, capacities=None):
 
         comm_size = 1
         comm_rank = 0
@@ -462,6 +463,13 @@ class DistTargetsDESI(DistTargets):
                         for trow in self._target_specs[sfile][t]:
                             self._my_data[toff].spectra[tspec_ivar[t]].ivar = \
                                 hdata[trow].astype(np.float64).copy()
+
+                            # mask significantly negative data (set ivar to 0)
+                            sigma = self._my_data[toff].spectra[tspec_ivar[t]].flux * \
+                                    np.sqrt(self._my_data[toff].spectra[tspec_ivar[t]].ivar)
+                            bignegflux = (sigma<-negflux_nsig)
+                            self._my_data[toff].spectra[tspec_ivar[t]].ivar[bignegflux] = 0.0
+
                             tspec_ivar[t] += 1
                     toff += 1
 
@@ -631,6 +639,9 @@ def rrdesi(options=None, comm=None):
 
     parser.add_argument("--cosmics-nsig", type=float, default=0,
         required=False, help="n sigma cosmic ray threshold in coaddition")
+
+    parser.add_argument("--negflux-nsig", type=float, default=5,
+        required=False, help="n sigma negative flux mask threshold")
 
     parser.add_argument("-i", "--infiles", nargs='+', required=True,
             help="Input spectra, coadd, or cframe files")
@@ -837,6 +848,7 @@ def rrdesi(options=None, comm=None):
         targets = DistTargetsDESI(args.infiles, coadd=(not args.allspec),
                                   targetids=targetids, first_target=first_target, n_target=n_target,
                                   comm=comm, cache_Rcsr=True, cosmics_nsig=args.cosmics_nsig,
+                                  negflux_nsig=args.negflux_nsig,
                                   capacities=capacities)
 
         #- Mask some problematic sky lines
