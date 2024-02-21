@@ -694,7 +694,12 @@ def get_spectra_and_model(targets=None, redrockdata=None, templates=None, comm=N
     
     dwave = targets.wavegrids()
     wave = np.concatenate([w for w in dwave.values()])
+    wave_dict = list(targets._wave.values())[0]
+
     wavehashes = list(dwave.keys())
+    bands = wave_dict.keys()
+
+
     if targets is not None:
         local_targets = targets.local()
         #define dictionary to save the model data
@@ -708,6 +713,8 @@ def get_spectra_and_model(targets=None, redrockdata=None, templates=None, comm=N
             wavelength = {'BRZ_WAVELENGTH':dwave[wavehashes[0]]}
 
         for tg in local_targets:
+            if comm is None:
+                tg.sharedmem_unpack()
             i = np.where(redrockdata['TARGETID'].data==tg.id)[0][0]
             model_flux['TARGETID'].append(tg.id)
             all_Rcsr = {}

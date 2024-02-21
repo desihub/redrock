@@ -1034,29 +1034,29 @@ def rrdesi(options=None, comm=None):
                 zbest = comm.bcast(zbest, root=0)
 
             stop = elapsed(start, f"Writing {args.outfile} took", comm=comm)
-            
+
         if args.model is not None:
             templates = None
-            if comm_rank==0:
+            if comm_rank==0 or comm is None:
                 templates = get_templates()
             if comm is not None:
                 templates = comm.bcast(templates, root=0)
             if args.archetypes is not None:
-                if comm_rank==0:
+                if comm_rank==0 or comm is None:
                     print('\nMODEL: Estimating Archetype best-fit models for the targets')
                 archetype = Archetype(args.archetypes)
-                allmodels, wavedict = archetype.get_spectra_and_archetype_model(targets=targets, redrockdata=zbest, deg_legendre=args.archetype_legendre_degree, ncam=ncamera, templates=templates)
+                allmodels, wavedict = archetype.get_spectra_and_archetype_model(targets=targets, redrockdata=zbest, deg_legendre=args.archetype_legendre_degree, ncam=ncamera, templates=templates, comm=comm)
             else:
-                if comm_rank==0:
+                if comm_rank==0 or comm is None:
                     print('\nMODEL: Estimating redrock PCA best-fit models for the targets')
-                allmodels, wavedict = get_spectra_and_model(targets=targets, redrockdata=zbest, templates=templates)
+                allmodels, wavedict = get_spectra_and_model(targets=targets, redrockdata=zbest, templates=templates, comm=comm)
             
             if targets.comm is not None:
                 all_model= targets.comm.gather(allmodels, root=0)
             else:
                 all_model = [ allmodels ]
 
-            if comm_rank==0:
+            if comm_rank==0 or comm is None:
                 if args.ntargets is not None or args.targetids is not None:
                     cc_model = []
                     for pp in all_model:

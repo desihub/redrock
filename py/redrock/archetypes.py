@@ -243,7 +243,7 @@ class Archetype():
         """Get the best archetype for the given redshift and spectype.
 
         Args:
-            spectra (list): list of Spectrum objects.
+            target (object): target object.
             weights (array): concatenated spectral weights (ivar).
             flux (array): concatenated flux values.
             wflux (array): concatenated weighted flux values.
@@ -263,6 +263,7 @@ class Archetype():
 
         """
         spectra = target.spectra
+        print(spectra[0])
         nleg = target.nleg
         legendre = target.legendre(nleg=nleg, use_gpu=use_gpu) #Get previously calculated legendre
 
@@ -385,7 +386,7 @@ class Archetype():
     
         return coeff, arch_inds, tdata
 
-    def get_spectra_and_archetype_model(self, targets=None, redrockdata=None, deg_legendre=None, ncam=3, templates=None):
+    def get_spectra_and_archetype_model(self, targets=None, redrockdata=None, deg_legendre=None, ncam=3, templates=None, comm=None):
 
         dwave = targets.wavegrids()
         wavehashes = list(dwave.keys())
@@ -404,6 +405,8 @@ class Archetype():
             wavelength = {'BRZ_WAVELENGTH':dwave[wavehashes[0]]}
 
         for tg in local_targets:
+            if comm is None:
+                tg.sharedmem_unpack()
             i = np.where(redrockdata['TARGETID'].data==tg.id)[0][0]
             model_flux['TARGETID'].append(tg.id)
             if redrockdata[i]['SPECTYPE']!=self._rrtype:
