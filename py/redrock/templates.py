@@ -691,27 +691,34 @@ def get_templates():
     return templates
 
 def get_spectra_and_model(targets=None, redrockdata=None, templates=None, comm=None):
-    
+
     dwave = targets.wavegrids()
-    wave = np.concatenate([w for w in dwave.values()])
+
     wave_dict = list(targets._wave.values())[0]
-
-    wavehashes = list(dwave.keys())
     bands = wave_dict.keys()
+    wavehashes = list(dwave.keys())
+    band_to_wavehash = {} 
+    wavelengths = {}
 
+    #define dictionary to save the model data
+    model_flux  = {} 
+    model_flux['TARGETID'] = []
 
+    hashkeys = {} 
+
+    #matching wavehases to its band name
+    for key in bands:
+        ukey = key.upper()
+        wavelengths[ukey+'_WAVELENGTH'] = wave_dict[key]
+        for kk in wavehashes:
+            if np.all(wave_dict[key]==dwave[kk]):
+                band_to_wavehash[ukey] = kk
+                model_flux[ukey+'_MODEL'] = []
+                hashkeys[kk] = ukey+'_MODEL'
+ 
     if targets is not None:
         local_targets = targets.local()
-        #define dictionary to save the model data
-        if len(wavehashes)>1:
-            model_flux  = {'TARGETID':[], 'B_MODEL':[], 'R_MODEL':[], 'Z_MODEL':[]} 
-            hashkeys = {wavehashes[0]:'B_MODEL', wavehashes[-1]:'R_MODEL', wavehashes[1]:'Z_MODEL'} #because the order of camera are not right in target class
-            wavelength = {'B_WAVELENGTH':dwave[wavehashes[0]], 'R_WAVELENGTH':dwave[wavehashes[-1]], 'Z_WAVELENGTH':dwave[wavehashes[1]]}
-        else:
-            model_flux  = {'TARGETID':[], 'BRZ_MODEL':[]} #dictionary for saving the model data
-            hashkeys = {wavehashes[0]:'BRZ_MODEL'}
-            wavelength = {'BRZ_WAVELENGTH':dwave[wavehashes[0]]}
-
+        
         for tg in local_targets:
             if comm is None:
                 tg.sharedmem_unpack()
@@ -722,12 +729,11 @@ def get_spectra_and_model(targets=None, redrockdata=None, templates=None, comm=N
                 key = s.wavehash
                 all_Rcsr[key] = s.Rcsr
             model_flux= eval_model_for_one_spectra(redrockdata[i], dwave, R=all_Rcsr, model_flux=model_flux, hashkeys=hashkeys, templates=templates)
-            
-        return Table(model_flux), wavelength
+        
+        return Table(model_flux), wavelengths
     else:
         print('Target object not provided..\n')
         return
-
 
 def eval_model_for_one_spectra(data, dwave, R=None, model_flux=None,hashkeys=None, templates=None):
     

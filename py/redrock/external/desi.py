@@ -115,7 +115,7 @@ def write_bestmodel(outfile, zbest, modeldict, wavedict, template_version, arche
     Args:
         outfile (str): output file name (fits)
         zbest (best fit redshift table)
-        modeldict (dict): dictionary containing best-fit model (across cameras or coadded), fir each targetid, main keys: targetids
+        modeldict (dict): dictionary or table containing best-fit model (across cameras or coadded), fir each targetid, main keys: targetids
         wavedict (dict): wavelength dictionary
         template_version (str): template version used
         archetype_version (str): archetype version used
@@ -136,14 +136,17 @@ def write_bestmodel(outfile, zbest, modeldict, wavedict, template_version, arche
         if key in os.environ:
             setdep(header, key, os.environ[key])
     
+    #sanity check
     np.testing.assert_array_equal(zbest['TARGETID'].data, modeldict['TARGETID'].data)
-    assert all(modeldict.keys()[1:])==all(wavedict.keys())
+    #deleting targetid a they are already in zbest table
+    del modeldict['TARGETID']
+
     zbest.meta['EXTNAME'] = 'REDSHIFTS'
     hx = fits.HDUList()
     hx.append(fits.PrimaryHDU(header=header))
     hx.append(fits.convenience.table_to_hdu(zbest))
-
-    for key1, key2 in zip(wavedict.keys(), modeldict.keys()[1:]):
+    
+    for key1, key2 in zip(wavedict.keys(), modeldict.keys()):
         hdu = fits.ImageHDU(name=key1)
         hdu.data = wavedict[key1]
         hdu.header["BUNIT"] = "Angstrom"
