@@ -703,6 +703,7 @@ def get_spectra_and_model(targets=None, redrockdata=None, templates=None, comm=N
     #define dictionary to save the model data
     model_flux  = {} 
     model_flux['TARGETID'] = []
+    model_flux['COEFFTYPE'] = []
 
     hashkeys = {} 
 
@@ -729,7 +730,6 @@ def get_spectra_and_model(targets=None, redrockdata=None, templates=None, comm=N
                 key = s.wavehash
                 all_Rcsr[key] = s.Rcsr
             model_flux= eval_model_for_one_spectra(redrockdata[i], dwave, R=all_Rcsr, model_flux=model_flux, hashkeys=hashkeys, templates=templates)
-        
         return Table(model_flux), wavelengths
     else:
         print('Target object not provided..\n')
@@ -738,6 +738,8 @@ def get_spectra_and_model(targets=None, redrockdata=None, templates=None, comm=N
 def eval_model_for_one_spectra(data, dwave, R=None, model_flux=None,hashkeys=None, templates=None):
     
     tx = templates[(data['SPECTYPE'], data['SUBTYPE'])]
+    method = tx._method
+    model_flux['COEFFTYPE'].append(method)
     coeff = data['COEFF'][0:tx.nbasis]
     tmodel = tx.flux.T.dot(coeff).T
     for key, wave in dwave.items():

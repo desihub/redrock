@@ -140,6 +140,8 @@ def write_bestmodel(outfile, zbest, modeldict, wavedict, template_version, arche
     np.testing.assert_array_equal(zbest['TARGETID'].data, modeldict['TARGETID'].data)
     #deleting targetid a they are already in zbest table
     del modeldict['TARGETID']
+    zbest['COEFFTYPE'] = modeldict['COEFFTYPE'].copy()
+    del modeldict['COEFFTYPE']
 
     zbest.meta['EXTNAME'] = 'REDSHIFTS'
     hx = fits.HDUList()

@@ -401,6 +401,7 @@ class Archetype():
         #define dictionary to save the model data
         model_flux  = {} 
         model_flux['TARGETID'] = []
+        model_flux['COEFFTYPE'] = []
 
         hashkeys = {} 
 
@@ -433,6 +434,7 @@ class Archetype():
                         key = hashkeys[s.wavehash]
                         res_mod = s.Rcsr.dot(tdata[s.wavehash])
                         model_flux[key].append(res_mod.dot(coeff))
+                    model_flux['COEFFTYPE'].append('ARCHETYPE')
             return Table(model_flux), wavelengths
         else:
             print('Target object not provided..\n')
