@@ -253,8 +253,8 @@ class Archetype():
             n_nearest (int): number of nearest neighbours to be used in chi2 space (including best archetype)
             trans (dict): pass previously calcualated Lyman transmission instead of recalculating
             solve_method (string): bvls or pca
-            use_gpu (bool): use GPU or not
             prior (2d array): prior matrix on coefficients (1/sig**2)
+            use_gpu (bool): use GPU or not
             
         Returns:
             chi2 (float): chi2 of best archetype
@@ -265,6 +265,7 @@ class Archetype():
         spectra = target.spectra
         nleg = target.nleg
         legendre = target.legendre(nleg=nleg, use_gpu=use_gpu) #Get previously calculated legendre
+        bands = target.bands
 
         #Select np or cp for operations as arrtype
         if (use_gpu):
@@ -285,10 +286,9 @@ class Archetype():
         else:
             ncam = 1 # entire spectra
         
-        wkeys = list(dwave.keys())
-        new_keys = [wkeys[0], wkeys[2], wkeys[1]]
-
-        obs_wave = np.concatenate([dwave[key] for key in new_keys])
+        #wkeys = list(dwave.keys())
+        #new_keys = [wkeys[0], wkeys[2], wkeys[1]]
+        #obs_wave = np.concatenate([dwave[key] for key in new_keys])
         
         nleg = legendre[list(legendre.keys())[0]].shape[0]
         zzchi2 = np.zeros(self._narch, dtype=np.float64)
@@ -330,11 +330,12 @@ class Archetype():
             else:
                 tdata[hs] = binned[hs].transpose()[:,:,None]
             nbasis = tdata[hs].shape[2]
+
         if per_camera:
             if (use_gpu):
-                (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, tdata, gpuweights, gpuflux, gpuwflux, nleg, self._narch, method=solve_method, n_nbh=1, prior=prior, use_gpu=use_gpu, ncam=ncam)
+                (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, tdata, gpuweights, gpuflux, gpuwflux, nleg, self._narch, method=solve_method, n_nbh=1, prior=prior, use_gpu=use_gpu, bands=bands)
             else:
-                (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux, nleg, self._narch, method=solve_method, n_nbh=1, prior=prior, use_gpu=use_gpu, ncam=ncam)
+                (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux, nleg, self._narch, method=solve_method, n_nbh=1, prior=prior, use_gpu=use_gpu, bands=bands)
         else:
             if (use_gpu):
                 (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, gpuweights, gpuflux, gpuwflux, self._narch, nbasis, use_gpu=use_gpu)
@@ -349,7 +350,6 @@ class Archetype():
             iBest = np.argmin(zzchi2)
             #print(z, zzchi2[iBest], zzcoeff[iBest], self._full_type[iBest])
             return zzchi2[iBest], zzcoeff[iBest], self._full_type[iBest]
-
 
     def eval_tdata(self, arrtype, legendre, binned, dwave, nleg, ngals, ncam):
 
@@ -385,14 +385,11 @@ class Archetype():
     
         return coeff, arch_inds, tdata
 
-    def get_spectra_and_archetype_model(self, targets=None, redrockdata=None, deg_legendre=None, ncam=3, templates=None, comm=None):
+    def get_spectra_and_archetype_model(self, targets=None, redrockdata=None, deg_legendre=None, ncam=3, templates=None, dwave=None, wave_dict=None, comm=None):
 
         arrtype = np
         dedges = None
-    
-        dwave = targets.wavegrids()
 
-        wave_dict = list(targets._wave.values())[0]
         bands = wave_dict.keys()
         wavehashes = list(dwave.keys())
         band_to_wavehash = {} 

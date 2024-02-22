@@ -690,11 +690,8 @@ def get_templates():
         templates[(tx.template_type, tx.sub_type)] = tx
     return templates
 
-def get_spectra_and_model(targets=None, redrockdata=None, templates=None, comm=None):
+def get_spectra_and_model(targets=None, redrockdata=None, templates=None, dwave=None, wave_dict=None, comm=None):
 
-    dwave = targets.wavegrids()
-
-    wave_dict = list(targets._wave.values())[0]
     bands = wave_dict.keys()
     wavehashes = list(dwave.keys())
     band_to_wavehash = {} 
@@ -719,7 +716,6 @@ def get_spectra_and_model(targets=None, redrockdata=None, templates=None, comm=N
  
     if targets is not None:
         local_targets = targets.local()
-        
         for tg in local_targets:
             if comm is None:
                 tg.sharedmem_unpack()

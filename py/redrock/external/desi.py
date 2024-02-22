@@ -458,7 +458,7 @@ class DistTargetsDESI(DistTargets):
                         for s in range(nspec):
                             sindx = self._target_specs[sfile][t][s]
                             speclist.append(Spectrum(self._wave[sfile][b],
-                                None, None, None, None))
+                                None, None, None, None, b))
 
             self._my_data.append(Target(t, speclist, coadd=False))
 
@@ -908,8 +908,10 @@ def rrdesi(options=None, comm=None):
                     ii |= (9792. <= s.wave) & (s.wave <= 9795.)
                     s.ivar[ii] = 0.0
 
-        # Get the dictionary of wavelength grids
+        # Get the dictionary of wavelength grids (with keys as wavehashes)
         dwave = targets.wavegrids()
+        # Get the dictionary of wavelength grids (with keys as camera names)
+        wave_dict = list(targets._wave.values())[0]
         
         ncamera = len(list(dwave.keys())) # number of cameras for given instrument
         if args.archetypes_no_legendre or args.archetypes is None:
@@ -923,7 +925,7 @@ def rrdesi(options=None, comm=None):
                 print('Will be using default archetype values.') 
                 print('number of minimum redshift for which archetype redshift fitting will be done = %d'%(nminima))
 
-            if ncamera>1: 
+            if ncamera>=1: 
                 archetype_legendre_percamera = True
                 if comm_rank == 0 and args.archetypes is not None:
                     print('Number of cameras = %d, percamera fitting will be done'%(ncamera))
@@ -1028,7 +1030,7 @@ def rrdesi(options=None, comm=None):
                     archetypes = All_archetypes(archetypes_dir=args.archetypes,
                                                 verbose=(comm_rank==0)).archetypes
                     archetype_version = {name:arch._version for name, arch in archetypes.items() }
-
+                
                 write_zbest(args.outfile, zbest,
                         targets.fibermap, targets.exp_fibermap,
                         targets.tsnr2,
@@ -1050,11 +1052,11 @@ def rrdesi(options=None, comm=None):
                 if comm_rank==0 or comm is None:
                     print('\nMODEL: Estimating Archetype best-fit models for the targets')
                 archetype = Archetype(args.archetypes)
-                allmodels, wavedict = archetype.get_spectra_and_archetype_model(targets=targets, redrockdata=zbest, deg_legendre=args.archetype_legendre_degree, ncam=ncamera, templates=templates, comm=comm)
+                allmodels, wavedict = archetype.get_spectra_and_archetype_model(targets=targets, redrockdata=zbest, deg_legendre=args.archetype_legendre_degree, ncam=ncamera, templates=templates, dwave=dwave, wave_dict=wave_dict, comm=comm)
             else:
                 if comm_rank==0 or comm is None:
                     print('\nMODEL: Estimating redrock PCA best-fit models for the targets')
-                allmodels, wavedict = get_spectra_and_model(targets=targets, redrockdata=zbest, templates=templates, comm=comm)
+                allmodels, wavedict = get_spectra_and_model(targets=targets, redrockdata=zbest, templates=templates, dwave=dwave, wave_dict=wave_dict, comm=comm)
             
             if targets.comm is not None:
                 all_model= targets.comm.gather(allmodels, root=0)

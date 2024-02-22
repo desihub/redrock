@@ -238,7 +238,7 @@ def calc_zchi2_one(spectra, weights, flux, wflux, tdata, solve_matrices_algorith
 
     return zchi2, zcoeff
 
-def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux, nleg, narch, method=None, n_nbh=None, prior=None, use_gpu=False, ncam=None):
+def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux, nleg, narch, method=None, n_nbh=None, prior=None, use_gpu=False, bands=None):
     
     """This function calculates coefficients for archetype mode in each camera using normal linear algebra matrix solver or BVLS (bounded value least square) method
 
@@ -258,7 +258,7 @@ def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux
         n_nbh (int): number of nearest best archetypes
         prior (array): prior matrix added to the Legendre coefficients (1/sigma^2)
         use_gpu (bool): use GPU or not
-        ncam (int): number of cameras for given instrument
+        bands (list): list of wavelength bands
     
     Returns:
         coefficients and chi2
@@ -268,9 +268,15 @@ def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux
     ### TODO - implement BVLS on GPU
     # number of cameras in DESI: b, r, z
     spectra = target.spectra
-
+    ncam = len(bands)
     nbasis = n_nbh+nleg*ncam # n_nbh : for actual physical archetype(s), nleg: number of legendre polynomials, ncamera: number of cameras
-    ret_zcoeff= {'alpha':[], 'b':[], 'r':[], 'z':[]}
+
+    ret_zcoeff = {}
+    ret_zcoeff['alpha'] = []
+    for b in bands: # bands as save in targets object
+        ret_zcoeff[b] = []
+
+    new_bands = sorted(bands) # saves as correct order
 
     #Setup dict of solver args to pass bounds to solver
     method = method.upper()
@@ -322,9 +328,9 @@ def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux
         split_coeff =  np.split(zzcoeff[:,n_nbh:], ncam, axis=1) # n_camera = 3
         # In target spectra redrock saves values as 'b', 'z', 'r'.
         # So just re-ordering them here to 'b', 'r', 'z' for easier reading
-        old_coeff = {band: split_coeff[i] for i, band in enumerate(['b', 'z', 'r'])}
+        old_coeff = {band: split_coeff[i] for i, band in enumerate(bands)}
 
-        for band in ['b', 'r', 'z']:# 3 cameras
+        for band in new_bands:# 3 cameras
             ret_zcoeff[band] = old_coeff[band]
     coeff = np.concatenate(list(ret_zcoeff.values()), axis=1)
     #print(f'{time.time()-start} [sec] took for per camera BVLS method\n')
