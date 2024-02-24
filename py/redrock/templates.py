@@ -693,7 +693,7 @@ def get_templates():
         templates[(tx.template_type, tx.sub_type)] = tx
     return templates
 
-def get_model_spectra(targets=None, redrockdata=None, templates=None, dwave=None, wave_dict=None, comm=None):
+def get_best_model_spectra(targets=None, redrockdata=None, templates=None, dwave=None, wave_dict=None, comm=None):
 
     """Function to Evaluate model spectra.
 

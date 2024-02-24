@@ -29,7 +29,7 @@ from ..utils import elapsed, get_mp, distribute_work, getGPUCountMPI
 
 from ..targets import (Spectrum, Target, DistTargets)
 
-from ..templates import load_dist_templates, get_spectra_and_model, get_templates
+from ..templates import load_dist_templates, get_best_model_spectra, get_templates
 
 from ..results import write_zscan
 
@@ -1052,11 +1052,11 @@ def rrdesi(options=None, comm=None):
                 if comm_rank==0 or comm is None:
                     print('\nMODEL: Estimating Archetype best-fit models for the targets')
                 archetype = Archetype(args.archetypes)
-                allmodels, wavedict = archetype.get_spectra_and_archetype_model(targets=targets, redrockdata=zbest, deg_legendre=args.archetype_legendre_degree, ncam=ncamera, templates=templates, dwave=dwave, wave_dict=wave_dict, comm=comm)
+                allmodels, wavedict = archetype.get_best_archetype_model(targets=targets, redrockdata=zbest, deg_legendre=args.archetype_legendre_degree, ncam=ncamera, templates=templates, dwave=dwave, wave_dict=wave_dict, comm=comm)
             else:
                 if comm_rank==0 or comm is None:
                     print('\nMODEL: Estimating redrock PCA best-fit models for the targets')
-                allmodels, wavedict = get_spectra_and_model(targets=targets, redrockdata=zbest, templates=templates, dwave=dwave, wave_dict=wave_dict, comm=comm)
+                allmodels, wavedict = get_best_model_spectra(targets=targets, redrockdata=zbest, templates=templates, dwave=dwave, wave_dict=wave_dict, comm=comm)
             
             if targets.comm is not None:
                 all_model= targets.comm.gather(allmodels, root=0)
