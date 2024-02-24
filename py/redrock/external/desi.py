@@ -154,7 +154,7 @@ def write_bestmodel(outfile, zbest, modeldict, wavedict, template_version, arche
         hdu.header["BUNIT"] = "Angstrom"
         hx.append(hdu)
         hdu = fits.ImageHDU(name=key2)
-        hdu.data = modeldict[key2].data
+        hdu.data = modeldict[key2].data.astype('float32')
         hx.append(hdu)
         
     outfile = os.path.expandvars(outfile)

@@ -683,6 +683,9 @@ def eval_model(data, wave, R=None, templates=None):
     return out
 
 def get_templates():
+    """
+    Wrapper to return templates as dictionary
+    """
     templates = dict()
     templatefn = find_templates()
     for fn in templatefn:
@@ -690,7 +693,28 @@ def get_templates():
         templates[(tx.template_type, tx.sub_type)] = tx
     return templates
 
-def get_spectra_and_model(targets=None, redrockdata=None, templates=None, dwave=None, wave_dict=None, comm=None):
+def get_model_spectra(targets=None, redrockdata=None, templates=None, dwave=None, wave_dict=None, comm=None):
+
+    """Function to Evaluate model spectra.
+
+    Given a bunch of fits with coefficients COEFF, redshifts Z, and types
+    SPECTYPE, SUBTYPE in data, evaluate the redrock model fits at the
+    wavelengths wave using resolution matrix R.
+
+    The wavelength and resolution matrices may be dictionaries including for
+    multiple cameras.
+
+    Args:
+        targets (list): list containing target objects
+        redrockdata (Table or dict): final zbest table
+        templates (dict): template dictionary containing template classes
+        dwave (dict): wavelength dictionary with keys as wavehashes
+        wave_dict (dict): wavelength dictionary with keys as band names
+        comm: for mpi purposes
+    Returns:
+        model fluxes (dict), keys as Targetids and data type is array [nspec, nwave]
+        wavelengths dictionary (data type same as fluxes)
+    """
 
     bands = wave_dict.keys()
     wavehashes = list(dwave.keys())
@@ -732,6 +756,21 @@ def get_spectra_and_model(targets=None, redrockdata=None, templates=None, dwave=
         return
 
 def eval_model_for_one_spectra(data, dwave, R=None, model_flux=None,hashkeys=None, templates=None):
+
+    """
+    Wrapper function to evaluate best fit model for one spectra
+
+    Args:
+        data (Table or dict): for the given targetid
+        dwave (dict): wavelength dictionary with keys as wavehashes
+        R (dict or None): Resolution matrix for each camera or for entire spectra
+        model_flux (dict): dictionary containing targetid
+        hashkeys: (dict): containing hashkey to band name
+        templates : (dict): template dictionary containing template classes
+    
+    Returns:
+        model flux (dict), key as Targetid and data type is array [1, nwave]
+    """
     
     tx = templates[(data['SPECTYPE'], data['SUBTYPE'])]
     method = tx._method

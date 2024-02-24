@@ -353,6 +353,21 @@ class Archetype():
 
     def eval_tdata(self, arrtype, legendre, binned, dwave, nleg, ngals, ncam):
 
+        """Wrapper for evaluating tdata (basically templates) for archetypes.
+
+        Args:
+            arrtype (np or cp): in case GPUs or CPUs option
+            legendre (dict): keys as wavehashes and values as Legendre polynomials evluated at reduced wavelengths (usually come from target.legendre)
+            binned (dict): Rebinned templates at observed wavelengths
+            dwave (dict): wavelength dictionary with keys as wavehashes
+            nleg (int): number of legendre polynomials
+            ngals (int): number of nearest galaxies (default 1)
+            ncam (int): number of cameras
+
+        Returns:
+            returns a dictionary containing template data arrays corresponding to each wavehash
+        """
+
         tdata, tdata2 = dict(), dict()
         nbasis = ngals + nleg*ncam
         for hs, wave in dwave.items():
@@ -372,6 +387,23 @@ class Archetype():
 
     def return_coeff_per_camera(self, i, tg, arrtype, dedges, dwave, redrockdata, deg_legendre, ncam, ngals=1):
 
+        """
+        wrapper function to get archetype and legendre coefficients and template arrays
+
+        Args:
+            i (int): index of given target id in zbest table
+            tg (target object) for given targetid
+            arrtype (np or cp) as is the case GPU vs CPU
+            dedges (dict): default is None: dictionary containing edges for tarpezium rebinning
+            dwave (dict): wavelength dictionary with keys as wavehashes
+            deg_legendre (int): Legendre polynomial degree
+            ncam (int): number of cameras
+            ngals (int): number of nearest galaxies (default 1)
+        
+        Returns:
+            coefficients, tdata and best archetype index
+        """
+
         z = redrockdata['Z'][i]
 
         arch_inds = np.array(redrockdata['SUBTYPE'][i].split('_')[1:], dtype='int32')
@@ -385,8 +417,30 @@ class Archetype():
     
         return coeff, arch_inds, tdata
 
-    def get_spectra_and_archetype_model(self, targets=None, redrockdata=None, deg_legendre=None, ncam=3, templates=None, dwave=None, wave_dict=None, comm=None):
+    def get_best_archetype_model(self, targets=None, redrockdata=None, deg_legendre=None, ncam=3, templates=None, dwave=None, wave_dict=None, comm=None):
 
+        """Function to Evaluate model spectra with archetypes (only if coefficients are for archetypes, otherwise will return PCA/NMF fits).
+
+        Given a bunch of fits with coefficients COEFF, redshifts Z, and types SPECTYPE, SUBTYPE in data, evaluate the redrock model fits at the wavelengths wave using resolution matrix R.
+
+        The wavelength and resolution matrices may be dictionaries including for multiple cameras.
+
+        Args:
+            targets (list): list containing target objects
+            redrockdata (Table or dict): final zbest table
+            deg_legendre (int): Legendre polynomial degree
+            ncam (int): number of cameras
+            templates (dict): template dictionary containing template classes
+            dwave (dict): wavelength dictionary with keys as wavehashes
+            wave_dict (dict): wavelength dictionary with keys as band names
+            comm: for mpi purposes
+        Returns:
+            model fluxes (dict), keys as Targetids and data type is array [nspec, nwave]
+        wavelengths dictionary (data type same as fluxes)
+    """
+        
+        # I am keeping here, this might come handy in case we want to use cupy for GPUs
+        
         arrtype = np
         dedges = None
 
