@@ -292,6 +292,8 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
                 coeff = np.zeros(template.nbasis)
                 zwarn |= ZW.Z_FITLIMIT
                 zwarn |= ZW.BAD_MINFIT
+                #Set trans to None so as not to pass an empty dict to archetypes! CW 2/26/24
+                trans = None
             else:
                 #- Unknown problem; re-raise error
                 raise err
@@ -329,10 +331,13 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
                     ncamera = len(list(dwave.keys())) # number of cameras, for e.g. DESI has three cameras
                 else:
                     ncamera = 1
+                tot_deg_legendre = deg_legendre
+                if archetype._solver_method == 'bvls':
+                    tot_deg_legendre = deg_legendre*2
                 if n_nearest is None:
-                    prior = prior_on_coeffs(1, deg_legendre, prior_sigma, ncamera)
+                    prior = prior_on_coeffs(1, tot_deg_legendre, prior_sigma, ncamera)
                 else:
-                    prior = prior_on_coeffs(n_nearest, deg_legendre, prior_sigma, ncamera)
+                    prior = prior_on_coeffs(n_nearest, tot_deg_legendre, prior_sigma, ncamera)
             else:
                 prior=None
             chi2min, coeff, fulltype = archetype.get_best_archetype(target,weights,flux,wflux,dwave,zbest, per_camera, n_nearest, trans=trans, use_gpu=use_gpu, prior=prior)
