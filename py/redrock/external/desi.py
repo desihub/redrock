@@ -467,7 +467,7 @@ class DistTargetsDESI(DistTargets):
                             # mask significantly negative data (set ivar to 0)
                             sigma = self._my_data[toff].spectra[tspec_ivar[t]].flux * \
                                     np.sqrt(self._my_data[toff].spectra[tspec_ivar[t]].ivar)
-                            bignegflux = (sigma<-negflux_nsig)
+                            bignegflux = (sigma<-abs(negflux_nsig))
                             self._my_data[toff].spectra[tspec_ivar[t]].ivar[bignegflux] = 0.0
 
                             tspec_ivar[t] += 1
@@ -848,7 +848,7 @@ def rrdesi(options=None, comm=None):
         targets = DistTargetsDESI(args.infiles, coadd=(not args.allspec),
                                   targetids=targetids, first_target=first_target, n_target=n_target,
                                   comm=comm, cache_Rcsr=True, cosmics_nsig=args.cosmics_nsig,
-                                  negflux_nsig=args.negflux_nsig,
+                                  negflux_nsig=abs(args.negflux_nsig),
                                   capacities=capacities)
 
         #- Mask some problematic sky lines
