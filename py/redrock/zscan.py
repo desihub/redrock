@@ -270,8 +270,11 @@ def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux
     spectra = target.spectra
 
     nbasis = n_nbh+nleg*ncam # n_nbh : for actual physical archetype(s), nleg: number of legendre polynomials, ncamera: number of cameras
-    ret_zcoeff= {'alpha':[], 'b':[], 'r':[], 'z':[]}
-
+    
+    if nleg>0:
+        ret_zcoeff= {'alpha':[], 'b':[], 'r':[], 'z':[]}
+    else:
+        ret_zcoeff= {'alpha':[]} # in case no Legendre polynomials are used at all, only archetypes.
     #Setup dict of solver args to pass bounds to solver
     method = method.upper()
     solver_args = dict()
