@@ -116,7 +116,7 @@ def legendre_calculate(nleg, dwave):
 
     return legendre
 
-def prior_on_coeffs(n_nbh, deg_legendre, sigma, ncamera, method=None):
+def prior_on_coeffs(n_nbh, deg_legendre, sigma, ncamera, add_negative_legendre_terms=False):
     
     """
     Args:
@@ -124,15 +124,15 @@ def prior_on_coeffs(n_nbh, deg_legendre, sigma, ncamera, method=None):
         deg_legendre (int): number of Legendre polynomials 
         sigma (int): prior sigma to be used for archetype fitting
         ncamera (int): number of cameras for given instrument
-        method (str): archetype solver method - if bvls then prior will be
-            adjusted to account for negative legendre terms
+        add_negative_legendre_terms (bool): whether to adjust prior
+            to account for negative legendre terms
     Returns:
         2d array to be added while solving for archetype fitting
 
     """
     
     tot_legendre_terms = deg_legendre
-    if method == 'bvls':
+    if add_negative_legendre_terms:
         #Double total legendre term count to reflect negative terms
         tot_legendre_terms = deg_legendre*2
     nbasis = n_nbh+tot_legendre_terms*ncamera # 3 desi cameras
@@ -140,7 +140,7 @@ def prior_on_coeffs(n_nbh, deg_legendre, sigma, ncamera, method=None):
     for i in range(n_nbh):
         prior[i][i]=0. ## Do not add prior to the archetypes, added only to the Legendre polynomials
 
-    if method == 'bvls':
+    if add_negative_legendre_terms:
         #Add cross terms to prior array
         for i in range(ncamera):
             for j in range(deg_legendre):
@@ -350,7 +350,10 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
                     n_nearest = 1
                 #Abstract the construction of prior including cross-terms for negative legendre terms
                 #to prior_on_coeffs method.
-                prior = prior_on_coeffs(n_nearest, deg_legendre, prior_sigma, ncamera, archetype._solver_method)
+                add_negative_legendre_terms = False
+                if archetype._solver_method == 'bvls' and use_gpu:
+                    add_negative_legendre_terms = True
+                prior = prior_on_coeffs(n_nearest, deg_legendre, prior_sigma, ncamera, add_negative_legendre_terms)
             else:
                 prior=None
             chi2min, coeff, fulltype = archetype.get_best_archetype(target,weights,flux,wflux,dwave,zbest, per_camera, n_nearest, trans=trans, use_gpu=use_gpu, prior=prior)
