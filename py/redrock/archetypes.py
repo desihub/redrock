@@ -299,9 +299,7 @@ class Archetype():
 
         obs_wave = np.concatenate([dwave[key] for key in new_keys])
         
-        nleg = legendre[list(legendre.keys())[0]].shape[0]
-        #zzchi2 = np.zeros(self._narch, dtype=np.float64)
-        #zzcoeff = np.zeros((self._narch,  1+ncam*(nleg)), dtype=np.float64)
+        #nleg = legendre[list(legendre.keys())[0]].shape[0]
         
         #TODO: return best fit model as well
         #zzmodel = np.zeros((self._narch, obs_wave.size), dtype=np.float64)
@@ -343,10 +341,11 @@ class Archetype():
                 tdata[hs] = binned[hs].transpose()[:,:,None]
             nbasis = tdata[hs].shape[2]
         if per_camera:
+            #Hard code NNLS as solve method for per_camera_coeff_with_least_square_batch
             if (use_gpu):
-                (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, tdata, gpuweights, gpuflux, gpuwflux, tot_nleg, self._narch, method=solve_method, n_nbh=1, prior=prior, use_gpu=use_gpu, ncam=ncam)
+                (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, tdata, gpuweights, gpuflux, gpuwflux, tot_nleg, self._narch, method='NNLS', n_nbh=1, prior=prior, use_gpu=use_gpu, ncam=ncam)
             else:
-                (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux, tot_nleg, self._narch, method=solve_method, n_nbh=1, prior=prior, use_gpu=use_gpu, ncam=ncam)
+                (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux, tot_nleg, self._narch, method='NNLS', n_nbh=1, prior=prior, use_gpu=use_gpu, ncam=ncam)
         else:
             if (use_gpu):
                 (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, gpuweights, gpuflux, gpuwflux, self._narch, nbasis, use_gpu=use_gpu)

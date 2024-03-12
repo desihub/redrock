@@ -278,12 +278,10 @@ def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux
     solver_args = dict()
     if (method == 'BVLS'):
         #only positive coefficients are allowed for the archetypes
-        #bounds = np.zeros((2, nbasis))
-        #bounds[0][n_nbh:]=-np.inf #constant and slope terms in archetype method (can be positive or negative)
-        #bounds[1] = np.inf
-        #solver_args['bounds'] = bounds
-        #Update solver method
-        method = 'NNLS'
+        bounds = np.zeros((2, nbasis))
+        bounds[0][n_nbh:]=-np.inf #constant and slope terms in archetype method (can be positive or negative)
+        bounds[1] = np.inf
+        solver_args['bounds'] = bounds
 
     #Use branching options because GPU is faster in batch in 3d
     #but due to timing weirdness in numpy, CPU is faster looping over

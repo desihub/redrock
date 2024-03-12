@@ -116,7 +116,7 @@ def legendre_calculate(nleg, dwave):
 
     return legendre
 
-def prior_on_coeffs(n_nbh, deg_legendre, sigma, ncamera):
+def prior_on_coeffs(n_nbh, deg_legendre, sigma, ncamera, method=None):
     
     """
     Args:
@@ -124,15 +124,30 @@ def prior_on_coeffs(n_nbh, deg_legendre, sigma, ncamera):
         deg_legendre (int): number of Legendre polynomials 
         sigma (int): prior sigma to be used for archetype fitting
         ncamera (int): number of cameras for given instrument
+        method (str): archetype solver method - if bvls then prior will be
+            adjusted to account for negative legendre terms
     Returns:
         2d array to be added while solving for archetype fitting
 
     """
     
-    nbasis = n_nbh+deg_legendre*ncamera # 3 desi cameras
+    tot_legendre_terms = deg_legendre
+    if method == 'bvls':
+        #Double total legendre term count to reflect negative terms
+        tot_legendre_terms = deg_legendre*2
+    nbasis = n_nbh+tot_legendre_terms*ncamera # 3 desi cameras
     prior = np.zeros((nbasis, nbasis), dtype='float64');np.fill_diagonal(prior, 1/(sigma**2))
     for i in range(n_nbh):
         prior[i][i]=0. ## Do not add prior to the archetypes, added only to the Legendre polynomials
+
+    if method == 'bvls':
+        #Add cross terms to prior array
+        for i in range(ncamera):
+            for j in range(deg_legendre):
+                idx1 = n_nbh+i*tot_legendre_terms+j
+                idx2 = n_nbh+i*tot_legendre_terms+deg_legendre+j
+                prior[idx1][idx2] = -prior[idx1][idx1]
+                prior[idx2][idx1] = -prior[idx2][idx2]
     return prior
 
 
@@ -331,13 +346,11 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
                     ncamera = len(list(dwave.keys())) # number of cameras, for e.g. DESI has three cameras
                 else:
                     ncamera = 1
-                tot_deg_legendre = deg_legendre
-                if archetype._solver_method == 'bvls':
-                    tot_deg_legendre = deg_legendre*2
                 if n_nearest is None:
-                    prior = prior_on_coeffs(1, tot_deg_legendre, prior_sigma, ncamera)
-                else:
-                    prior = prior_on_coeffs(n_nearest, tot_deg_legendre, prior_sigma, ncamera)
+                    n_nearest = 1
+                #Abstract the construction of prior including cross-terms for negative legendre terms
+                #to prior_on_coeffs method.
+                prior = prior_on_coeffs(n_nearest, deg_legendre, prior_sigma, ncamera, archetype._solver_method)
             else:
                 prior=None
             chi2min, coeff, fulltype = archetype.get_best_archetype(target,weights,flux,wflux,dwave,zbest, per_camera, n_nearest, trans=trans, use_gpu=use_gpu, prior=prior)
