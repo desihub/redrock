@@ -298,7 +298,8 @@ def find_templates(template_path=None):
     return template_files
 
 
-def load_templates(template_path=None):
+def load_templates(template_path=None, zscan_galaxy=None, zscan_star=None, zscan_qso=None,
+                   asdict=False):
     """
     Return list of Template objects
 
@@ -319,9 +320,18 @@ def load_templates(template_path=None):
 
     templates = list()
     for filename in template_path:
-        templates.append(Template(filename))
+        tx = Template(filename, zscan_galaxy=zscan_galaxy,
+                      zscan_star=zscan_star, zscan_qso=zscan_qso)
+        templates.append(tx)
 
-    return templates
+    if asdict:
+        templates_dict = dict()
+        for tx in templates:
+            templates_dict[(tx.template_type, tx.sub_type)] = tx
+
+        return templates_dict
+    else:
+        return templates
 
 
 class DistTemplatePiece(object):
@@ -588,30 +598,25 @@ def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1,
             after distributed rebinning so each process has the full
             redshift range for the template.
 
-    Returns:
-        list: a list of DistTemplate objects.
+    Returns (dist_templates, templates):
+        dist_templates: a list of DistTemplate objects, sampled at redshifts
+        templates: dict of original Template objects, not resampled, keys SPECTYPE,SUBTYPE
 
     """
     timer = elapsed(None, "", comm=comm)
 
-    template_files = None
+    template_dict = None
     if (comm is None) or (comm.rank == 0):
-        template_files = find_templates(templates)
+        template_dict = load_templates(templates, asdict=True,
+                                       zscan_galaxy=zscan_galaxy,
+                                       zscan_star=zscan_star,
+                                       zscan_qso=zscan_qso)
 
     if comm is not None:
-        template_files = comm.bcast(template_files, root=0)
-
-    template_data = list()
-    if (comm is None) or (comm.rank == 0):
-        for t in template_files:
-            template_data.append(Template(filename=t, zscan_galaxy=zscan_galaxy,
-                                          zscan_star=zscan_star, zscan_qso=zscan_qso))
-
-    if comm is not None:
-        template_data = comm.bcast(template_data, root=0)
+        template_dict = comm.bcast(template_dict, root=0)
 
     timer = elapsed(timer, "Read and broadcast of {} templates"\
-        .format(len(template_files)), comm=comm)
+        .format(len(template_dict)), comm=comm)
 
     if (use_gpu):
         import cupy as cp
@@ -623,7 +628,7 @@ def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1,
     # Compute the interpolated templates in a distributed way with every
     # process generating a slice of the redshift range.
     dtemplates = list()
-    for t in template_data:
+    for t in template_dict.values():
         if redistribute:
             dtemplate = ReDistTemplate(t, dwave, mp_procs=mp_procs, comm=comm, use_gpu=use_gpu, gpu_mode=gpu_mode)
         else:
@@ -632,7 +637,7 @@ def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1,
 
     timer = elapsed(timer, "Rebinning templates", comm=comm)
 
-    return dtemplates
+    return dtemplates, template_dict
 
 
 def eval_model(data, wave, R=None, templates=None):
@@ -682,16 +687,6 @@ def eval_model(data, wave, R=None, templates=None):
             out[i] = R[i].dot(mx)
     return out
 
-def get_templates():
-    """
-    Wrapper to return templates as dictionary
-    """
-    templates = dict()
-    templatefn = find_templates()
-    for fn in templatefn:
-        tx = Template(fn)
-        templates[(tx.template_type, tx.sub_type)] = tx
-    return templates
 
 def get_best_model_spectra(targets=None, redrockdata=None, templates=None, dwave=None, wave_dict=None, comm=None):
 

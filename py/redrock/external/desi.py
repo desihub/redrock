@@ -29,7 +29,7 @@ from ..utils import elapsed, get_mp, distribute_work, getGPUCountMPI
 
 from ..targets import (Spectrum, Target, DistTargets)
 
-from ..templates import load_dist_templates, get_best_model_spectra, get_templates
+from ..templates import load_dist_templates, get_best_model_spectra
 
 from ..results import write_zscan
 
@@ -951,7 +951,7 @@ def rrdesi(options=None, comm=None):
 
         # Read the template data
         # Pass both use_gpu (this proc) and args.gpu (if any proc is using GPU)
-        dtemplates = load_dist_templates(dwave, templates=args.templates,
+        dtemplates, templates = load_dist_templates(dwave, templates=args.templates,
                                          zscan_galaxy=args.zscan_galaxy,
                                          zscan_qso=args.zscan_qso,
                                          zscan_star=args.zscan_star,
@@ -1043,11 +1043,6 @@ def rrdesi(options=None, comm=None):
             stop = elapsed(start, f"Writing {args.outfile} took", comm=comm)
 
         if args.model is not None:
-            templates = None
-            if comm_rank==0 or comm is None:
-                templates = get_templates()
-            if comm is not None:
-                templates = comm.bcast(templates, root=0)
             if args.archetypes is not None:
                 if comm_rank==0 or comm is None:
                     print('\nMODEL: Estimating Archetype best-fit models for the targets')
