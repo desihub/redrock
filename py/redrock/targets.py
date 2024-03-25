@@ -25,10 +25,11 @@ class Spectrum(object):
         R (scipy.sparse.dia_matrix): the resolution matrix in band diagonal
             format.
         Rcsr (scipy.sparse.csr_matrix): the resolution matrix in CSR format.
+        band (str): camera band name
 
     """
     # @profile
-    def __init__(self, wave, flux, ivar, R, Rcsr=None):
+    def __init__(self, wave, flux, ivar, R, Rcsr=None, band=None):
         if R is not None:
             w = np.asarray(R.sum(axis=1))[:,0]<constants.min_resolution_integral
             ivar[w] = 0.
@@ -39,11 +40,11 @@ class Spectrum(object):
         self.R = R
         self._Rcsr = Rcsr
         self._mpshared = False
+        self.band = band
         if hasattr(R,'data'):
             self.wavehash = hash((len(wave), wave[0], wave[1], wave[-2], wave[-1], R.data.shape[0]))
         else:
             self.wavehash = hash((len(wave), wave[0], wave[1], wave[-2], wave[-1]))
-
         #It is much more efficient to calculate edges once if rebinning
         #and copy to GPU and store here rather than doing this every time
         self._gpuwave = None
@@ -168,6 +169,9 @@ class Target(object):
         self._legendre = None
         self._gpulegendre = None
         self.nleg = 0
+        self.bands = []
+        for s in spectra:
+            self.bands.append(s.band)
 
     def legendre(self, nleg, use_gpu=False):
         if (use_gpu and self.nleg == nleg):

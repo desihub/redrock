@@ -14,10 +14,15 @@ import traceback
 
 import numpy as np
 from astropy.io import fits
+from astropy.table import Table
+from fitsio import FITS
 
 from .utils import native_endian, elapsed
 from .igm import transmission_Lyman
 from .rebin import rebin_template, trapz_rebin
+from .zscan import spectral_data
+
+from desispec.coaddition import coadd_cameras
 
 valid_template_methods = ('PCA', 'NMF')
 
@@ -676,3 +681,107 @@ def eval_model(data, wave, R=None, templates=None):
         else:
             out[i] = R[i].dot(mx)
     return out
+
+def get_templates():
+    """
+    Wrapper to return templates as dictionary
+    """
+    templates = dict()
+    templatefn = find_templates()
+    for fn in templatefn:
+        tx = Template(fn)
+        templates[(tx.template_type, tx.sub_type)] = tx
+    return templates
+
+def get_best_model_spectra(targets=None, redrockdata=None, templates=None, dwave=None, wave_dict=None, comm=None):
+
+    """Function to Evaluate model spectra.
+
+    Given a bunch of fits with coefficients COEFF, redshifts Z, and types
+    SPECTYPE, SUBTYPE in data, evaluate the redrock model fits at the
+    wavelengths wave using resolution matrix R.
+
+    The wavelength and resolution matrices may be dictionaries including for
+    multiple cameras.
+
+    Args:
+        targets (list): list containing target objects
+        redrockdata (Table or dict): final zbest table
+        templates (dict): template dictionary containing template classes
+        dwave (dict): wavelength dictionary with keys as wavehashes
+        wave_dict (dict): wavelength dictionary with keys as band names
+        comm: for mpi purposes
+    Returns:
+        model fluxes (dict), keys as Targetids and data type is array [nspec, nwave]
+        wavelengths dictionary (data type same as fluxes)
+    """
+
+    bands = wave_dict.keys()
+    wavehashes = list(dwave.keys())
+    band_to_wavehash = {} 
+    wavelengths = {}
+
+    #define dictionary to save the model data
+    model_flux  = {} 
+    model_flux['TARGETID'] = []
+    model_flux['COEFFTYPE'] = []
+
+    hashkeys = {} 
+
+    #matching wavehases to its band name
+    for key in bands:
+        ukey = key.upper()
+        wavelengths[ukey+'_WAVELENGTH'] = wave_dict[key]
+        for kk in wavehashes:
+            if np.array_equal(wave_dict[key],dwave[kk]):
+                band_to_wavehash[ukey] = kk
+                model_flux[ukey+'_MODEL'] = []
+                hashkeys[kk] = ukey+'_MODEL'
+ 
+    if targets is not None:
+        local_targets = targets.local()
+        for tg in local_targets:
+            if comm is None:
+                tg.sharedmem_unpack()
+            i = np.where(redrockdata['TARGETID'].data==tg.id)[0][0]
+            model_flux['TARGETID'].append(tg.id)
+            all_Rcsr = {}
+            for s in tg.spectra:
+                key = s.wavehash
+                all_Rcsr[key] = s.Rcsr
+            model_flux= eval_model_for_one_spectra(redrockdata[i], dwave, R=all_Rcsr, model_flux=model_flux, hashkeys=hashkeys, templates=templates)
+        return Table(model_flux), wavelengths
+    else:
+        print('Target object not provided..\n')
+        return
+
+def eval_model_for_one_spectra(data, dwave, R=None, model_flux=None,hashkeys=None, templates=None):
+
+    """
+    Wrapper function to evaluate best fit model for one spectra
+
+    Args:
+        data (Table or dict): for the given targetid
+        dwave (dict): wavelength dictionary with keys as wavehashes
+        R (dict or None): Resolution matrix for each camera or for entire spectra
+        model_flux (dict): dictionary containing targetid
+        hashkeys: (dict): containing hashkey to band name
+        templates : (dict): template dictionary containing template classes
+    
+    Returns:
+        model flux (dict), key as Targetid and data type is array [1, nwave]
+    """
+    
+    tx = templates[(data['SPECTYPE'], data['SUBTYPE'])]
+    method = tx._method
+    model_flux['COEFFTYPE'].append(method)
+    coeff = data['COEFF'][0:tx.nbasis]
+    tmodel = tx.flux.T.dot(coeff).T
+    for key, wave in dwave.items():
+        ukey = hashkeys[key]
+        mx = trapz_rebin(tx.wave*(1+data['Z']), tmodel, wave)
+        if R is None:
+            model_flux[ukey].append(mx)
+        else:
+            model_flux[ukey].append(R[key].dot(mx))
+    return model_flux

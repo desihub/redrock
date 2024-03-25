@@ -7,6 +7,7 @@ Classes and functions for archetypes.
 import os
 from glob import glob
 from astropy.io import fits
+from astropy.table import Table
 import numpy as np
 from scipy.interpolate import interp1d
 import scipy.special
@@ -18,6 +19,8 @@ from .rebin import trapz_rebin
 from .igm import transmission_Lyman
 
 from .zscan import per_camera_coeff_with_least_square_batch
+
+from .templates import eval_model_for_one_spectra
 
 class Archetype():
     """Class to store all different archetypes from the same spectype.
@@ -240,7 +243,7 @@ class Archetype():
         """Get the best archetype for the given redshift and spectype.
 
         Args:
-            spectra (list): list of Spectrum objects.
+            target (object): target object.
             weights (array): concatenated spectral weights (ivar).
             flux (array): concatenated flux values.
             wflux (array): concatenated weighted flux values.
@@ -250,8 +253,8 @@ class Archetype():
             n_nearest (int): number of nearest neighbours to be used in chi2 space (including best archetype)
             trans (dict): pass previously calcualated Lyman transmission instead of recalculating
             solve_method (string): bvls or pca
-            use_gpu (bool): use GPU or not
             prior (2d array): prior matrix on coefficients (1/sig**2)
+            use_gpu (bool): use GPU or not
             
         Returns:
             chi2 (float): chi2 of best archetype
@@ -262,6 +265,7 @@ class Archetype():
         spectra = target.spectra
         nleg = target.nleg
         legendre = target.legendre(nleg=nleg, use_gpu=use_gpu) #Get previously calculated legendre
+        bands = target.bands
 
         #Select np or cp for operations as arrtype
         if (use_gpu):
@@ -282,10 +286,9 @@ class Archetype():
         else:
             ncam = 1 # entire spectra
         
-        wkeys = list(dwave.keys())
-        new_keys = [wkeys[0], wkeys[2], wkeys[1]]
-
-        obs_wave = np.concatenate([dwave[key] for key in new_keys])
+        #wkeys = list(dwave.keys())
+        #new_keys = [wkeys[0], wkeys[2], wkeys[1]]
+        #obs_wave = np.concatenate([dwave[key] for key in new_keys])
         
         nleg = legendre[list(legendre.keys())[0]].shape[0]
         zzchi2 = np.zeros(self._narch, dtype=np.float64)
@@ -327,11 +330,12 @@ class Archetype():
             else:
                 tdata[hs] = binned[hs].transpose()[:,:,None]
             nbasis = tdata[hs].shape[2]
+
         if per_camera:
             if (use_gpu):
-                (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, tdata, gpuweights, gpuflux, gpuwflux, nleg, self._narch, method=solve_method, n_nbh=1, prior=prior, use_gpu=use_gpu, ncam=ncam)
+                (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, tdata, gpuweights, gpuflux, gpuwflux, nleg, self._narch, method=solve_method, n_nbh=1, prior=prior, use_gpu=use_gpu, bands=bands)
             else:
-                (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux, nleg, self._narch, method=solve_method, n_nbh=1, prior=prior, use_gpu=use_gpu, ncam=ncam)
+                (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux, nleg, self._narch, method=solve_method, n_nbh=1, prior=prior, use_gpu=use_gpu, bands=bands)
         else:
             if (use_gpu):
                 (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, gpuweights, gpuflux, gpuwflux, self._narch, nbasis, use_gpu=use_gpu)
@@ -347,6 +351,145 @@ class Archetype():
             #print(z, zzchi2[iBest], zzcoeff[iBest], self._full_type[iBest])
             return zzchi2[iBest], zzcoeff[iBest], self._full_type[iBest]
 
+    def eval_tdata(self, arrtype, legendre, binned, dwave, nleg, ngals, ncam):
+
+        """Wrapper for evaluating tdata (basically templates) for archetypes.
+
+        Args:
+            arrtype (np or cp): in case GPUs or CPUs option
+            legendre (dict): keys as wavehashes and values as Legendre polynomials evluated at reduced wavelengths (usually come from target.legendre)
+            binned (dict): Rebinned templates at observed wavelengths
+            dwave (dict): wavelength dictionary with keys as wavehashes
+            nleg (int): number of legendre polynomials
+            ngals (int): number of nearest galaxies (default 1)
+            ncam (int): number of cameras
+
+        Returns:
+            returns a dictionary containing template data arrays corresponding to each wavehash
+        """
+
+        tdata, tdata2 = dict(), dict()
+        nbasis = ngals + nleg*ncam
+        for hs, wave in dwave.items():
+            if nleg > 0:
+                tdata[hs] = arrtype.append(binned[hs].T, legendre[hs], axis=0).T
+            else:
+                tdata[hs] = binned[hs]
+        for i, hs in enumerate(tdata):
+            tdata2[hs] = np.zeros((tdata[hs].shape[0], nbasis))
+            
+            for k in range(ngals):
+                tdata2[hs][:,k] = tdata[hs][:,k] # these are nearest archetype
+            if nleg>0:
+                for k in range(ngals, ngals+nleg):
+                    tdata2[hs][:,k+nleg*i] = tdata[hs][:,k] # Legendre polynomials terms
+        return tdata2
+
+    def return_coeff_per_camera(self, i, tg, arrtype, dedges, dwave, redrockdata, deg_legendre, ncam, ngals=1):
+
+        """
+        wrapper function to get archetype and legendre coefficients and template arrays
+
+        Args:
+            i (int): index of given target id in zbest table
+            tg (target object) for given targetid
+            arrtype (np or cp) as is the case GPU vs CPU
+            dedges (dict): default is None: dictionary containing edges for tarpezium rebinning
+            dwave (dict): wavelength dictionary with keys as wavehashes
+            deg_legendre (int): Legendre polynomial degree
+            ncam (int): number of cameras
+            ngals (int): number of nearest galaxies (default 1)
+        
+        Returns:
+            coefficients, tdata and best archetype index
+        """
+
+        z = redrockdata['Z'][i]
+
+        arch_inds = np.array(redrockdata['SUBTYPE'][i].split('_')[1:], dtype='int32')
+        nbasis = ncam*deg_legendre + len(arch_inds)
+        coeff = redrockdata['COEFF'][i][0:nbasis]
+        trans = { hs:transmission_Lyman(z,w) for hs, w in dwave.items() }
+        binned = self.rebin_template_batch(z, dwave, trapz=True, dedges=dedges, indx=arch_inds, use_gpu=False)
+        binned = {hs:trans[hs][:,None]*binned[hs] for hs, w in dwave.items() }
+        legendre = tg.legendre(nleg=deg_legendre, use_gpu=False)
+        tdata = self.eval_tdata(arrtype, legendre, binned, dwave, deg_legendre, ngals, ncam)
+    
+        return coeff, arch_inds, tdata
+
+    def get_best_archetype_model(self, targets=None, redrockdata=None, deg_legendre=None, ncam=3, templates=None, dwave=None, wave_dict=None, comm=None):
+
+        """Function to Evaluate model spectra with archetypes (only if coefficients are for archetypes, otherwise will return PCA/NMF fits).
+
+        Given a bunch of fits with coefficients COEFF, redshifts Z, and types SPECTYPE, SUBTYPE in data, evaluate the redrock model fits at the wavelengths wave using resolution matrix R.
+
+        The wavelength and resolution matrices may be dictionaries including for multiple cameras.
+
+        Args:
+            targets (list): list containing target objects
+            redrockdata (Table or dict): final zbest table
+            deg_legendre (int): Legendre polynomial degree
+            ncam (int): number of cameras
+            templates (dict): template dictionary containing template classes
+            dwave (dict): wavelength dictionary with keys as wavehashes
+            wave_dict (dict): wavelength dictionary with keys as band names
+            comm: for mpi purposes
+        Returns:
+            model fluxes (dict), keys as Targetids and data type is array [nspec, nwave]
+        wavelengths dictionary (data type same as fluxes)
+    """
+        
+        # I am keeping here, this might come handy in case we want to use cupy for GPUs
+        
+        arrtype = np
+        dedges = None
+
+        bands = wave_dict.keys()
+        wavehashes = list(dwave.keys())
+        band_to_wavehash = {} 
+        wavelengths = {}
+
+        #define dictionary to save the model data
+        model_flux  = {} 
+        model_flux['TARGETID'] = []
+        model_flux['COEFFTYPE'] = []
+
+        hashkeys = {} 
+
+        #matching wavehases to its band name
+        for key in bands:
+            ukey = key.upper()
+            wavelengths[ukey+'_WAVELENGTH'] = wave_dict[key]
+            for kk in wavehashes:
+                if np.array_equal(wave_dict[key],dwave[kk]):
+                    band_to_wavehash[ukey] = kk
+                    model_flux[ukey+'_MODEL'] = []
+                    hashkeys[kk] = ukey+'_MODEL'
+
+        if targets is not None:
+            local_targets = targets.local()
+            for tg in local_targets:
+                if comm is None:
+                    tg.sharedmem_unpack()
+                i = np.where(redrockdata['TARGETID'].data==tg.id)[0][0]
+                model_flux['TARGETID'].append(tg.id)
+                if redrockdata[i]['SPECTYPE']!=self._rrtype:
+                    all_Rcsr = {}
+                    for s in tg.spectra:
+                        key = s.wavehash
+                        all_Rcsr[key] = s.Rcsr
+                    model_flux= eval_model_for_one_spectra(redrockdata[i], dwave, R=all_Rcsr, model_flux=model_flux, hashkeys=hashkeys, templates=templates)
+                else:
+                    coeff, arch_inds, tdata  = self.return_coeff_per_camera(i, tg, arrtype, dedges, dwave, redrockdata, deg_legendre, ncam)
+                    for s in tg.spectra:
+                        key = hashkeys[s.wavehash]
+                        res_mod = s.Rcsr.dot(tdata[s.wavehash])
+                        model_flux[key].append(res_mod.dot(coeff))
+                    model_flux['COEFFTYPE'].append('ARCHETYPE')
+            return Table(model_flux), wavelengths
+        else:
+            print('Target object not provided..\n')
+            return
 
 class All_archetypes():
     """Class to store all different archetypes of all the different spectype.
@@ -408,3 +551,6 @@ def find_archetypes(archetypes_dir=None):
             lstfilename = sorted([ f.replace(archetypes_dir_expand,archetypes_dir) for f in lstfilename])
 
     return lstfilename
+
+
+
