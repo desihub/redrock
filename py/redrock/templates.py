@@ -733,7 +733,7 @@ def get_best_model_spectra(targets=None, redrockdata=None, templates=None, dwave
         ukey = key.upper()
         wavelengths[ukey+'_WAVELENGTH'] = wave_dict[key]
         for kk in wavehashes:
-            if np.all(wave_dict[key]==dwave[kk]):
+            if np.array_equal(wave_dict[key],dwave[kk]):
                 band_to_wavehash[ukey] = kk
                 model_flux[ukey+'_MODEL'] = []
                 hashkeys[kk] = ukey+'_MODEL'

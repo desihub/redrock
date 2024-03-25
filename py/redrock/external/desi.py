@@ -1010,7 +1010,7 @@ def rrdesi(options=None, comm=None):
             if comm_rank == 0:
                 write_zscan(args.details, scandata, zfit, clobber=True)
             stop = elapsed(start, "Writing zscan data took", comm=comm)
-
+        
         if args.outfile:
             start = elapsed(None, "", comm=comm)
             if comm_rank == 0:
@@ -1018,7 +1018,7 @@ def rrdesi(options=None, comm=None):
 
                 # Remove extra columns not needed for zbest
                 zbest.remove_columns(['zz', 'zzchi2', 'znum'])
-
+                
                 # Change to upper case like DESI
                 for colname in zbest.colnames:
                     if colname.islower():
