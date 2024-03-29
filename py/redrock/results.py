@@ -86,8 +86,12 @@ def write_zscan(filename, zscan, zfit, clobber=False):
     os.rename(tempfile, filename)
 
 
-def read_zscan(filename):
+def read_zscan(filename, select_targetids=None):
     """Read redrock.zfind results from a file.
+
+    Args:
+        filename (str): redrock details (.h5) filename
+        select_targetids (list): array of TARGETIDs to read
 
     Returns:
         tuple: (zbest, results) where zbest is a Table with keys TARGETID, Z,
@@ -104,14 +108,22 @@ def read_zscan(filename):
                 - zwarn: 0=good, non-0 is a warning flag
 
     """
+    def encode_column(c):
+        return c.astype((str, c.dtype.itemsize))
+    
     import h5py
     # zbest = Table.read(filename, format='hdf5', path='zbest')
     with h5py.File(os.path.expandvars(filename), mode='r') as fx:
         targetids = fx['targetids'][()]  # .value
         spectypes = list(fx['zscan'].keys())
 
+        if select_targetids is not None:
+            indx = np.where(np.isin(targetids, select_targetids))[0]
+        else:
+            indx = np.arange(len(targetids))
+
         zscan = dict()
-        for targetid in targetids:
+        for targetid in targetids[indx]:
             zscan[targetid] = dict()
             for spectype in spectypes:
                 zscan[targetid][spectype] = dict()
@@ -122,7 +134,7 @@ def read_zscan(filename):
             penalty = fx['/zscan/{}/penalty'.format(spectype)][()]
             zcoeff = fx['/zscan/{}/zcoeff'.format(spectype)][()]
             redshifts = fx['/zscan/{}/redshifts'.format(spectype)][()]
-            for i, targetid in enumerate(targetids):
+            for i, targetid in zip(indx, targetids[indx]):
                 zscan[targetid][spectype]['redshifts'] = redshifts
                 zscan[targetid][spectype]['zchi2'] = zchi2[i]
                 zscan[targetid][spectype]['penalty'] = penalty[i]
@@ -137,12 +149,14 @@ def read_zscan(filename):
                     encode_column(thiszfit['subtype']))
                 zscan[targetid][spectype]['zfit'] = thiszfit
 
-        zfit = [fx['zfit/{}/zfit'.format(tid)][()] for tid in targetids]
+        zfit = [fx['zfit/{}/zfit'.format(tid)][()] for tid in targetids[indx]]
         zfit = Table(np.hstack(zfit))
         zfit.replace_column('spectype', encode_column(zfit['spectype']))
         zfit.replace_column('subtype', encode_column(zfit['subtype']))
 
     return zscan, zfit
+
+
 def read_zscan_redrock(filename):
     """Read redrock.zfind results from a file to be reused by redrock itself.
 
