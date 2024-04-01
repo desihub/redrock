@@ -108,9 +108,6 @@ def read_zscan(filename, select_targetids=None):
                 - zwarn: 0=good, non-0 is a warning flag
 
     """
-    def encode_column(c):
-        return c.astype((str, c.dtype.itemsize))
-    
     import h5py
     # zbest = Table.read(filename, format='hdf5', path='zbest')
     with h5py.File(os.path.expandvars(filename), mode='r') as fx:
