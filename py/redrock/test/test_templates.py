@@ -123,7 +123,7 @@ class TestTemplates(unittest.TestCase):
                 TEMNAM01='QSO:::HIZ', TEMVER01='1.0     ',
                 TEMNAM02='STAR:::M',  TEMVER02='unknown ',
             )
-        filenames = header2templatefiles(hdr)
+        filenames = header2templatefiles(hdr, template_dir=self.testTemplateDir)
         self.assertTrue(filenames[0].endswith('rrtemplate-GALAXY-None-v2.6.fits'), f'Wrong {filenames[0]}')
         self.assertTrue(filenames[1].endswith('rrtemplate-QSO-HIZ-v1.0.fits'),     f'Wrong {filenames[1]}')
         self.assertTrue(filenames[2].endswith('rrtemplate-STAR-M-v0.1.fits'),      f'Wrong {filenames[2]}')
@@ -135,7 +135,7 @@ class TestTemplates(unittest.TestCase):
                 TEMNAM01='QSO:::HIZ', TEMVER01='1.0',
                 TEMNAM02='STAR:::M',  TEMVER02='3.14',
             )
-        filenames = header2templatefiles(hdr)
+        filenames = header2templatefiles(hdr, template_dir=self.testTemplateDir)
         self.assertTrue(filenames[0].endswith('rrtemplate-GALAXY-None-v2.6.fits'), f'Wrong {filenames[0]}')
         self.assertTrue(filenames[1].endswith('rrtemplate-QSO-HIZ-v1.0.fits'),     f'Wrong {filenames[1]}')
         self.assertTrue(filenames[2].endswith('rrtemplate-STAR-M-v3.14.fits'),     f'Wrong {filenames[2]}')
@@ -146,7 +146,7 @@ class TestTemplates(unittest.TestCase):
                 TEMNAM01='QSO:::HIZ', TEMVER01='1.0',  TEMFIL01='foo.fits',
                 TEMNAM02='STAR:::M',  TEMVER02='3.14', TEMFIL02='bar.fits'
             )
-        filenames = header2templatefiles(hdr)
+        filenames = header2templatefiles(hdr, template_dir=self.testTemplateDir)
         self.assertTrue(filenames[0].endswith('blat.fits'), f'Wrong {filenames[0]}')
         self.assertTrue(filenames[1].endswith('foo.fits'),  f'Wrong {filenames[1]}')
         self.assertTrue(filenames[2].endswith('bar.fits'),  f'Wrong {filenames[2]}')
@@ -158,7 +158,7 @@ class TestTemplates(unittest.TestCase):
                 TEMNAM02='GALAXY:::LRG',    TEMVER02='3.0',
                 TEMNAM01='GALAXY:::ELG',    TEMVER01='3.0',
             )
-        filenames = header2templatefiles(hdr)
+        filenames = header2templatefiles(hdr, template_dir=self.testTemplateDir)
         self.assertTrue(filenames[0].endswith('rrtemplate-GALAXY-BGS-v3.0.fits'), f'Wrong {filenames[0]}')
         self.assertTrue(filenames[1].endswith('rrtemplate-GALAXY-ELG-v3.0.fits'), f'Wrong {filenames[1]}')
         self.assertTrue(filenames[2].endswith('rrtemplate-GALAXY-LRG-v3.0.fits'), f'Wrong {filenames[2]}')
