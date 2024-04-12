@@ -301,16 +301,23 @@ def find_templates(template_path=None):
 def load_templates(template_path=None, zscan_galaxy=None, zscan_star=None, zscan_qso=None,
                    asdict=False):
     """
-    Return list of Template objects
+    Return list or dict of Template objects
+
+    Options:
+        template_path: list of template files, directory, or text file with list of templates
+        zscan_galaxy (str): zmin,zmax,dz redshift range for galaxies
+        zscan_star (str): zmin,zmax,dz redshift range for stars
+        zscan_qso (str): zmin,zmax,dz redshift range for QSOs
+        asdict (bool): return dict keyed by (spectype, subtype) instead of list
 
     `template_path` is list of template file paths, or path to provide to
     find_templates, i.e. a path to a directory with templates, a path to
     a text file containing a list of templates, a path to a single template
     file, or None to use $RR_TEMPLATE_DIR instead.
 
-    Returns: list of Template objects
+    Returns: list or dict of Template objects
 
-    Note: this always returns a list, even if template_path is a path to a
+    Note: this always returns a list/dict, even if template_path is a path to a
     single template file.
     """
     if isinstance(template_path, (str, type(None))):
