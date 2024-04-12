@@ -271,7 +271,8 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
         i = min(max(np.argmin(zzchi2),1), len(zz)-2)
         zmin, sigma, chi2min, zwarn = minfit(zz[i-1:i+2], zzchi2[i-1:i+2])
 
-        trans = dict()
+        #trans = dict()
+        trans = { hs:None for hs, w in dwave.items() } #define trans with keys and None values
         try:
             #Calculate xmin and xmax from template and pass as scalars 
             xmin = template.minwave*(1+zmin)
