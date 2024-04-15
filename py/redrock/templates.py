@@ -213,13 +213,16 @@ class Template(object):
         return self._igm_model
 
 
-    def eval(self, coeff, wave, z):
+    def eval(self, coeff, wave, z, R=None):
         """Return template for given coefficients, wavelengths, and redshift
 
         Args:
             coeff : array of coefficients length self.nbasis
             wave : wavelengths at which to evaluate template flux
             z : redshift at which to evaluate template flux
+
+        Options:
+            R : array[nwave,nwave] resolution matrix to convolve with model
 
         Returns:
             template flux array
@@ -230,8 +233,12 @@ class Template(object):
 
         """
         assert len(coeff) == self.nbasis
-        flux = self.flux.T.dot(coeff).T / (1+z)
-        return trapz_rebin(self.wave*(1+z), flux, wave)
+        flux = self.flux.T.dot(coeff).T
+        model = trapz_rebin(self.wave*(1+z), flux, wave)
+        if R is not None:
+            model = R.dot(model)
+
+        return model
 
 
 def find_templates(template_path=None):
@@ -605,10 +612,7 @@ def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1,
             after distributed rebinning so each process has the full
             redshift range for the template.
 
-    Returns (dist_templates, templates):
-        dist_templates: a list of DistTemplate objects, sampled at redshifts
-        templates: dict of original Template objects, not resampled, keys SPECTYPE,SUBTYPE
-
+    Returns dist_templates: a list of DistTemplate objects, sampled at redshifts
     """
     timer = elapsed(None, "", comm=comm)
 
@@ -644,7 +648,7 @@ def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1,
 
     timer = elapsed(timer, "Rebinning templates", comm=comm)
 
-    return dtemplates, template_dict
+    return dtemplates
 
 
 def eval_model(data, wave, R=None, templates=None):
@@ -673,29 +677,34 @@ def eval_model(data, wave, R=None, templates=None):
         a dictionary of model fluxes, one for each camera.
     """
     if templates is None:
-        templates = dict()
-        templatefn = find_templates()
-        for fn in templatefn:
-            tx = Template(fn)
-            templates[(tx.template_type, tx.sub_type)] = tx
+        templates = load_templates(asdict=True)
+
+    #- if wave is a dictionary of wavelength arrays, recursively call
+    #- eval_model to return dictionary of models
     if isinstance(wave, dict):
-        Rdict = R if R is not None else {x: None for x in wave}
-        return {x: eval_model(data, wave[x], R=Rdict[x], templates=templates)
-                for x in wave}
-    out = np.zeros((len(data), len(wave)), dtype='f4')
+        if R is None:
+            Rdict = {x: None for x in wave}
+        else:
+            if not isinstance(R, dict) or set(R.keys()) != set(wave.keys()):
+                raise ValueError('R must be dict with same keys as wave')
+            Rdict = R
+
+        out = dict()
+        for key in wave:
+            out[key] = eval_model(data, wave[key], R=Rdict[key], templates=templates)
+
+        return out
+
+    models = np.zeros((len(data), len(wave)), dtype='f4')
     for i in range(len(data)):
         tx = templates[(data['SPECTYPE'][i], data['SUBTYPE'][i])]
         coeff = data['COEFF'][i][0:tx.nbasis]
-        model = tx.flux.T.dot(coeff).T
-        mx = trapz_rebin(tx.wave*(1+data['Z'][i]), model, wave)
-        if R is None:
-            out[i] = mx
-        else:
-            out[i] = R[i].dot(mx)
-    return out
+        z = data['Z'][i]
+        models[i] = tx.eval(coeff, wave, z, R=R[i])
 
+    return models
 
-def get_best_model_spectra(targets=None, redrockdata=None, templates=None, dwave=None, wave_dict=None, comm=None):
+def get_best_model_spectra(targets=None, redrockdata=None, templates=None, dwave=None, wave_dict=None):
 
     """Function to Evaluate model spectra.
 
@@ -707,12 +716,11 @@ def get_best_model_spectra(targets=None, redrockdata=None, templates=None, dwave
     multiple cameras.
 
     Args:
-        targets (list): list containing target objects
+        targets (list): DistTargets object
         redrockdata (Table or dict): final zbest table
         templates (dict): template dictionary containing template classes
         dwave (dict): wavelength dictionary with keys as wavehashes
         wave_dict (dict): wavelength dictionary with keys as band names
-        comm: for mpi purposes
     Returns:
         model fluxes (dict), keys as Targetids and data type is array [nspec, nwave]
         wavelengths dictionary (data type same as fluxes)
@@ -730,7 +738,7 @@ def get_best_model_spectra(targets=None, redrockdata=None, templates=None, dwave
 
     hashkeys = {} 
 
-    #matching wavehases to its band name
+    #matching wavehashes to its band name
     for key in bands:
         ukey = key.upper()
         wavelengths[ukey+'_WAVELENGTH'] = wave_dict[key]
@@ -743,8 +751,6 @@ def get_best_model_spectra(targets=None, redrockdata=None, templates=None, dwave
     if targets is not None:
         local_targets = targets.local()
         for tg in local_targets:
-            if comm is None:
-                tg.sharedmem_unpack()
             i = np.where(redrockdata['TARGETID'].data==tg.id)[0][0]
             model_flux['TARGETID'].append(tg.id)
             all_Rcsr = {}
