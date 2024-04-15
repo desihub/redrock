@@ -76,6 +76,7 @@ class Spectrum(object):
 
     @property
     def Rcsr(self):
+        self.sharedmem_unpack()
         if self._Rcsr is None:
             self._Rcsr = self.R.tocsr()
         return self._Rcsr
