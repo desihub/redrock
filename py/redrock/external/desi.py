@@ -24,6 +24,7 @@ from desispec.resolution import Resolution
 from desispec.coaddition import coadd_fibermap
 from desispec.specscore import compute_coadd_tsnr_scores
 from desispec.maskbits import fibermask
+from desispec.io.util import get_tempfilename
 
 from ..utils import elapsed, get_mp, distribute_work, getGPUCountMPI
 
@@ -162,7 +163,9 @@ def write_bestmodel(outfile, zbest, modeldict, wavedict, template_version, arche
     if not os.path.exists(outdir):
         os.makedirs(outdir)
 
-    hx.writeto(outfile, overwrite=True)
+    tempfile = get_tempfilename(outfile)
+    hx.writeto(tempfile, overwrite=True)
+    os.rename(tempfile, outfile)
 
     return
 
@@ -951,7 +954,7 @@ def rrdesi(options=None, comm=None):
 
         # Read the template data
         # Pass both use_gpu (this proc) and args.gpu (if any proc is using GPU)
-        dtemplates, templates = load_dist_templates(dwave, templates=args.templates,
+        dtemplates = load_dist_templates(dwave, templates=args.templates,
                                          zscan_galaxy=args.zscan_galaxy,
                                          zscan_qso=args.zscan_qso,
                                          zscan_star=args.zscan_star,
@@ -1043,16 +1046,25 @@ def rrdesi(options=None, comm=None):
             stop = elapsed(start, f"Writing {args.outfile} took", comm=comm)
 
         if args.model is not None:
+
+            #- original non-distributed non-resampled templates
+            templates = dict()
+            for dt in dtemplates:
+                spectype = dt.template.template_type
+                subtype = dt.template.sub_type
+                templates[(spectype,subtype)] = dt.template
+
+            #- Evaluate models
             if args.archetypes is not None:
                 if comm_rank==0 or comm is None:
                     print('\nMODEL: Estimating Archetype best-fit models for the targets')
                 archetype = Archetype(args.archetypes)
-                allmodels, wavedict = archetype.get_best_archetype_model(targets=targets, redrockdata=zbest, deg_legendre=args.archetype_legendre_degree, ncam=ncamera, templates=templates, dwave=dwave, wave_dict=wave_dict, comm=comm)
+                allmodels, wavedict = archetype.get_best_archetype_model(targets=targets, redrockdata=zbest, deg_legendre=args.archetype_legendre_degree, ncam=ncamera, templates=templates, dwave=dwave, wave_dict=wave_dict)
             else:
                 if comm_rank==0 or comm is None:
                     print('\nMODEL: Estimating redrock PCA best-fit models for the targets')
-                allmodels, wavedict = get_best_model_spectra(targets=targets, redrockdata=zbest, templates=templates, dwave=dwave, wave_dict=wave_dict, comm=comm)
-            
+                allmodels, wavedict = get_best_model_spectra(targets=targets, redrockdata=zbest, templates=templates, dwave=dwave, wave_dict=wave_dict)
+
             if targets.comm is not None:
                 all_model= targets.comm.gather(allmodels, root=0)
             else:
