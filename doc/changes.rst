@@ -8,12 +8,15 @@ redrock Change Log
 * Write test files to temporary directory (PR `#263`_).
 * Check template dimension so code works on a single template (PR `#264`_). 
 * Versioned templates, NMF support, and updated IGM models (PR `#271`_).
+* Mask significantly negative flux (PR `#282`_).
+* Add ``results.read_zscan(..., select=targetids=...)`` option (PR `#289`_).
 * Archetype updates:
 
   * Added default --nminima for archetypes (PR `#265`_).
   * Adjust coeff size for Legendre for archetypes (PR `#266`_).
   * Docstring cleanup (PR `#267`_).
   * Fix --archetype_nnearest option (PR `#272`_).
+  * fix --archetype-legendre-degree=0 crash corner case (PR `#278`_).
 
 
 .. _`#263`: https://github.com/desihub/redrock/pull/263
@@ -23,6 +26,9 @@ redrock Change Log
 .. _`#267`: https://github.com/desihub/redrock/pull/267
 .. _`#271`: https://github.com/desihub/redrock/pull/271
 .. _`#272`: https://github.com/desihub/redrock/pull/272
+.. _`#278`: https://github.com/desihub/redrock/pull/278
+.. _`#282`: https://github.com/desihub/redrock/pull/282
+.. _`#289`: https://github.com/desihub/redrock/pull/289
 
 0.18.0 (2023-09-14)
 -------------------
