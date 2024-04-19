@@ -943,6 +943,10 @@ def rrdesi(options=None, comm=None):
 
             ii = np.isin(zfit['targetid'], targetids[badpos | broken | unassigned | bad])
             zfit['zwarn'][ii] |= ZWarningMask.NODATA
+            # ADM set NODATA cases to z=0, GALAXY with zero coefficients.
+            zfit['spectype'][ii] = 'GALAXY'
+            zfit['subtype'][ii] = ''
+            zfit['coeff'][ii] = 0.
 
             ii = np.isin(zfit['targetid'], targetids[broken])
             zfit['zwarn'][ii] |= ZWarningMask.UNPLUGGED
