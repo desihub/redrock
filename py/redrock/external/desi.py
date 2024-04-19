@@ -24,6 +24,7 @@ from desispec.resolution import Resolution
 from desispec.coaddition import coadd_fibermap
 from desispec.specscore import compute_coadd_tsnr_scores
 from desispec.maskbits import fibermask
+from desispec.io.fibermap import annotate_fibermap
 
 from ..utils import elapsed, get_mp, distribute_work, getGPUCountMPI
 
@@ -93,7 +94,8 @@ def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
     hx = fits.HDUList()
     hx.append(fits.PrimaryHDU(header=header))
     hx.append(fits.convenience.table_to_hdu(zbest))
-    hx.append(fits.convenience.table_to_hdu(fibermap))
+    # ADM annotate_fibermap adds units to fibermap HDUs.
+    hx.append(annotate_fibermap(fits.convenience.table_to_hdu(fibermap)))
     hx.append(fits.convenience.table_to_hdu(exp_fibermap))
     hx.append(fits.convenience.table_to_hdu(tsnr2))
 
