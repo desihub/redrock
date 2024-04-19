@@ -227,7 +227,7 @@ class Archetype():
             
         if per_camera:
             #Use CPU mode since small tdata
-            (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux, nleg, 1, method='bvls', n_nbh=n_nearest, prior=prior, use_gpu=False, ncam=ncam)
+            (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux, nleg, 1, method='bvls', n_nbh=n_nearest, prior=prior, use_gpu=False, bands=target.bands)
         else:
             #Use CPU mode for calc_zchi2 since small tdata
             (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, weights, flux, wflux, 1, nbasis, use_gpu=False)

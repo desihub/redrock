@@ -273,8 +273,9 @@ def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux
 
     ret_zcoeff = {}
     ret_zcoeff['alpha'] = []
-    for b in bands: # bands as save in targets object
-        ret_zcoeff[b] = []
+    if nleg>0:
+        for b in bands: # bands as save in targets object
+            ret_zcoeff[b] = []
 
     new_bands = sorted(bands) # saves as correct order
 
