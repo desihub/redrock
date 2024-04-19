@@ -5,12 +5,13 @@ redrock Change Log
 0.19.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Add units to fibermap output (PR `#292`_).
+
+.. _`#292`: https://github.com/desihub/redrock/pull/292
 
 0.19.0 (2024-04-19)
 -------------------
 
-* Add units to fibermap output (PR `#292`_).
 * Write test files to temporary directory (PR `#263`_).
 * Check template dimension so code works on a single template (PR `#264`_). 
 * Versioned templates, NMF support, and updated IGM models (PR `#271`_).
@@ -34,7 +35,6 @@ redrock Change Log
 .. _`#278`: https://github.com/desihub/redrock/pull/278
 .. _`#282`: https://github.com/desihub/redrock/pull/282
 .. _`#289`: https://github.com/desihub/redrock/pull/289
-.. _`#292`: https://github.com/desihub/redrock/pull/292
 
 0.18.0 (2023-09-14)
 -------------------
