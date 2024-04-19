@@ -2,7 +2,12 @@
 redrock Change Log
 ==================
 
-0.19.0 (unreleased)
+0.19.1 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.19.0 (2024-04-19)
 -------------------
 
 * Write test files to temporary directory (PR `#263`_).
