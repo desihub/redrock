@@ -258,7 +258,7 @@ class Archetype():
             (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, weights, flux, wflux, 1, nbasis, use_gpu=False)
 
         sstype = ['%s'%(self._subtype[k]) for k in iBest] # subtypes of best archetypes
-        fsstype = ','.join(sstype)
+        fsstype = ';'.join(sstype)
         #print(sstype)
         #print(z, zzchi2, zzcoeff, fsstype)
         return zzchi2[0], zzcoeff[0], self._rrtype+':::%s'%(fsstype)
@@ -453,7 +453,7 @@ def split_archetype_coeff(subtype, coeff, nbands, nleg=None):
     If nleg is None, it will be derived from counting non-zero terms of coeff.
     Expected length of non-zero coeffs is num_subtypes + nbands*nleg.
     """
-    narchetypes = len(subtype.split(','))
+    narchetypes = len(subtype.split(';'))
     archcoeff = coeff[0:narchetypes]
     all_legcoeff = coeff[narchetypes:]
 
