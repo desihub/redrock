@@ -106,16 +106,6 @@ def minfit(x, y):
 
     return (x0, xerr, y0, zwarn)
 
-
-
-def legendre_calculate(nleg, dwave):
-    wave = np.concatenate([ w for w in dwave.values() ])
-    wmin = wave.min()
-    wmax = wave.max()
-    legendre = { hs:np.array([scipy.special.legendre(i)( (w-wmin)/(wmax-wmin)*2.) for i in range(nleg)]) for hs, w in dwave.items() }
-
-    return legendre
-
 def prior_on_coeffs(n_nbh, deg_legendre, sigma, ncamera):
     
     """
