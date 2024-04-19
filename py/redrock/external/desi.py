@@ -9,6 +9,7 @@ import sys
 import re
 import warnings
 import traceback
+import itertools
 
 import argparse
 
@@ -30,7 +31,7 @@ from ..utils import elapsed, get_mp, distribute_work, getGPUCountMPI
 
 from ..targets import (Spectrum, Target, DistTargets)
 
-from ..templates import load_dist_templates, get_best_model_spectra
+from ..templates import load_dist_templates
 
 from ..results import write_zscan
 
@@ -111,15 +112,18 @@ def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
 
 def write_bestmodel(outfile, zbest, modeldict, wavedict, template_version, archetype_version):
     """
-    Writes best fit redrock model in the outfile, the file format is same as input coadd file
+    Writes best fit redrock model in the outfile
 
     Args:
         outfile (str): output file name (fits)
-        zbest (best fit redshift table)
-        modeldict (dict): dictionary or table containing best-fit model (across cameras or coadded), fir each targetid, main keys: targetids
-        wavedict (dict): wavelength dictionary
-        template_version (str): template version used
-        archetype_version (str): archetype version used
+        zbest (Table): best fit redshift table
+        modeldict (dict): models[ntargets, nwave] keyed by camera band
+        wavedict (dict): wavelength dictionary keyed by camera band
+        template_version (dict): template versions keyed by fulltype
+        archetype_version (dict): archetype versions keys by fulltype
+
+    The output file format mirrors the structure of an input coadd, with B/R/Z_MODEL
+    HDUs instead of B/R/Z_FLUX HDUs.
     """
     header = fits.Header()
     header['LONGSTRN'] = 'OGIP 1.0'
@@ -137,27 +141,22 @@ def write_bestmodel(outfile, zbest, modeldict, wavedict, template_version, arche
         if key in os.environ:
             setdep(header, key, os.environ[key])
     
-    #sanity check
-    np.testing.assert_array_equal(zbest['TARGETID'].data, modeldict['TARGETID'].data)
-    #deleting targetid a they are already in zbest table
-    del modeldict['TARGETID']
-    zbest['COEFFTYPE'] = modeldict['COEFFTYPE'].copy()
-    del modeldict['COEFFTYPE']
-
     zbest.meta['EXTNAME'] = 'REDSHIFTS'
     hx = fits.HDUList()
     hx.append(fits.PrimaryHDU(header=header))
     hx.append(fits.convenience.table_to_hdu(zbest))
-    
-    for key1, key2 in zip(wavedict.keys(), modeldict.keys()):
-        hdu = fits.ImageHDU(name=key1)
-        hdu.data = wavedict[key1]
+
+    for band in wavedict.keys():
+        BAND = band.upper()
+        hdu = fits.ImageHDU(name=f'{BAND}_WAVELENGTH')
+        hdu.data = wavedict[band]
         hdu.header["BUNIT"] = "Angstrom"
         hx.append(hdu)
-        hdu = fits.ImageHDU(name=key2)
-        hdu.data = modeldict[key2].data.astype('float32')
+
+        hdu = fits.ImageHDU(name=f'{BAND}_MODEL')
+        hdu.data = modeldict[band].astype('float32')
         hx.append(hdu)
-        
+
     outfile = os.path.expandvars(outfile)
     outdir = os.path.dirname(os.path.abspath(outfile))
     if not os.path.exists(outdir):
@@ -460,8 +459,8 @@ class DistTargetsDESI(DistTargets):
                         nspec = len(self._target_specs[sfile][t])
                         for s in range(nspec):
                             sindx = self._target_specs[sfile][t][s]
-                            speclist.append(Spectrum(self._wave[sfile][b],
-                                None, None, None, None, b))
+                            speclist.append(Spectrum(wave=self._wave[sfile][b],
+                                flux=None, ivar=None, R=None, band=b))
 
             self._my_data.append(Target(t, speclist, coadd=False))
 
@@ -780,7 +779,7 @@ def rrdesi(options=None, comm=None):
                     comm.Abort()
                 else:
                     sys.exit(1)
-         
+
         if args.archetypes is not None:
             print('\n===== Archetype argument is provided, doing necessary checks=======\n')
             if os.path.exists(args.archetypes) and os.access(args.archetypes, os.R_OK):
@@ -806,6 +805,11 @@ def rrdesi(options=None, comm=None):
                     comm.Abort()
                 else:
                     sys.exit(1)
+
+    #- All ranks read the archetypes file(s)
+    archetypes = None
+    if args.archetypes is not None:
+        archetypes = All_archetypes(archetypes_dir=args.archetypes, verbose=(comm_rank==0)).archetypes
 
     targetids = None
     if args.targetids is not None:
@@ -913,8 +917,6 @@ def rrdesi(options=None, comm=None):
 
         # Get the dictionary of wavelength grids (with keys as wavehashes)
         dwave = targets.wavegrids()
-        # Get the dictionary of wavelength grids (with keys as camera names)
-        wave_dict = list(targets._wave.values())[0]
         
         ncamera = len(list(dwave.keys())) # number of cameras for given instrument
         if args.archetypes_no_legendre or args.archetypes is None:
@@ -966,9 +968,9 @@ def rrdesi(options=None, comm=None):
         # refinement.  This function only returns data on the rank 0 process.
 
         start = elapsed(None, "", comm=comm)
-        
+
         scandata, zfit = zfind(targets, dtemplates, mpprocs,
-            nminima=nminima, archetypes=args.archetypes,
+            nminima=nminima, archetypes=archetypes,
             priors=args.priors, chi2_scan=args.chi2_scan, use_gpu=use_gpu, zminfit_npoints=args.zminfit_npoints, per_camera=archetype_legendre_percamera, deg_legendre=args.archetype_legendre_degree, n_nearest=args.archetype_nnearest, prior_sigma=archetype_legendre_prior, ncamera=ncamera)
 
         stop = elapsed(start, "Computing redshifts", comm=comm)
@@ -1022,16 +1024,17 @@ def rrdesi(options=None, comm=None):
                 # Remove extra columns not needed for zbest
                 zbest.remove_columns(['zz', 'zzchi2', 'znum'])
                 
-                # Change to upper case like DESI
+                # Change to upper case like SDSS / DESI
                 for colname in zbest.colnames:
                     if colname.islower():
                         zbest.rename_column(colname, colname.upper())
 
+                # Allow 4 char for ARCH (vs. PCA/NMF) even if archetypes aren't used
+                zbest['FITMETHOD'] = zbest['FITMETHOD'].astype('S4')
+
                 template_version = {t._template.full_type:t._template._version for t in dtemplates}
                 archetype_version = None
-                if not args.archetypes is None:
-                    archetypes = All_archetypes(archetypes_dir=args.archetypes,
-                                                verbose=(comm_rank==0)).archetypes
+                if archetypes is not None:
                     archetype_version = {name:arch._version for name, arch in archetypes.items() }
                 
                 write_zbest(args.outfile, zbest,
@@ -1047,7 +1050,7 @@ def rrdesi(options=None, comm=None):
 
         if args.model is not None:
 
-            #- original non-distributed non-resampled templates
+            #- get original non-distributed non-resampled templates from distributed templates object
             templates = dict()
             for dt in dtemplates:
                 spectype = dt.template.template_type
@@ -1055,38 +1058,42 @@ def rrdesi(options=None, comm=None):
                 templates[(spectype,subtype)] = dt.template
 
             #- Evaluate models
-            if args.archetypes is not None:
-                if comm_rank==0 or comm is None:
-                    print('\nMODEL: Estimating Archetype best-fit models for the targets')
-                archetype = Archetype(args.archetypes)
-                allmodels, wavedict = archetype.get_best_archetype_model(targets=targets, redrockdata=zbest, deg_legendre=args.archetype_legendre_degree, ncam=ncamera, templates=templates, dwave=dwave, wave_dict=wave_dict)
-            else:
-                if comm_rank==0 or comm is None:
-                    print('\nMODEL: Estimating redrock PCA best-fit models for the targets')
-                allmodels, wavedict = get_best_model_spectra(targets=targets, redrockdata=zbest, templates=templates, dwave=dwave, wave_dict=wave_dict)
 
+            #- Evaluate best-fit models for local targets,
+            #- then collect into all_models on rank 0
+            local_models = targets.eval_models(zbest, templates, archetypes)
+            local_targetids = targets.local_target_ids()
             if targets.comm is not None:
-                all_model= targets.comm.gather(allmodels, root=0)
+                all_models = targets.comm.gather(local_models, root=0)
+                all_targetids = targets.comm.gather(local_targetids, root=0)
             else:
-                all_model = [ allmodels ]
+                all_models = [local_models,]
+                all_targetids = [local_targetids,]
 
-            if comm_rank==0 or comm is None:
-                if args.ntargets is not None or args.targetids is not None:
-                    cc_model = []
-                    for pp in all_model:
-                        if len(pp)>0: # to take care if number of processes is bigger than ntargets
-                            cc_model.append(pp)
-                else:
-                    cc_model =all_model.copy()
-                
-                all_model = vstack(cc_model) #combining all targets
-                #matching model targets to zebst target order
-                xsorted = np.argsort(all_model['TARGETID'])
-                ypos = np.searchsorted(all_model['TARGETID'][xsorted], zbest['TARGETID'])
-                indices = xsorted[ypos]
-                write_bestmodel(args.model, zbest, all_model[indices], wavedict, template_version, archetype_version)
-                del all_model
-    
+            stop = elapsed(start, f"Evaluating best fit models took", comm=comm)
+            if comm_rank == 0:
+                #- collapse list of lists of dictionaries -> single list of dictionaries
+                all_models = list(itertools.chain.from_iterable(all_models))
+
+                #- find sort orrder to match zbest
+                all_targetids = np.concatenate(all_targetids)
+                xsorted = np.argsort(all_targetids)
+                ypos = np.searchsorted(all_targetids[xsorted], zbest['TARGETID'])
+                sort_indices = xsorted[ypos]
+
+                #- double check sorting
+                all_targetids = np.array(all_targetids)[sort_indices]
+                np.testing.assert_array_equal(zbest['TARGETID'].data, all_targetids)
+
+                #- convert list[targets] of dict[bands] into dict[band] of sorted array[targets]
+                #- for DESI, the wavegrid keys = wavehashes = camera bands b/r/z
+                all_models_dict = dict()
+                wave_dict = targets.wavegrids()
+                for band in wave_dict:
+                    all_models_dict[band] = np.vstack([m[band] for m in all_models])[sort_indices]
+
+                write_bestmodel(args.model, zbest, all_models_dict, wave_dict, template_version, archetype_version)
+
             stop = elapsed(start, f"Writing {args.model} took", comm=comm)
 
     except Exception as err:
