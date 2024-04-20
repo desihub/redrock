@@ -540,6 +540,11 @@ class DistTargetsDESI(DistTargets):
     def _local_data(self):
         return self._my_data
 
+def none_or_float(value):
+    if value == 'None':
+        return None
+    return value
+
 
 def rrdesi(options=None, comm=None):
     """Estimate redshifts for DESI targets.
@@ -574,7 +579,7 @@ def rrdesi(options=None, comm=None):
     parser.add_argument("--archetype-legendre-percamera", default=True, action="store_true",
         required=False, help="If True, in archetype mode the fitting will be done for each camera/band")
     
-    parser.add_argument("--archetype-legendre-prior", type=float, default=0.1,
+    parser.add_argument("--archetype-legendre-prior", type=none_or_float, default=0.1,
         required=False, help="sigma to add as prior in solving linear equation, 1/sig**2 will be added, default is 0.1")
     
     parser.add_argument("--archetypes-no-legendre", default=False, action="store_true",
@@ -912,7 +917,7 @@ def rrdesi(options=None, comm=None):
         # refinement.  This function only returns data on the rank 0 process.
 
         start = elapsed(None, "", comm=comm)
-        
+        print(f'prior = {archetype_legendre_prior}')
         scandata, zfit = zfind(targets, dtemplates, mpprocs,
             nminima=nminima, archetypes=args.archetypes,
             priors=args.priors, chi2_scan=args.chi2_scan, use_gpu=use_gpu, zminfit_npoints=args.zminfit_npoints, per_camera=archetype_legendre_percamera, deg_legendre=args.archetype_legendre_degree, n_nearest=args.archetype_nnearest, prior_sigma=archetype_legendre_prior, ncamera=ncamera)
