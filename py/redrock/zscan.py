@@ -238,7 +238,41 @@ def calc_zchi2_one(spectra, weights, flux, wflux, tdata, solve_matrices_algorith
 
     return zchi2, zcoeff
 
-def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux, nleg, narch, method=None, n_nbh=None, prior=None, use_gpu=False, ncam=None):
+def prior_on_coeffs(n_nbh, deg_legendre, sigma, ncamera, add_negative_legendre_terms=False):
+
+    """
+    Args:
+        n_nbh (int): number of dominant archetypes
+        deg_legendre (int): number of Legendre polynomials
+        sigma (int): prior sigma to be used for archetype fitting
+        ncamera (int): number of cameras for given instrument
+        add_negative_legendre_terms (bool): whether to adjust prior
+            to account for negative legendre terms
+    Returns:
+        2d array to be added while solving for archetype fitting
+
+    """
+
+    tot_legendre_terms = deg_legendre
+    if add_negative_legendre_terms:
+        #Double total legendre term count to reflect negative terms
+        tot_legendre_terms = deg_legendre*2
+    nbasis = n_nbh+tot_legendre_terms*ncamera # 3 desi cameras
+    prior = np.zeros((nbasis, nbasis), dtype='float64');np.fill_diagonal(prior, 1/(sigma**2))
+    for i in range(n_nbh):
+        prior[i][i]=0. ## Do not add prior to the archetypes, added only to the Legendre polynomials
+
+    if add_negative_legendre_terms:
+        #Add cross terms to prior array
+        for i in range(ncamera):
+            for j in range(deg_legendre):
+                idx1 = n_nbh+i*tot_legendre_terms+j
+                idx2 = n_nbh+i*tot_legendre_terms+deg_legendre+j
+                prior[idx1][idx2] = -prior[idx1][idx1]
+                prior[idx2][idx1] = -prior[idx2][idx2]
+    return prior
+
+def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux, nleg, narch, method=None, n_nbh=None, prior_sigma=None, use_gpu=False, ncam=None):
     
     """This function calculates coefficients for archetype mode in each camera using normal linear algebra matrix solver or BVLS (bounded value least square) method
 
@@ -268,7 +302,24 @@ def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux
     ### TODO - implement BVLS on GPU
     # number of cameras in DESI: b, r, z
     spectra = target.spectra
+    method = method.upper()
+    add_negative_legendre_terms = False
+    if (method == 'BVLS' and use_gpu):
+        add_negative_legendre_terms = True
 
+    #Calculate prior here
+    prior = prior_on_coeffs(n_nbh, nleg, prior_sigma, ncam, add_negative_legendre_terms)
+
+    if (method == 'BVLS' and use_gpu):
+        #Hard-code se NNLS with additional legendre terms if BVLS AND gpu mode
+        method = 'NNLS'
+        #tdata should already have the additional negative legendre terms
+        nleg *= 2
+        if narch == 1:
+            #Use CPU if only 1 narch (nearest neighbor)
+            use_gpu = False
+
+    #Calculate nbasis after accounting for legendre terms
     nbasis = n_nbh+nleg*ncam # n_nbh : for actual physical archetype(s), nleg: number of legendre polynomials, ncamera: number of cameras
     
     if nleg>0:
@@ -277,7 +328,6 @@ def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux
         ret_zcoeff= {'alpha':[]} # in case no Legendre polynomials are used at all, only archetypes.
 
     #Setup dict of solver args to pass bounds to solver
-    method = method.upper()
     solver_args = dict()
     if (method == 'BVLS'):
         #only positive coefficients are allowed for the archetypes
