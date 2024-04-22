@@ -109,6 +109,10 @@ class TestTemplates(unittest.TestCase):
         templates = load_templates(template_files[0:2])
         self.assertEqual(len(templates), 2)
 
+        self.assertEqual(templates[0].filename, template_files[0])
+        self.assertEqual(templates[1].filename, template_files[1])
+
+
     ### @unittest.skipIf('RR_TEMPLATE_DIR' not in os.environ, '$RR_TEMPLATE_DIR not set')
     def test_load_dist_templates(self):
         dtarg = testutil.fake_targets()
