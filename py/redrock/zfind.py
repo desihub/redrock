@@ -251,6 +251,10 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
     if archetypes:
         archetypes = All_archetypes(archetypes_dir=archetypes).archetypes
         archetype_spectype = list(archetypes.keys()) # to account for the case if only one archetype is provided
+        tot_deg_legendre = deg_legendre
+        for key in archetypes:
+            if archetypes[key]._solver_method == 'bvls':
+                tot_deg_legendre = deg_legendre*2
     
     if not priors is None:
         priors = Priors(priors)
@@ -599,9 +603,9 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             maxcoeff = np.max([t.template.nbasis for t in templates])
         else:
             if n_nearest is not None:
-                maxcoeff = max(np.max([t.template.nbasis for t in templates]), ncamera*(deg_legendre)+n_nearest)
+                maxcoeff = max(np.max([t.template.nbasis for t in templates]), ncamera*(tot_deg_legendre)+n_nearest)
             else:
-                maxcoeff = max(np.max([t.template.nbasis for t in templates]), ncamera*(deg_legendre)+1)
+                maxcoeff = max(np.max([t.template.nbasis for t in templates]), ncamera*(tot_deg_legendre)+1)
 
         if allzfit['coeff'].ndim == 1:
             ntarg = allzfit['coeff'].shape
