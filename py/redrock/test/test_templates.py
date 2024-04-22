@@ -18,6 +18,7 @@ class TestTemplates(unittest.TestCase):
     def setUpClass(cls):
         cls.testDir = tempfile.mkdtemp()        
         cls.testfile = os.path.join(cls.testDir, 'test-{uuid}.h5'.format(uuid=uuid1()))
+        cls.starting_cwd = os.getcwd()
 
         # create dummy template files in a separate dir
         cls.testTemplateDir = tempfile.mkdtemp()
@@ -60,6 +61,9 @@ class TestTemplates(unittest.TestCase):
         if os.path.exists(self.testfile):
             os.remove(self.testfile)
 
+        #- make sure we are in starting directory every time
+        os.chdir(self.starting_cwd)
+
     ### @unittest.skipIf('RR_TEMPLATE_DIR' not in os.environ, '$RR_TEMPLATE_DIR not set')
     def test_find_templates(self):
         templates = find_templates()
@@ -78,6 +82,12 @@ class TestTemplates(unittest.TestCase):
             self.assertIn(os.path.basename(filename), self.default_templates)
 
         templates = find_templates(self.testTemplateDir+'/templates-alternate.txt')
+
+        # works without a path prefix
+        os.chdir(self.testTemplateDir)
+        templates = find_templates('templates-alternate.txt')
+        os.chdir(self.starting_cwd)
+
         self.assertEqual(len(templates), len(self.alternate_templates))
         for filename in templates:
             self.assertIn(os.path.basename(filename), self.alternate_templates)

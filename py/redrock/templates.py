@@ -270,7 +270,7 @@ def find_templates(template_path=None):
         if not os.path.exists(template_path):
             raise ValueError(f'Missing {template_path=}')
         default_templates_file = template_path
-        template_dir = os.path.dirname(template_path)
+        template_dir = os.path.dirname(os.path.abspath(template_path))
     elif template_path.endswith( ('.fits', '.fits.gz', '.fits.fz') ):
         #- single template file, return that as a list
         return [template_path,]
