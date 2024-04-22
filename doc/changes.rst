@@ -5,9 +5,11 @@ redrock Change Log
 0.19.1 (unreleased)
 -------------------
 
+* Set ZWARN/NODATA to z=0 GALAXY, no SUBTYPE, zero coefficients (PR `#294`_).
 * Add units to fibermap output (PR `#292`_).
 
 .. _`#292`: https://github.com/desihub/redrock/pull/292
+.. _`#294`: https://github.com/desihub/redrock/pull/294
 
 0.19.0 (2024-04-19)
 -------------------
