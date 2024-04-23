@@ -44,7 +44,7 @@ from ..archetypes import All_archetypes
 
 
 def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
-        template_version, archetype_version,
+        templates, archetypes=None,
         spec_header=None):
     """Write zbest and fibermap Tables to outfile
 
@@ -54,10 +54,10 @@ def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
         fibermap (Table): the coadded fibermap from the original inputs.
         tsnr2 (Table): table of input coadded TSNR2 values
         exp_fibermap (Table): the per-exposure fibermap from the orig inputs.
-        template_version (str): template version used
-        archetype_version (str): archetype version used
+        templates (list): list of template objects
 
     Options:
+        archetypes (list): list of Archetype objects
         spec_header (dict-like): header of HDU 0 of input spectra
 
     Modifies input tables.meta['EXTNAME']
@@ -65,13 +65,15 @@ def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
     header = fits.Header()
     header['LONGSTRN'] = 'OGIP 1.0'
     header['RRVER'] = (__version__, 'Redrock version')
-    for i, fulltype in enumerate(template_version.keys()):
-        header['TEMNAM'+str(i).zfill(2)] = fulltype
-        header['TEMVER'+str(i).zfill(2)] = template_version[fulltype]
-    if not archetype_version is None:
-        for i, fulltype in enumerate(archetype_version.keys()):
-            header['ARCNAM'+str(i).zfill(2)] = fulltype
-            header['ARCVER'+str(i).zfill(2)] = archetype_version[fulltype]
+    for i, t in enumerate(templates):
+        header[f'TEMNAM{i:02d}'] = t.full_type
+        header[f'TEMVER{i:02d}'] = t.version
+        header[f'TEMFIL{i:02d}'] = os.path.basename(t.filename)
+    if archetypes is not None:
+        for i, atyp in enumerate(archetypes):
+            header[f'ARCNAM{i:02d}'] = atyp.template_type
+            header[f'ARCVER{i:02d}'] = atyp.version
+            header[f'ARCFIL{i:02d}'] = os.path.basename(atyp.filename)
 
     # record code versions and key environment variables
     add_dependencies(header)
@@ -978,17 +980,17 @@ def rrdesi(options=None, comm=None):
                     if colname.islower():
                         zbest.rename_column(colname, colname.upper())
 
-                template_version = {t._template.full_type:t._template._version for t in dtemplates}
-                archetype_version = None
+                templates = [t._template for t in dtemplates]
+
+                archetypes = None
                 if not args.archetypes is None:
                     archetypes = All_archetypes(archetypes_dir=args.archetypes,
-                                                verbose=(comm_rank==0)).archetypes
-                    archetype_version = {name:arch._version for name, arch in archetypes.items() }
+                                                verbose=(comm_rank==0)).archetypes.values()
 
                 write_zbest(args.outfile, zbest,
                         targets.fibermap, targets.exp_fibermap,
                         targets.tsnr2,
-                        template_version, archetype_version,
+                        templates, archetypes=archetypes,
                         spec_header=targets.header0)
 
             stop = elapsed(start, f"Writing {args.outfile} took", comm=comm)

@@ -35,8 +35,10 @@ class Template(object):
     def __init__(self, filename=None, spectype=None, redshifts=None,
                  wave=None, flux=None, subtype=None, method='PCA',
                  igm_model='Inoue14',
-                 zscan_galaxy=None, zscan_qso=None, zscan_star=None):
+                 zscan_galaxy=None, zscan_qso=None, zscan_star=None,
+                 version=None):
 
+        self._filename = filename
         if filename is not None:
             fx = None
             if os.path.exists(filename):
@@ -143,6 +145,7 @@ class Template(object):
             self._subtype = subtype
             self._igm_model = igm_model
             self._method = method
+            self._version = version
 
         self._nbasis = self.flux.shape[0]
         self._nwave = self.flux.shape[1]
@@ -195,6 +198,14 @@ class Template(object):
             return '{}:::{}'.format(self._rrtype, self._subtype)
         else:
             return self._rrtype
+
+    @property
+    def version(self):
+        return self._version
+
+    @property
+    def filename(self):
+        return self._filename
 
     @property
     def redshifts(self):

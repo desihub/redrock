@@ -31,6 +31,7 @@ class Archetype():
     def __init__(self, filename):
 
         # Load the file
+        self._filename = filename
         h = fits.open(os.path.expandvars(filename), memmap=False)
 
         hdr = h['ARCHETYPES'].header
@@ -81,6 +82,27 @@ class Archetype():
             import cupy as cp
             self._gpuflux = cp.asarray(self.flux)
         return self._gpuflux
+
+    @property
+    def version(self):
+        return self._version
+
+    @property
+    def filename(self):
+        return self._filename
+
+    #- template_type, sub_type, and full_type like Template object methods
+    @property
+    def template_type(self):
+        return self._rrtype
+
+    @property
+    def sub_type(self):
+        return self._subtype
+
+    @property
+    def full_type(self):
+        return self._full_type
 
     def rebin_template(self,index,z,dwave,trapz=True):
         """
