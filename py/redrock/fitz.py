@@ -136,7 +136,8 @@ def prior_on_coeffs(n_nbh, deg_legendre, sigma, ncamera):
     return prior
 
 
-def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=False, deg_legendre=None, zminfit_npoints=15, per_camera=False, n_nearest=None, prior_sigma=None):
+def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=False, deg_legendre=None,
+         zminfit_npoints=15, per_camera=False, n_nearest=None, prior_sigma=None):
     """Refines redshift measurement around up to nminima minima.
 
     TODO:
@@ -174,7 +175,12 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
     dwave = { s.wavehash:s.wave for s in spectra }
 
     (weights, flux, wflux) = spectral_data(spectra)
-    
+
+    # Redshifts near [OII]; used only for galaxy templates
+    if template.template_type == 'GALAXY':
+        isOII = (3724 <= template.wave) & (template.wave <= 3733)
+        OIItemplate = template.flux[:, isOII].T
+     
     if (use_gpu):
         #Get CuPy arrays of weights, flux, wflux
         #These are created on the first call of gpu_spectral_data() for a
@@ -251,6 +257,13 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
             (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, binned, weights, flux, wflux, nz, nbasis,
                                                  solve_matrices_algorithm=template.solve_matrices_algorithm,
                                                  use_gpu=use_gpu)
+
+        #- Penalize chi2 for negative [OII] flux; ad-hoc
+        zzchi2penalty = zzchi2 * 0.
+        if template.template_type == 'GALAXY':
+            OIIflux = np.sum(zzcoeff @ OIItemplate.T, axis=1)
+            zzchi2penalty[OIIflux < 0] = -OIIflux[OIIflux < 0]
+        zzchi2 += zzchi2penalty
 
         #- fit parabola to 3 points around minimum
         i = min(max(np.argmin(zzchi2),1), len(zz)-2)
