@@ -5,11 +5,19 @@ redrock Change Log
 0.19.1 (unreleased)
 -------------------
 
-* Set ZWARN/NODATA to z=0 GALAXY, no SUBTYPE, zero coefficients (PR `#294`_).
+* Add load_templates_from_header (PR `#290`_).
 * Add units to fibermap output (PR `#292`_).
+* Set ZWARN/NODATA to z=0 GALAXY, no SUBTYPE, zero coefficients (PR `#294`_).
+* Add TEMFILnn keywords to header to support non-standard template names
+  (PR `#295`_).
+* Fix read_zscan; add make_fulltype, parse_fulltype to standardize
+  fulltype,spectype,subtype parsing (PR `#297`_).
 
+.. _`#290`: https://github.com/desihub/redrock/pull/290
 .. _`#292`: https://github.com/desihub/redrock/pull/292
 .. _`#294`: https://github.com/desihub/redrock/pull/294
+.. _`#295`: https://github.com/desihub/redrock/pull/295
+.. _`#297`: https://github.com/desihub/redrock/pull/297
 
 0.19.0 (2024-04-19)
 -------------------
