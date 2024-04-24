@@ -765,6 +765,28 @@ def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, solve_mat
             zchi2[i] = np.dot( (flux - model)**2, weights )
     return (zchi2, zcoeff)
 
+def calc_negOII_penalty(OIItemplate, coeff):
+    """return penalty term for model having negative [OII] flux
+
+    Args:
+        OIItemplate[nwave, nbasis]: portion of template around [OII] doublet
+        coeff[nz, nbasis]: coefficients from full template fit to data
+
+    Returns:
+        penalty[nz]: penalty per redshift bin
+    """
+    #- evaluate template and sum over [OII] doublet
+    OIIflux = np.sum(coeff @ OIItemplate, axis=1)
+
+    #- Linear penalty with negative [OII]; no mathematical basis but
+    #- pragmatically works ok
+    try:
+        penalty = -OIIflux * (OIIflux < 0)
+    except Exception as err:
+        print(f'BLAT {OIItemplate.shape=} {coeff.shape=}')
+        raise err
+
+    return penalty
 
 ###!!! NOTE - this is the main method for the v3 algorithm
 ###    In this version, everything is done in batch on the GPU but the
@@ -813,12 +835,6 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
     zchi2penalty = np.zeros( (ntargets, nz) )
     zcoeff = np.zeros( (ntargets, nz, nbasis) )
 
-    # Redshifts near [OII]; used only for galaxy templates
-    if dtemplate.template.template_type == 'GALAXY':
-        isOII = (3724 <= dtemplate.template.wave) & \
-            (dtemplate.template.wave <= 3733)
-        OIItemplate = dtemplate.template.flux[:,isOII].T
-
     ## Redshifted templates are now already in format needed - dict of 3d
     # arrays (CUPY or numpy).
     tdata = dtemplate.local.data
@@ -849,10 +865,10 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
         # For coarse z scan, use fullprecision = False to maximize speed
         (zchi2[j,:], zcoeff[j,:,:]) = calc_zchi2_batch(target_data[j].spectra, tdata, weights, flux, wflux, nz, nbasis, dtemplate.template.solve_matrices_algorithm, use_gpu=use_gpu, fullprecision=False)
 
-        #- Penalize chi2 for negative [OII] flux; ad-hoc
-        if dtemplate.template.template_type == 'GALAXY':
-            OIIflux = np.sum(zcoeff[j] @ OIItemplate.T, axis=1)
-            zchi2penalty[j][OIIflux < 0] = -OIIflux[OIIflux < 0]
+        #- Galaxy templates penalize chi2 for negative [OII] flux; ad-hoc
+        if hasattr(dtemplate.template, 'OIItemplate'):
+            zchi2penalty[j] = calc_negOII_penalty(
+                                   dtemplate.template.OIItemplate, zcoeff[j])
 
         if dtemplate.comm is None and progress is not None:
             progress.put(1)

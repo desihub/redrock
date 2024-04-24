@@ -16,6 +16,7 @@ from . import constants
 from .rebin import rebin_template
 
 from .zscan import calc_zchi2_one, spectral_data, calc_zchi2_batch
+from .zscan import calc_negOII_penalty
 
 from .zwarning import ZWarningMask as ZW
 
@@ -259,11 +260,8 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
                                                  use_gpu=use_gpu)
 
         #- Penalize chi2 for negative [OII] flux; ad-hoc
-        zzchi2penalty = zzchi2 * 0.
-        if template.template_type == 'GALAXY':
-            OIIflux = np.sum(zzcoeff @ OIItemplate.T, axis=1)
-            zzchi2penalty[OIIflux < 0] = -OIIflux[OIIflux < 0]
-        zzchi2 += zzchi2penalty
+        if hasattr(template, 'OIItemplate'):
+            zzchi2 += calc_negOII_penalty(template.OIItemplate, zzcoeff)
 
         #- fit parabola to 3 points around minimum
         i = min(max(np.argmin(zzchi2),1), len(zz)-2)

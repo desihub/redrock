@@ -158,6 +158,12 @@ class Template(object):
             raise ValueError(f'Template method {self._method} unrecognized; '
                               f'should be one of {valid_template_methods}')
 
+        #- Special case for GALAXY templates: cache subset of template
+        #- that covers [OII]
+        if self._rrtype == 'GALAXY':
+            isOII = (3724 <= self.wave) & (self.wave <= 3733)
+            self.OIItemplate = self.flux[:,isOII]
+
         if filename is not None:
             print(f'INFO: {os.path.basename(filename)} {self}')
         else:
