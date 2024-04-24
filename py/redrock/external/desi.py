@@ -543,7 +543,7 @@ class DistTargetsDESI(DistTargets):
 def none_or_float(value):
     if value == 'None':
         return None
-    return value
+    return float(value)
 
 
 def rrdesi(options=None, comm=None):
@@ -662,7 +662,7 @@ def rrdesi(options=None, comm=None):
         args = parser.parse_args()
     else:
         args = parser.parse_args(options)
-
+    
     if args.ncpu is not None:
         print('WARNING: --ncpu is deprecated; use --mp instead')
         args.mp = args.ncpu
@@ -917,7 +917,7 @@ def rrdesi(options=None, comm=None):
         # refinement.  This function only returns data on the rank 0 process.
 
         start = elapsed(None, "", comm=comm)
-        
+         
         scandata, zfit = zfind(targets, dtemplates, mpprocs,
             nminima=nminima, archetypes=args.archetypes,
             priors=args.priors, chi2_scan=args.chi2_scan, use_gpu=use_gpu, zminfit_npoints=args.zminfit_npoints, per_camera=archetype_legendre_percamera, deg_legendre=args.archetype_legendre_degree, n_nearest=args.archetype_nnearest, prior_sigma=archetype_legendre_prior, ncamera=ncamera)
