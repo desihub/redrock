@@ -69,4 +69,17 @@ class TestIO(unittest.TestCase):
                     d2 = zscan2[targetid][spectype][key]
                     self.assertTrue(np.all(d1==d2), 'data mismatch {}/{}/{}'.format(targetid, spectype, key))
 
+    def test_read_zscan(self):
+        """Additional read_zscan testing with pre-generated data"""
+        import importlib
+        zscanfile = importlib.resources.files('redrock.test').joinpath('data/rrdetails-test.h5')
+        zscan, zfit = read_zscan(zscanfile)
+
+        for targetid in np.unique(zfit['targetid']):
+            for fulltype in zscan[targetid].keys():
+                zz = zscan[targetid][fulltype]
+                self.assertEqual(len(zz['redshifts']), len(zz['zchi2']))
+                self.assertGreater(len(zz['zfit']), 0, f'Empty zfit Table for {targetid=} {fulltype=}')
+
+
 
