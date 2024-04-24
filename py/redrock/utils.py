@@ -256,7 +256,7 @@ def reduced_wavelength(wave):
     Args:
         wave (array): wavelength for which reduced wavelengths to be estimated
     Return:
-        reduced wavelength [-1,1] range
+        reduced wavelength in [-1,1] range
     """
     wave = np.asarray(wave)
     wavemax = wave.max()
