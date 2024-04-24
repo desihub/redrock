@@ -166,6 +166,11 @@ def mp_array(original):
     """
     import multiprocessing as mp
 
+    # A zero-length array generates the warning documented in
+    # https://github.com/desihub/redrock/issues/250; capture it.
+    if original.size == 0:
+        return original
+    
     typecode = original.dtype.char
     shape = original.shape
 
