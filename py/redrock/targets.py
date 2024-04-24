@@ -180,9 +180,9 @@ class Target(object):
         if (self._legendre is not None and self.nleg == nleg):
             return self._legendre
         dwave = { s.wavehash:s.wave for s in self.spectra }
-        wave = np.concatenate([ w for w in dwave.values() ])
-        wmin = wave.min()
-        wmax = wave.max()
+        #wave = np.concatenate([ w for w in dwave.values() ])
+        #wmin = wave.min()
+        #wmax = wave.max()
         self._legendre = { hs:np.array([scipy.special.legendre(i)(reduced_wavelength(w)) for i in range(nleg)]) for hs, w in dwave.items() }
         self.nleg = nleg
         if (use_gpu):
