@@ -177,4 +177,14 @@ class TestTemplates(unittest.TestCase):
         self.assertTrue(filenames[1].endswith('rrtemplate-GALAXY-ELG-v3.0.fits'), f'Wrong {filenames[1]}')
         self.assertTrue(filenames[2].endswith('rrtemplate-GALAXY-LRG-v3.0.fits'), f'Wrong {filenames[2]}')
 
+    def test_fulltype_parsing(self):
+        from ..templates import parse_fulltype, make_fulltype
+        self.assertEqual(parse_fulltype('GALAXY'), ('GALAXY', ''))
+        self.assertEqual(parse_fulltype('QSO:::HIZ'), ('QSO', 'HIZ'))
+
+        self.assertEqual(make_fulltype('GALAXY', ''), 'GALAXY')
+        self.assertEqual(make_fulltype('GALAXY', None), 'GALAXY')
+        self.assertEqual(make_fulltype('QSO', 'HIZ'), 'QSO:::HIZ')
+
+
 

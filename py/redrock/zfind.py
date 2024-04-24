@@ -21,6 +21,8 @@ from .utils import elapsed
 
 from .targets import distribute_targets
 
+from .templates import parse_fulltype
+
 from .archetypes import All_archetypes
 
 from .priors import Priors
@@ -320,9 +322,8 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
     #creating list of template spectype to make use in case archetypes would be used
     all_spectype = []
     for spec in templates:
-        temp_spectype = spec.template._rrtype.split(':::')
-        if temp_spectype not in all_spectype:
-            all_spectype.append(temp_spectype)
+        if spec.template.template_type not in all_spectype:
+            all_spectype.append(spec.template.template_type)
 
     for t in np.array(list(templates))[sort]:
         ft = t.template.full_type
@@ -423,23 +424,20 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     continue
                 tmp = allresults[tid][fulltype]['zfit']
 
-                #- TODO: reconsider fragile parsing of fulltype
                 if archetypes is None:
-                    if fulltype.count(':::') > 0:
-                        spectype, subtype = fulltype.split(':::')
-                    else:
-                        spectype, subtype = (fulltype, '')
-
+                    spectype, subtype = parse_fulltype(fulltype)
                 else:
                     if 'fulltype' in tmp.keys():#to take care of case when archetype is applied only for one template
-                        spectype = [ el[0].split(':::')[0] for el in tmp['fulltype'] ] #el is a list with one element (corresponding to each minima)
-                        subtype = [ el[0].split(':::')[1] for el in tmp['fulltype'] ]
+                        spectype = list()
+                        subtype = list()
+                        #l el is a list with one element (corresponding to each minimum)
+                        for el in tmp['fulltype']:
+                            this_spectype, this_subtype = parse_fulltype(el[0])
+                            spectype.append(this_spectype)
+                            subtype.append(this_subtype)
                         del tmp['fulltype'] #it's a dictionary
                     else:
-                        if fulltype.count(':::') > 0:
-                            spectype, subtype = fulltype.split(':::')
-                        else:
-                            spectype, subtype = (fulltype, '')
+                        spectype, subtype = parse_fulltype(fulltype)
 
                 #Have to create arrays of correct length since using dict of
                 #np arrays instead of astropy Table

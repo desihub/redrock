@@ -19,6 +19,8 @@ from .igm import transmission_Lyman
 
 from .zscan import per_camera_coeff_with_least_square_batch
 
+from .templates import make_fulltype
+
 class Archetype():
     """Class to store all different archetypes from the same spectype.
 
@@ -41,7 +43,7 @@ class Archetype():
         self._rrtype = hdr['RRTYPE'].strip()
         self._subtype = np.array(np.char.strip(h['ARCHETYPES'].data['SUBTYPE'].astype(str)))
         self._subtype = np.char.add(np.char.add(self._subtype,'_'),np.arange(self._narch,dtype=int).astype(str))
-        self._full_type = np.char.add(self._rrtype+':::',self._subtype)
+        self._full_type = np.array([make_fulltype(self._rrtype, subtype) for subtype in self._subtype])
         self._version = hdr['VERSION']
 
         self.wave = np.asarray(hdr['CRVAL1'] + hdr['CDELT1']*np.arange(self.flux.shape[1]))
@@ -255,7 +257,7 @@ class Archetype():
         fsstype = '_'.join(sstype)
         #print(sstype)
         #print(z, zzchi2, zzcoeff, fsstype)
-        return zzchi2[0], zzcoeff[0], self._rrtype+':::%s'%(fsstype)
+        return zzchi2[0], zzcoeff[0], make_fulltype(self._rrtype, fsstype)
 
     def get_best_archetype(self,target,weights,flux,wflux,dwave,z, per_camera, n_nearest, trans=None, solve_method='bvls', prior=None, use_gpu=False):
 

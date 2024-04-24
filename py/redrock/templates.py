@@ -192,12 +192,9 @@ class Template(object):
 
     @property
     def full_type(self):
-        """Return formatted type:subtype string.
+        """Return formatted fulltype = spectype:::subtype string.
         """
-        if self._subtype != '':
-            return '{}:::{}'.format(self._rrtype, self._subtype)
-        else:
-            return self._rrtype
+        return make_fulltype(self._rrtype, self._subtype)
 
     @property
     def version(self):
@@ -248,6 +245,31 @@ class Template(object):
         flux = self.flux.T.dot(coeff).T / (1+z)
         return trapz_rebin(self.wave*(1+z), flux, wave)
 
+def parse_fulltype(fulltype):
+    """Parse template fulltype into (spectype, subtype)
+    """
+    fulltype = fulltype.strip()
+    if ':::' in fulltype:
+        spectype, subtype = fulltype.split(':::')
+    else:
+        spectype = fulltype
+        subtype = ''
+
+    return spectype, subtype
+
+def make_fulltype(spectype, subtype):
+    """combine (spectype, subtype) into fulltype
+    """
+    spectype = spectype.strip()
+    if subtype is not None:
+        subtype = subtype.strip()
+
+    if subtype is not None and subtype != '':
+        fulltype = f'{spectype}:::{subtype}'
+    else:
+        fulltype = spectype
+
+    return fulltype
 
 def find_templates(template_path=None):
     """Return list of Redrock template files
@@ -334,12 +356,7 @@ def header2templatefiles(hdr, template_dir=None):
             filenames.append( hdr[filekey] )
         elif (typekey in hdr) and (verkey in hdr):
             version = hdr[verkey].strip()
-            blat = hdr[typekey].split(':::')  # SPECTYPE:::SUBTYPE or just SPECTYPE
-            spectype = blat[0].strip()
-            if len(blat) > 1:
-                subtype = blat[1].strip()
-            else:
-                subtype = None
+            spectype, subtype = parse_fulltype(hdr[typekey])
 
             #- special case unversioned STAR templates
             if version=='unknown':
@@ -347,6 +364,10 @@ def header2templatefiles(hdr, template_dir=None):
                     version = '0.1'
                 else:
                     raise ValueError(f'unknown version for {spectype=}')
+
+            #- blank subtype -> None for filename purposes
+            if subtype == '':
+                subtype = None
 
             filenames.append(f'rrtemplate-{spectype}-{subtype}-v{version}.fits')
 
