@@ -781,11 +781,7 @@ def calc_negOII_penalty(OIItemplate, coeff):
 
     #- Linear penalty with negative [OII]; no mathematical basis but
     #- pragmatically works ok
-    try:
-        penalty = -OIIflux * (OIIflux < 0)
-    except Exception as err:
-        print(f'BLAT {OIItemplate.shape=} {coeff.shape=}')
-        raise err
+    penalty = -OIIflux * (OIIflux < 0)
 
     return penalty
 
