@@ -48,12 +48,18 @@ def _get_header(templates, archetypes=None, spec_header=None):
     """Get standardized header with template and archetype versions
     
     Args:
-        templates (list): list of template objects
+        templates : list or dict of template objects
 
     Options:
-        archetypes (list): list of Archetype objects
+        archetypes : list or dict of Archetype objects
         spec_header (dict-like): header of HDU 0 of input spectra/coadd
     """
+    if isinstance(templates, dict):
+        templates = templates.values()
+
+    if isinstance(archetypes, dict):
+        archetypes = archetypes.values()
+
     header = fits.Header()
     header['LONGSTRN'] = 'OGIP 1.0'
     header['RRVER'] = (__version__, 'Redrock version')
@@ -93,10 +99,10 @@ def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
         fibermap (Table): the coadded fibermap from the original inputs.
         tsnr2 (Table): table of input coadded TSNR2 values
         exp_fibermap (Table): the per-exposure fibermap from the orig inputs.
-        templates (list): list of template objects
+        templates : list or dict of template objects
 
     Options:
-        archetypes (list): list of Archetype objects
+        archetypes : list or dict of Archetype objects
         spec_header (dict-like): header of HDU 0 of input spectra
 
     Modifies input tables.meta['EXTNAME']
@@ -137,10 +143,10 @@ def write_bestmodel(outfile, zbest, modeldict, wavedict, templates,
         zbest (Table): best fit redshift table
         modeldict (dict): models[ntargets, nwave] keyed by camera band
         wavedict (dict): wavelength dictionary keyed by camera band
-        templates (list): list of template objects
+        templates : list or dict of template objects
 
     Options:
-        archetypes (list): list of Archetype objects
+        archetypes : list or dict of Archetype objects
         spec_header (dict-like): header of HDU 0 of input spectra
 
     The output file format mirrors the structure of an input coadd, with B/R/Z_MODEL
@@ -1038,6 +1044,18 @@ def rrdesi(options=None, comm=None):
             ii = np.isin(zfit['targetid'], targetids[badcoverage])
             zfit['zwarn'][ii] |= ZWarningMask.LITTLE_COVERAGE
 
+        # gather templates and archetypes for final I/O header metadata
+        templates = dict()
+        for dt in dtemplates:
+            spectype = dt.template.template_type
+            subtype = dt.template.sub_type
+            templates[(spectype,subtype)] = dt.template
+
+        archetypes = None
+        if not args.archetypes is None:
+            archetypes = All_archetypes(archetypes_dir=args.archetypes,
+                                        verbose=(comm_rank==0)).archetypes
+
         # Write the outputs
 
         if args.details is not None:
@@ -1061,12 +1079,6 @@ def rrdesi(options=None, comm=None):
 
                 # Allow 4 char for ARCH (vs. PCA/NMF) even if archetypes aren't used
                 zbest['FITMETHOD'] = zbest['FITMETHOD'].astype('S4')                
-                templates = [t._template for t in dtemplates]
-
-                archetypes = None
-                if not args.archetypes is None:
-                    archetypes = All_archetypes(archetypes_dir=args.archetypes,
-                                                verbose=(comm_rank==0)).archetypes.values()
 
                 write_zbest(args.outfile, zbest,
                         targets.fibermap, targets.exp_fibermap,
@@ -1079,16 +1091,8 @@ def rrdesi(options=None, comm=None):
 
             stop = elapsed(start, f"Writing {args.outfile} took", comm=comm)
 
+        #- Evaluate models
         if args.model is not None:
-
-            #- get original non-distributed non-resampled templates from distributed templates object
-            templates = dict()
-            for dt in dtemplates:
-                spectype = dt.template.template_type
-                subtype = dt.template.sub_type
-                templates[(spectype,subtype)] = dt.template
-
-            #- Evaluate models
 
             #- Evaluate best-fit models for local targets,
             #- then collect into all_models on rank 0
@@ -1123,8 +1127,8 @@ def rrdesi(options=None, comm=None):
                 for band in wave_dict:
                     all_models_dict[band] = np.vstack([m[band] for m in all_models])[sort_indices]
 
-                write_bestmodel(args.model, zbest, all_models_dict, wave_dict, templates,
-                                archetypes, spec_header=targets.header0)
+                write_bestmodel(args.model, zbest, all_models_dict, wave_dict,
+                                templates, archetypes, spec_header=targets.header0)
 
             stop = elapsed(start, f"Writing {args.model} took", comm=comm)
 

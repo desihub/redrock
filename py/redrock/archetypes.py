@@ -198,7 +198,7 @@ class Archetype():
             integrated flux, but more directly maps model=templates.dot(coeff)
         """
 
-        subtypes = subtype.split(',')
+        subtypes = subtype.split(';')
         model = np.zeros(len(wave))
         for this_subtype, c in zip(subtypes, coeff[0:len(subtypes)]):
             index = np.where(self._subtype == this_subtype)[0][0]
