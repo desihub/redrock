@@ -161,6 +161,13 @@ class Template(object):
             raise ValueError(f'Template method {self._method} unrecognized; '
                               f'should be one of {valid_template_methods}')
 
+        # Special case for GALAXY templates and PCA fitting, which can include
+        # negative templates or coefficients: Cache a template that covers just
+        # [OII].
+        if self._rrtype == 'GALAXY' and self._method == "PCA":
+            isOII = (3724 <= self.wave) & (self.wave <= 3733)
+            self.OIItemplate = self.flux[:,isOII]
+
         if filename is not None:
             print(f'INFO: {os.path.basename(filename)} {self}')
         else:
