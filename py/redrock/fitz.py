@@ -9,7 +9,6 @@ from __future__ import absolute_import, division, print_function
 
 import numpy as np
 import scipy.constants
-import scipy.special
 
 from . import constants
 
@@ -319,7 +318,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
         if archetype is None:
             results.append(dict(z=zbest, zerr=zerr, zwarn=zwarn,
                 chi2=chi2min, zz=zz, zzchi2=zzchi2,
-                coeff=coeff))
+                coeff=coeff, fitmethod=template.method))
         else:
             if prior_sigma is not None:
                 if per_camera:
@@ -337,7 +336,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
 
             results.append(dict(z=zbest, zerr=zerr, zwarn=zwarn,
                 chi2=chi2min, zz=zz, zzchi2=zzchi2,
-                coeff=coeff, fulltype=fulltype))
+                coeff=coeff, fulltype=fulltype, fitmethod=archetype.method))
 
     #- Sort results by chi2min; detailed fits may have changed order
     ii = np.argsort([tmp['chi2'] for tmp in results])

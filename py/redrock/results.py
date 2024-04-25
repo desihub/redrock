@@ -47,8 +47,9 @@ def write_zscan(filename, zscan, zfit, clobber=False):
     zfit = zfit.copy()
 
     #- convert unicode to byte strings
-    zfit.replace_column('spectype', np.char.encode(zfit['spectype'], 'ascii'))
-    zfit.replace_column('subtype', np.char.encode(zfit['subtype'], 'ascii'))
+    for colname in ('spectype', 'subtype', 'fitmethod'):
+        if colname in zfit.columns:
+            zfit.replace_column(colname, np.char.encode(zfit[colname], 'ascii'))
 
     zbest = zfit[zfit['znum'] == 0]
     zbest.remove_column('znum')
