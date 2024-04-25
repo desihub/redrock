@@ -210,7 +210,8 @@ def sort_zfit_dict(zfit):
     sort_dict_by_cols(zfit, ('__badfit__', 'chi2'), sort_first_column_first=True)
     zfit.pop('__badfit__')
 
-def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=None, chi2_scan=None, use_gpu=False, zminfit_npoints=15, per_camera=None, deg_legendre=None, n_nearest=None, prior_sigma=None, ncamera=None):
+def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=None, chi2_scan=None, use_gpu=False,
+          zminfit_npoints=15, per_camera=None, deg_legendre=None, n_nearest=None, prior_sigma=None, ncamera=None):
     """Compute all redshift fits for the local set of targets and collect.
 
     Given targets and templates distributed across a set of MPI processes,
@@ -439,6 +440,11 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     else:
                         spectype, subtype = parse_fulltype(fulltype)
 
+                if spectype.upper() == 'STAR':
+                    max_velo_diff = constants.max_velo_diff_star
+                else:
+                    max_velo_diff = constants.max_velo_diff
+
                 #Have to create arrays of correct length since using dict of
                 #np arrays instead of astropy Table
                 nmin = len(tmp['chi2'])
@@ -525,8 +531,8 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             tzfit['znum'] = np.arange(l)
 
             #- calc deltachi2 and set ZW.SMALL_DELTA_CHI2 flag
-            deltachi2, setzwarn = calc_deltachi2(
-                    tzfit['chi2'], tzfit['z'], tzfit['zwarn'])
+            deltachi2, setzwarn = calc_deltachi2(tzfit['chi2'], tzfit['z'], tzfit['zwarn'],
+                                                 dvlimit=max_velo_diff)
             tzfit['deltachi2'] = deltachi2
             tzfit['zwarn'][setzwarn] |= ZW.SMALL_DELTA_CHI2
 
