@@ -403,39 +403,6 @@ class Archetype():
             return zzchi2[iBest], zzcoeff[iBest], self._full_type[iBest]
 
 
-    def return_coeff_per_camera(self, i, tg, arrtype, dedges, dwave, redrockdata, deg_legendre, ncam, ngals=1):
-
-        """
-        wrapper function to get archetype and legendre coefficients and template arrays
-
-        Args:
-            i (int): index of given target id in zbest table
-            tg (target object) for given targetid
-            arrtype (np or cp) as is the case GPU vs CPU
-            dedges (dict): default is None: dictionary containing edges for tarpezium rebinning
-            dwave (dict): wavelength dictionary with keys as wavehashes
-            deg_legendre (int): Legendre polynomial degree
-            ncam (int): number of cameras
-            ngals (int): number of nearest galaxies (default 1)
-        
-        Returns:
-            coefficients, tdata and best archetype index
-        """
-
-        z = redrockdata['Z'][i]
-
-        arch_inds = np.array(redrockdata['SUBTYPE'][i].split('_')[1:], dtype='int32')
-        nbasis = ncam*deg_legendre + len(arch_inds)
-        coeff = redrockdata['COEFF'][i][0:nbasis]
-        trans = { hs:transmission_Lyman(z,w) for hs, w in dwave.items() }
-        binned = self.rebin_template_batch(z, dwave, trapz=True, dedges=dedges, indx=arch_inds, use_gpu=False)
-        binned = {hs:trans[hs][:,None]*binned[hs] for hs, w in dwave.items() }
-        legendre = tg.legendre(nleg=deg_legendre, use_gpu=False)
-        tdata = self.eval_tdata(arrtype, legendre, binned, dwave, deg_legendre, ngals, ncam)
-    
-        return coeff, arch_inds, tdata
-
-
 class All_archetypes():
     """Class to store all different archetypes of all the different spectype.
 
