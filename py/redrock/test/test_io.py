@@ -139,6 +139,8 @@ class TestIO(unittest.TestCase):
 
         zscan1, zfit1 = zfind(dtarg, [ dtemp ])
 
+        zfit1.remove_column('fitmethod')
+
         write_zscan(self.testfile, zscan1, zfit1)
         write_zscan(self.testfile, zscan1, zfit1, clobber=True)
         zscan2, zfit2 = read_zscan(self.testfile)

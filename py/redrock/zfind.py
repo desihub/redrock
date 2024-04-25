@@ -228,7 +228,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             multiprocessing processes to use.
         nminima (int, optional): number of chi^2 minima to consider.
             Passed to fitz().
-        archetypes (str, optional): file or directory containing archetypes
+        archetypes (list optional): list of Archetype objects
             to use for final fitz choice of best chi2 vs. z minimum.
         priors (str, optional): file containing redshift priors
         chi2_scan (str, optional): file containing already computed chi2 scan
@@ -249,7 +249,6 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
     """
 
     if archetypes:
-        archetypes = All_archetypes(archetypes_dir=archetypes).archetypes
         archetype_spectype = list(archetypes.keys()) # to account for the case if only one archetype is provided
     
     if not priors is None:
