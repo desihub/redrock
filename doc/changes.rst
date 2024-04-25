@@ -12,12 +12,16 @@ redrock Change Log
   (PR `#295`_).
 * Fix read_zscan; add make_fulltype, parse_fulltype to standardize
   fulltype,spectype,subtype parsing (PR `#297`_).
+* Fix warning from zero-sized array (PR `#298`_).
+* Standardize wavelength -> [-1,1] mapping for Legendre poly (PR `#299`_).
 
 .. _`#290`: https://github.com/desihub/redrock/pull/290
 .. _`#292`: https://github.com/desihub/redrock/pull/292
 .. _`#294`: https://github.com/desihub/redrock/pull/294
 .. _`#295`: https://github.com/desihub/redrock/pull/295
 .. _`#297`: https://github.com/desihub/redrock/pull/297
+.. _`#298`: https://github.com/desihub/redrock/pull/298
+.. _`#299`: https://github.com/desihub/redrock/pull/299
 
 0.19.0 (2024-04-19)
 -------------------
