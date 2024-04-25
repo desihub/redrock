@@ -211,7 +211,11 @@ class Target(object):
         fitmethod = bestfit['FITMETHOD']
 
         self.model = dict()
-        if fitmethod == 'ARCH':
+        if np.all(coeff == 0.0):
+            # entirely masked data has coeffs=0
+            for sp in self.spectra:
+                self.model[sp.wavehash] = np.zeros(len(sp.wave), dtype=np.float32)
+        elif fitmethod == 'ARCH':
             #- Archetype fits have N nearest neighbor archetype coeffs
             #- followed by ncamera*nlegendre coefficients
             #- import here to avoid circular import

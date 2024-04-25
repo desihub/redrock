@@ -1034,6 +1034,7 @@ def rrdesi(options=None, comm=None):
             zfit['spectype'][ii] = 'GALAXY'
             zfit['subtype'][ii] = ''
             zfit['coeff'][ii] = 0.
+            zfit['fitmethod'][ii] = 'NONE'
 
             ii = np.isin(zfit['targetid'], targetids[broken])
             zfit['zwarn'][ii] |= ZWarningMask.UNPLUGGED
