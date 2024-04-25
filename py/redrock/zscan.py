@@ -609,7 +609,8 @@ def calc_batch_dot_product_3d3d_gpu(a, b, transpose_a=False, fullprecision=True)
 ###    are very obviously analagous though and should be highly
 ###    maintainable.  The main difference is the extra loop on the CPU version
 
-def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, solve_matrices_algorithm=None, solver_args=None, use_gpu=False, fullprecision=True, prior=None):
+def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, solve_matrices_algorithm=None,
+                     solver_args=None, use_gpu=False, fullprecision=True, prior=None):
     
     """Calculate a batch of chi2.
     For many redshifts and a set of spectral data, compute the chi2 for
@@ -863,12 +864,14 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
         # for all templates for all three spectra for this target
 
         # For coarse z scan, use fullprecision = False to maximize speed
-        (zchi2[j,:], zcoeff[j,:,:]) = calc_zchi2_batch(target_data[j].spectra, tdata, weights, flux, wflux, nz, nbasis, dtemplate.template.solve_matrices_algorithm, use_gpu=use_gpu, fullprecision=False)
+        (zchi2[j,:], zcoeff[j,:,:]) = calc_zchi2_batch(
+            target_data[j].spectra, tdata, weights, flux, wflux, nz, nbasis,
+            dtemplate.template.solve_matrices_algorithm, use_gpu=use_gpu,
+            fullprecision=False)
 
         #- Galaxy templates penalize chi2 for negative [OII] flux; ad-hoc
         if hasattr(dtemplate.template, 'OIItemplate'):
-            zchi2penalty[j] = calc_negOII_penalty(
-                                   dtemplate.template.OIItemplate, zcoeff[j])
+            zchi2penalty[j] = calc_negOII_penalty(dtemplate.template.OIItemplate, zcoeff[j])
 
         if dtemplate.comm is None and progress is not None:
             progress.put(1)
