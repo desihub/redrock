@@ -11,7 +11,7 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 import scipy.sparse
 
-from .utils import mp_array, distribute_work
+from .utils import mp_array, distribute_work, reduced_wavelength
 
 from . import constants
 
@@ -180,10 +180,7 @@ class Target(object):
         if (self._legendre is not None and self.nleg == nleg):
             return self._legendre
         dwave = { s.wavehash:s.wave for s in self.spectra }
-        wave = np.concatenate([ w for w in dwave.values() ])
-        wmin = wave.min()
-        wmax = wave.max()
-        self._legendre = { hs:np.array([scipy.special.legendre(i)( (w-wmin)/(wmax-wmin)*2.) for i in range(nleg)]) for hs, w in dwave.items() }
+        self._legendre = { hs:np.array([scipy.special.legendre(i)(reduced_wavelength(w)) for i in range(nleg)]) for hs, w in dwave.items() }
         self.nleg = nleg
         if (use_gpu):
             import cupy as cp

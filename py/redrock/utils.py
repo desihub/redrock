@@ -248,3 +248,16 @@ def getGPUCountMPI(comm):
     if comm.rank == 0:
         print("WARNING:  Found {:d} GPUs".format(len(pci_id_list)))
     return len(pci_id_list)
+
+def reduced_wavelength(wave):
+    """function to calculate reduced wavelength arrya for 
+    legendre polynomial in archetype mode, 
+    legendre polynomials are orthogonal in [-1,1]
+    Args:
+        wave (array): wavelength for which reduced wavelengths to be estimated
+    Return:
+        reduced wavelength in [-1,1] range
+    """
+    wavemax = wave.max()
+    wavemin = wave.min()
+    return 2*(wave - wavemin) / (wavemax - wavemin) - 1

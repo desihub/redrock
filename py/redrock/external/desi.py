@@ -579,7 +579,7 @@ def rrdesi(options=None, comm=None):
         required=False, help="If True, in archetype mode the fitting will be done for each camera/band")
     
     parser.add_argument("--archetype-legendre-prior", type=float, default=0.1,
-        required=False, help="sigma to add as prior in solving linear equation, 1/sig**2 will be added, default is 0.1")
+                        required=False, help="sigma to add as prior in solving linear equation, 1/sig**2 will be added, default is 0.1, Note: provide anything <=0 if you do not want to add any prior")
     
     parser.add_argument("--archetypes-no-legendre", default=False, action="store_true",
         required=False, help="Use this flag with archetypes if want to TURN OFF all archetype related default values")
@@ -661,7 +661,7 @@ def rrdesi(options=None, comm=None):
         args = parser.parse_args()
     else:
         args = parser.parse_args(options)
-
+    
     if args.ncpu is not None:
         print('WARNING: --ncpu is deprecated; use --mp instead')
         args.mp = args.ncpu
@@ -876,7 +876,7 @@ def rrdesi(options=None, comm=None):
         else:
             if comm_rank == 0 and args.archetypes is not None:
                 print('Will be using default archetype values.') 
-                print('number of minimum redshift for which archetype redshift fitting will be done = %d'%(nminima))
+                print('Number of minimum redshift for which archetype redshift fitting will be done = %d'%(nminima))
 
             if ncamera>1: 
                 archetype_legendre_percamera = True
@@ -892,9 +892,16 @@ def rrdesi(options=None, comm=None):
             else:
                 if comm_rank == 0 and args.archetypes is not None:
                     print('No Legendre polynomial will be added to archetypes.')
-            archetype_legendre_prior = args.archetype_legendre_prior
+            if args.archetype_legendre_prior<=0:
+                archetype_legendre_prior = None
+                printstr = 'no'
+            else:
+                archetype_legendre_prior = args.archetype_legendre_prior
+                printstr = 'a'
             if comm_rank == 0 and args.archetypes is not None:
-                print('archetype_legendre_prior = %s has been provided, so a prior will be added while solving for the coefficients'%(archetype_legendre_prior))
+                if archetype_legendre_prior is None:
+                    print('A zero or negative prior is provided so setting archetype_legendre_prior = None')
+                print('archetype_legendre_prior = %s has been provided, so %s prior will be added while solving for the coefficients'%(archetype_legendre_prior, printstr))
             if args.archetype_nnearest is not None:
                 if comm_rank == 0 and args.archetypes is not None:
                     print('nearest neighbour = %d is provided, will do the final fitting for N-best nearest archetypes in chi2 space..'%(args.archetype_nnearest))
@@ -916,7 +923,7 @@ def rrdesi(options=None, comm=None):
         # refinement.  This function only returns data on the rank 0 process.
 
         start = elapsed(None, "", comm=comm)
-        
+         
         scandata, zfit = zfind(targets, dtemplates, mpprocs,
             nminima=nminima, archetypes=args.archetypes,
             priors=args.priors, chi2_scan=args.chi2_scan, use_gpu=use_gpu, zminfit_npoints=args.zminfit_npoints, per_camera=archetype_legendre_percamera, deg_legendre=args.archetype_legendre_degree, n_nearest=args.archetype_nnearest, prior_sigma=archetype_legendre_prior, ncamera=ncamera)
