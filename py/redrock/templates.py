@@ -158,9 +158,10 @@ class Template(object):
             raise ValueError(f'Template method {self._method} unrecognized; '
                               f'should be one of {valid_template_methods}')
 
-        #- Special case for GALAXY templates: cache subset of template
-        #- that covers [OII]
-        if self._rrtype == 'GALAXY':
+        #- Special case for GALAXY templates: cache subset of template that
+        #- covers [OII] but only for GALAXY templates and fitting methods which
+        #- can include negative templates or coefficients.
+        if self._rrtype == 'GALAXY' and not self._method in ("NMF", "NNLS"):
             isOII = (3724 <= self.wave) & (self.wave <= 3733)
             self.OIItemplate = self.flux[:,isOII]
 
