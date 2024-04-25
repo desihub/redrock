@@ -163,6 +163,9 @@ def mp_array(original):
     Returns;
         ndarray: the wrapped data.
 
+    If the input array has size=0, the original is returned without
+    wrapping it in a size=0 multiprocessing.RawArray (which generates
+    warnings)
     """
     import multiprocessing as mp
 
