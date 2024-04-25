@@ -258,7 +258,6 @@ def reduced_wavelength(wave):
     Return:
         reduced wavelength in [-1,1] range
     """
-    wave = np.asarray(wave)
     wavemax = wave.max()
     wavemin = wave.min()
-    return 2*(wave - wavemax) / (wavemax - wavemin) - 1
+    return 2*(wave - wavemin) / (wavemax - wavemin) - 1

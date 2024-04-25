@@ -157,9 +157,6 @@ class Archetype():
         deg_legendre = (coeff!=0.).size-1
         index = np.arange(self._narch)[self._subtype==subtype][0]
 
-        #w = np.concatenate([ w for w in dwave.values() ])
-        #wave_min = w.min()
-        #wave_max = w.max()
         legendre = np.array([scipy.special.legendre(i)(reduced_wavelength(w)) for i in range(deg_legendre)])
         binned = trapz_rebin((1+z)*self.wave, self.flux[index], wave)*transmission_Lyman(z,wave,model=self.igm_model)
         flux = np.append(binned[None,:],legendre, axis=0)
