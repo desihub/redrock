@@ -26,6 +26,7 @@ from desispec.coaddition import coadd_fibermap
 from desispec.specscore import compute_coadd_tsnr_scores
 from desispec.maskbits import fibermask
 from desispec.io.util import get_tempfilename
+from desispec.io.fibermap import annotate_fibermap
 
 from ..utils import elapsed, get_mp, distribute_work, getGPUCountMPI
 
@@ -43,36 +44,28 @@ from .._version import __version__
 
 from ..archetypes import All_archetypes, Archetype
 
-
-def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
-        template_version, archetype_version,
-        spec_header=None):
-    """Write zbest and fibermap Tables to outfile
-
+def _get_header(templates, archetypes=None, spec_header=None):
+    """Get standardized header with template and archetype versions
+    
     Args:
-        outfile (str): output path.
-        zbest (Table): best fit table.
-        fibermap (Table): the coadded fibermap from the original inputs.
-        tsnr2 (Table): table of input coadded TSNR2 values
-        exp_fibermap (Table): the per-exposure fibermap from the orig inputs.
-        template_version (str): template version used
-        archetype_version (str): archetype version used
+        templates (list): list of template objects
 
     Options:
-        spec_header (dict-like): header of HDU 0 of input spectra
-
-    Modifies input tables.meta['EXTNAME']
+        archetypes (list): list of Archetype objects
+        spec_header (dict-like): header of HDU 0 of input spectra/coadd
     """
     header = fits.Header()
     header['LONGSTRN'] = 'OGIP 1.0'
     header['RRVER'] = (__version__, 'Redrock version')
-    for i, fulltype in enumerate(template_version.keys()):
-        header['TEMNAM'+str(i).zfill(2)] = fulltype
-        header['TEMVER'+str(i).zfill(2)] = template_version[fulltype]
-    if not archetype_version is None:
-        for i, fulltype in enumerate(archetype_version.keys()):
-            header['ARCNAM'+str(i).zfill(2)] = fulltype
-            header['ARCVER'+str(i).zfill(2)] = archetype_version[fulltype]
+    for i, t in enumerate(templates):
+        header[f'TEMNAM{i:02d}'] = t.full_type
+        header[f'TEMVER{i:02d}'] = t.version
+        header[f'TEMFIL{i:02d}'] = os.path.basename(t.filename)
+    if archetypes is not None:
+        for i, atyp in enumerate(archetypes):
+            header[f'ARCNAM{i:02d}'] = atyp.template_type
+            header[f'ARCVER{i:02d}'] = atyp.version
+            header[f'ARCFIL{i:02d}'] = os.path.basename(atyp.filename)
 
     # record code versions and key environment variables
     add_dependencies(header)
@@ -87,6 +80,29 @@ def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
             if key in spec_header:
                 header[key] = spec_header[key]
 
+    return header
+
+def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
+        templates, archetypes=None,
+        spec_header=None):
+    """Write zbest and fibermap Tables to outfile
+
+    Args:
+        outfile (str): output path.
+        zbest (Table): best fit table.
+        fibermap (Table): the coadded fibermap from the original inputs.
+        tsnr2 (Table): table of input coadded TSNR2 values
+        exp_fibermap (Table): the per-exposure fibermap from the orig inputs.
+        templates (list): list of template objects
+
+    Options:
+        archetypes (list): list of Archetype objects
+        spec_header (dict-like): header of HDU 0 of input spectra
+
+    Modifies input tables.meta['EXTNAME']
+    """
+    header = _get_header(templates, archetypes, spec_header)
+
     zbest.meta['EXTNAME'] = 'REDSHIFTS'
     fibermap.meta['EXTNAME'] = 'FIBERMAP'
     exp_fibermap.meta['EXTNAME'] = 'EXP_FIBERMAP'
@@ -95,7 +111,8 @@ def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
     hx = fits.HDUList()
     hx.append(fits.PrimaryHDU(header=header))
     hx.append(fits.convenience.table_to_hdu(zbest))
-    hx.append(fits.convenience.table_to_hdu(fibermap))
+    # ADM annotate_fibermap adds units to fibermap HDUs.
+    hx.append(annotate_fibermap(fits.convenience.table_to_hdu(fibermap)))
     hx.append(fits.convenience.table_to_hdu(exp_fibermap))
     hx.append(fits.convenience.table_to_hdu(tsnr2))
 
@@ -110,7 +127,8 @@ def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
 
     return
 
-def write_bestmodel(outfile, zbest, modeldict, wavedict, template_version, archetype_version):
+def write_bestmodel(outfile, zbest, modeldict, wavedict, templates,
+                    archetypes=None, spec_header=None):
     """
     Writes best fit redrock model in the outfile
 
@@ -119,27 +137,16 @@ def write_bestmodel(outfile, zbest, modeldict, wavedict, template_version, arche
         zbest (Table): best fit redshift table
         modeldict (dict): models[ntargets, nwave] keyed by camera band
         wavedict (dict): wavelength dictionary keyed by camera band
-        template_version (dict): template versions keyed by fulltype
-        archetype_version (dict): archetype versions keys by fulltype
+        templates (list): list of template objects
+
+    Options:
+        archetypes (list): list of Archetype objects
+        spec_header (dict-like): header of HDU 0 of input spectra
 
     The output file format mirrors the structure of an input coadd, with B/R/Z_MODEL
     HDUs instead of B/R/Z_FLUX HDUs.
     """
-    header = fits.Header()
-    header['LONGSTRN'] = 'OGIP 1.0'
-    header['RRVER'] = (__version__, 'Redrock version')
-    for i, fulltype in enumerate(template_version.keys()):
-        header['TEMNAM'+str(i).zfill(2)] = fulltype
-        header['TEMVER'+str(i).zfill(2)] = template_version[fulltype]
-    if not archetype_version is None:
-        for i, fulltype in enumerate(archetype_version.keys()):
-            header['ARCNAM'+str(i).zfill(2)] = fulltype
-            header['ARCVER'+str(i).zfill(2)] = archetype_version[fulltype]
-    # record code versions and key environment variables
-    add_dependencies(header)
-    for key in ['RR_TEMPLATE_DIR', 'RR_ARCHETYPE_DIR']:
-        if key in os.environ:
-            setdep(header, key, os.environ[key])
+    header = _get_header(templates, archetypes, spec_header)
     
     zbest.meta['EXTNAME'] = 'REDSHIFTS'
     hx = fits.HDUList()
@@ -194,6 +201,7 @@ class DistTargetsDESI(DistTargets):
         cache_Rcsr: pre-calculate and cache sparse CSR format of resolution
             matrix R
         cosmics_nsig (float): cosmic rejection threshold used in coaddition
+        negflux_nsig (float): mask negative flux significance threshold
         capacities (list): (optional) list of process capacities. If None,
             use equal capacity per process. A process with higher capacity
             can handle more work.
@@ -202,7 +210,7 @@ class DistTargetsDESI(DistTargets):
     ### @profile
     def __init__(self, spectrafiles, coadd=True, targetids=None,
                  first_target=None, n_target=None, comm=None, cache_Rcsr=False,
-                 cosmics_nsig=0, capacities=None):
+                 cosmics_nsig=0, negflux_nsig=5, capacities=None):
 
         comm_size = 1
         comm_rank = 0
@@ -522,6 +530,13 @@ class DistTargetsDESI(DistTargets):
                         for trow in self._target_specs[sfile][t]:
                             self._my_data[toff].spectra[tspec_ivar[t]].ivar = \
                                 hdata[trow].astype(np.float64).copy()
+
+                            # mask significantly negative data (set ivar to 0)
+                            sigma = self._my_data[toff].spectra[tspec_ivar[t]].flux * \
+                                    np.sqrt(self._my_data[toff].spectra[tspec_ivar[t]].ivar)
+                            bignegflux = (sigma<-abs(negflux_nsig))
+                            self._my_data[toff].spectra[tspec_ivar[t]].ivar[bignegflux] = 0.0
+
                             tspec_ivar[t] += 1
                     toff += 1
 
@@ -627,7 +642,7 @@ def rrdesi(options=None, comm=None):
         required=False, help="If True, in archetype mode the fitting will be done for each camera/band")
     
     parser.add_argument("--archetype-legendre-prior", type=float, default=0.1,
-        required=False, help="sigma to add as prior in solving linear equation, 1/sig**2 will be added, default is 0.1")
+                        required=False, help="sigma to add as prior in solving linear equation, 1/sig**2 will be added, default is 0.1, Note: provide anything <=0 if you do not want to add any prior")
     
     parser.add_argument("--archetypes-no-legendre", default=False, action="store_true",
         required=False, help="Use this flag with archetypes if want to TURN OFF all archetype related default values")
@@ -695,6 +710,9 @@ def rrdesi(options=None, comm=None):
     parser.add_argument("--cosmics-nsig", type=float, default=0,
         required=False, help="n sigma cosmic ray threshold in coaddition")
 
+    parser.add_argument("--negflux-nsig", type=float, default=5,
+        required=False, help="n sigma negative flux mask threshold")
+
     parser.add_argument("-i", "--infiles", nargs='+', required=True,
             help="Input spectra, coadd, or cframe files")
 
@@ -709,7 +727,7 @@ def rrdesi(options=None, comm=None):
         args = parser.parse_args()
     else:
         args = parser.parse_args(options)
-
+    
     if args.ncpu is not None:
         print('WARNING: --ncpu is deprecated; use --mp instead')
         args.mp = args.ncpu
@@ -905,6 +923,7 @@ def rrdesi(options=None, comm=None):
         targets = DistTargetsDESI(args.infiles, coadd=(not args.allspec),
                                   targetids=targetids, first_target=first_target, n_target=n_target,
                                   comm=comm, cache_Rcsr=True, cosmics_nsig=args.cosmics_nsig,
+                                  negflux_nsig=abs(args.negflux_nsig),
                                   capacities=capacities)
 
         #- Mask some problematic sky lines
@@ -928,7 +947,7 @@ def rrdesi(options=None, comm=None):
         else:
             if comm_rank == 0 and args.archetypes is not None:
                 print('Will be using default archetype values.') 
-                print('number of minimum redshift for which archetype redshift fitting will be done = %d'%(nminima))
+                print('Number of minimum redshift for which archetype redshift fitting will be done = %d'%(nminima))
 
             if ncamera>=1: 
                 archetype_legendre_percamera = True
@@ -944,9 +963,16 @@ def rrdesi(options=None, comm=None):
             else:
                 if comm_rank == 0 and args.archetypes is not None:
                     print('No Legendre polynomial will be added to archetypes.')
-            archetype_legendre_prior = args.archetype_legendre_prior
+            if args.archetype_legendre_prior<=0:
+                archetype_legendre_prior = None
+                printstr = 'no'
+            else:
+                archetype_legendre_prior = args.archetype_legendre_prior
+                printstr = 'a'
             if comm_rank == 0 and args.archetypes is not None:
-                print('archetype_legendre_prior = %s has been provided, so a prior will be added while solving for the coefficients'%(archetype_legendre_prior))
+                if archetype_legendre_prior is None:
+                    print('A zero or negative prior is provided so setting archetype_legendre_prior = None')
+                print('archetype_legendre_prior = %s has been provided, so %s prior will be added while solving for the coefficients'%(archetype_legendre_prior, printstr))
             if args.archetype_nnearest is not None:
                 if comm_rank == 0 and args.archetypes is not None:
                     print('nearest neighbour = %d is provided, will do the final fitting for N-best nearest archetypes in chi2 space..'%(args.archetype_nnearest))
@@ -998,6 +1024,10 @@ def rrdesi(options=None, comm=None):
 
             ii = np.isin(zfit['targetid'], targetids[badpos | broken | unassigned | bad])
             zfit['zwarn'][ii] |= ZWarningMask.NODATA
+            # ADM set NODATA cases to z=0, GALAXY with zero coefficients.
+            zfit['spectype'][ii] = 'GALAXY'
+            zfit['subtype'][ii] = ''
+            zfit['coeff'][ii] = 0.
 
             ii = np.isin(zfit['targetid'], targetids[broken])
             zfit['zwarn'][ii] |= ZWarningMask.UNPLUGGED
@@ -1030,17 +1060,18 @@ def rrdesi(options=None, comm=None):
                         zbest.rename_column(colname, colname.upper())
 
                 # Allow 4 char for ARCH (vs. PCA/NMF) even if archetypes aren't used
-                zbest['FITMETHOD'] = zbest['FITMETHOD'].astype('S4')
+                zbest['FITMETHOD'] = zbest['FITMETHOD'].astype('S4')                
+                templates = [t._template for t in dtemplates]
 
-                template_version = {t._template.full_type:t._template._version for t in dtemplates}
-                archetype_version = None
-                if archetypes is not None:
-                    archetype_version = {name:arch._version for name, arch in archetypes.items() }
-                
+                archetypes = None
+                if not args.archetypes is None:
+                    archetypes = All_archetypes(archetypes_dir=args.archetypes,
+                                                verbose=(comm_rank==0)).archetypes.values()
+
                 write_zbest(args.outfile, zbest,
                         targets.fibermap, targets.exp_fibermap,
                         targets.tsnr2,
-                        template_version, archetype_version,
+                        templates, archetypes=archetypes,
                         spec_header=targets.header0)
             
             if comm is not None:
@@ -1092,7 +1123,8 @@ def rrdesi(options=None, comm=None):
                 for band in wave_dict:
                     all_models_dict[band] = np.vstack([m[band] for m in all_models])[sort_indices]
 
-                write_bestmodel(args.model, zbest, all_models_dict, wave_dict, template_version, archetype_version)
+                write_bestmodel(args.model, zbest, all_models_dict, wave_dict, templates,
+                                archetypes, spec_header=targets.header0)
 
             stop = elapsed(start, f"Writing {args.model} took", comm=comm)
 

@@ -40,8 +40,10 @@ class Template(object):
     def __init__(self, filename=None, spectype=None, redshifts=None,
                  wave=None, flux=None, subtype=None, method='PCA',
                  igm_model='Inoue14',
-                 zscan_galaxy=None, zscan_qso=None, zscan_star=None):
+                 zscan_galaxy=None, zscan_qso=None, zscan_star=None,
+                 version=None):
 
+        self._filename = filename
         if filename is not None:
             fx = None
             if os.path.exists(filename):
@@ -109,13 +111,13 @@ class Template(object):
                         "template type {}".format(self._rrtype))
                 zmin = self._redshifts[0]
                 zmax = self._redshifts[-1]
-                print("DEBUG: Using default redshift range {:.4f}-{:.4f} for "
-                    "{}".format(zmin, zmax, os.path.basename(filename)))
+                # print("DEBUG: Using default redshift range {:.4f}-{:.4f} for "
+                #     "{}".format(zmin, zmax, os.path.basename(filename)))
             else:
                 zmin = self._redshifts[0]
                 zmax = self._redshifts[-1]
-                print("DEBUG: Using redshift range {:.4f}-{:.4f} for "
-                    "{}".format(zmin, zmax, os.path.basename(filename)))
+                # print("DEBUG: Using redshift range {:.4f}-{:.4f} for "
+                #     "{}".format(zmin, zmax, os.path.basename(filename)))
 
             self._subtype = None
             if 'RRSUBTYP' in hdr:
@@ -148,6 +150,7 @@ class Template(object):
             self._subtype = subtype
             self._igm_model = igm_model
             self._method = method
+            self._version = version
 
         self._nbasis = self.flux.shape[0]
         self._nwave = self.flux.shape[1]
@@ -163,9 +166,18 @@ class Template(object):
             raise ValueError(f'Template method {self._method} unrecognized; '
                               f'should be one of {valid_template_methods}')
 
-        print(f'INFO: {self.full_type} templates using {self._method} for fitting')
-        print(f'INFO: {self.full_type} templates using {self._igm_model} IGM model')
+        if filename is not None:
+            print(f'INFO: {os.path.basename(filename)} {self}')
+        else:
+            print(f'INFO: {self}')
 
+    def __str__(self):
+        zmin = round(self._redshifts[0], 4)
+        zmax = round(self._redshifts[-1], 4)
+        return f'{self._rrtype} {self._subtype} {self._method} IGM={self._igm_model} z={zmin}-{zmax}'
+
+    def __repr__(self):
+        return str(self)
 
     @property
     def nbasis(self):
@@ -185,12 +197,17 @@ class Template(object):
 
     @property
     def full_type(self):
-        """Return formatted type:subtype string.
+        """Return formatted fulltype = spectype:::subtype string.
         """
-        if self._subtype != '':
-            return '{}:::{}'.format(self._rrtype, self._subtype)
-        else:
-            return self._rrtype
+        return make_fulltype(self._rrtype, self._subtype)
+
+    @property
+    def version(self):
+        return self._version
+
+    @property
+    def filename(self):
+        return self._filename
 
     @property
     def redshifts(self):
@@ -247,6 +264,31 @@ class Template(object):
 
         return model
 
+def parse_fulltype(fulltype):
+    """Parse template fulltype into (spectype, subtype)
+    """
+    fulltype = fulltype.strip()
+    if ':::' in fulltype:
+        spectype, subtype = fulltype.split(':::')
+    else:
+        spectype = fulltype
+        subtype = ''
+
+    return spectype, subtype
+
+def make_fulltype(spectype, subtype):
+    """combine (spectype, subtype) into fulltype
+    """
+    spectype = spectype.strip()
+    if subtype is not None:
+        subtype = subtype.strip()
+
+    if subtype is not None and subtype != '':
+        fulltype = f'{spectype}:::{subtype}'
+    else:
+        fulltype = spectype
+
+    return fulltype
 
 def find_templates(template_path=None):
     """Return list of Redrock template files
@@ -273,13 +315,14 @@ def find_templates(template_path=None):
         print(f'DEBUG: Reading templates from {template_path}')
 
     if os.path.isdir(template_path):
-        default_templates_file = f'{template_path}/default_templates.txt'
+        default_templates_file = f'{template_path}/templates-default.txt'
         template_dir = template_path
+
     elif template_path.endswith('.txt'):
         if not os.path.exists(template_path):
             raise ValueError(f'Missing {template_path=}')
         default_templates_file = template_path
-        template_dir = os.path.dirname(template_path)
+        template_dir = os.path.dirname(os.path.abspath(template_path))
     elif template_path.endswith( ('.fits', '.fits.gz', '.fits.fz') ):
         #- single template file, return that as a list
         return [template_path,]
@@ -311,6 +354,64 @@ def find_templates(template_path=None):
 
     return template_files
 
+
+def header2templatefiles(hdr, template_dir=None):
+    """Derive template filenames from header keywords
+
+    Args:
+        hdr: dict-like with keys TEMNAMnn+TEMVERnn and/or TEMFILnn
+
+    Options:
+        template_dir (str): full path to redrock-templates directory
+
+    Returns list of template filenames, including directory path
+    """
+    filenames = list()
+    for i in range(100):
+        filekey = f'TEMFIL{i:02d}'
+        typekey = f'TEMNAM{i:02d}'
+        verkey = f'TEMVER{i:02d}'
+        if filekey in hdr:
+            filenames.append( hdr[filekey] )
+        elif (typekey in hdr) and (verkey in hdr):
+            version = hdr[verkey].strip()
+            spectype, subtype = parse_fulltype(hdr[typekey])
+
+            #- special case unversioned STAR templates
+            if version=='unknown':
+                if spectype == 'STAR':
+                    version = '0.1'
+                else:
+                    raise ValueError(f'unknown version for {spectype=}')
+
+            #- blank subtype -> None for filename purposes
+            if subtype == '':
+                subtype = None
+
+            filenames.append(f'rrtemplate-{spectype}-{subtype}-v{version}.fits')
+
+    #- preprend template directory
+    if template_dir is None:
+        template_dir = os.environ['RR_TEMPLATE_DIR']
+
+    filenames = [os.path.join(template_dir, fn) for fn in filenames]
+
+    return filenames
+
+
+def load_templates_from_header(hdr, template_dir=None):
+    """Return templates matching header keywords
+
+    Args:
+        hdr: dict-like with keys TEMNAMnn+TEMVERnn and/or TEMFILnn
+
+    Options:
+        template_dir (str): full path to redrock-templates directory
+
+    Returns list of Template objects
+    """
+    template_filenames = header2templatefiles(hdr, template_dir=template_dir)
+    return load_templates(template_filenames)
 
 def load_templates(template_path=None, zscan_galaxy=None, zscan_star=None, zscan_qso=None,
                    asdict=False):

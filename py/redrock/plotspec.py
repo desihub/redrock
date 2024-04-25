@@ -9,6 +9,7 @@ import numpy as np
 
 from . import zwarning
 
+from .templates import make_fulltype
 
 class PlotSpec(object):
     def __init__(self, targets, templates, zscan, zfit, truth=None, archetypes=False):
@@ -104,9 +105,7 @@ class PlotSpec(object):
         zz = zfit[zfit['znum'] == self.znum][0]
         coeff = zz['coeff']
 
-        fulltype = zz['spectype']
-        if zz['subtype'] != '':
-            fulltype = fulltype+':::'+zz['subtype']
+        fulltype = make_fulltype(zz['spectype'], zz['subtype'])
         if self.archetypes:
             dwave = { s.wavehash:s.wave for s in target.spectra }
             tp = self.archetypes.archetypes[zz['spectype']]

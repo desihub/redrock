@@ -106,16 +106,6 @@ def minfit(x, y):
 
     return (x0, xerr, y0, zwarn)
 
-
-
-def legendre_calculate(nleg, dwave):
-    wave = np.concatenate([ w for w in dwave.values() ])
-    wmin = wave.min()
-    wmax = wave.max()
-    legendre = { hs:np.array([scipy.special.legendre(i)( (w-wmin)/(wmax-wmin)*2.) for i in range(nleg)]) for hs, w in dwave.items() }
-
-    return legendre
-
 def prior_on_coeffs(n_nbh, deg_legendre, sigma, ncamera):
     
     """
@@ -256,7 +246,8 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
         i = min(max(np.argmin(zzchi2),1), len(zz)-2)
         zmin, sigma, chi2min, zwarn = minfit(zz[i-1:i+2], zzchi2[i-1:i+2])
 
-        trans = dict()
+        #trans = dict()
+        trans = { hs:None for hs, w in dwave.items() } #define trans with keys and None values
         try:
             #Calculate xmin and xmax from template and pass as scalars 
             xmin = template.minwave*(1+zmin)

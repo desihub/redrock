@@ -12,6 +12,8 @@ import numpy as np
 from scipy.interpolate import interp1d
 import scipy.special
 
+from .utils import reduced_wavelength
+
 from .zscan import calc_zchi2_one, calc_zchi2_batch
 
 from .rebin import trapz_rebin
@@ -19,6 +21,8 @@ from .rebin import trapz_rebin
 from .igm import transmission_Lyman
 
 from .zscan import per_camera_coeff_with_least_square_batch
+
+from .templates import make_fulltype
 
 class Archetype():
     """Class to store all different archetypes from the same spectype.
@@ -32,6 +36,7 @@ class Archetype():
     def __init__(self, filename):
 
         # Load the file
+        self._filename = filename
         h = fits.open(os.path.expandvars(filename), memmap=False)
 
         hdr = h['ARCHETYPES'].header
@@ -41,7 +46,7 @@ class Archetype():
         self._rrtype = hdr['RRTYPE'].strip()
         self._subtype = np.array(np.char.strip(h['ARCHETYPES'].data['SUBTYPE'].astype(str)))
         self._subtype = np.char.add(np.char.add(self._subtype,'_'),np.arange(self._narch,dtype=int).astype(str))
-        self._full_type = np.char.add(self._rrtype+':::',self._subtype)
+        self._full_type = np.array([make_fulltype(self._rrtype, subtype) for subtype in self._subtype])
         self._version = hdr['VERSION']
 
         self.wave = np.asarray(hdr['CRVAL1'] + hdr['CDELT1']*np.arange(self.flux.shape[1]))
@@ -84,6 +89,27 @@ class Archetype():
             import cupy as cp
             self._gpuflux = cp.asarray(self.flux)
         return self._gpuflux
+
+    @property
+    def version(self):
+        return self._version
+
+    @property
+    def filename(self):
+        return self._filename
+
+    #- template_type, sub_type, and full_type like Template object methods
+    @property
+    def template_type(self):
+        return self._rrtype
+
+    @property
+    def sub_type(self):
+        return self._subtype
+
+    @property
+    def full_type(self):
+        return self._full_type
 
     def rebin_template(self,index,z,dwave,trapz=True):
         """
@@ -185,7 +211,7 @@ class Archetype():
             deg_legendre = len(legcoeff)
             wave_min = wave.min()
             wave_max = wave.max()
-            legendre = np.array([scipy.special.legendre(i)( (wave-wave_min)/(wave_max-wave_min)*2.-1. ) for i in range(deg_legendre)])
+            legendre = np.array([scipy.special.legendre(i)( reduced_wavelength(wave) ) for i in range(deg_legendre)])
             model += legendre.T.dot(legcoeff).T
 
         if R is not None:
@@ -261,7 +287,7 @@ class Archetype():
         fsstype = ';'.join(sstype)
         #print(sstype)
         #print(z, zzchi2, zzcoeff, fsstype)
-        return zzchi2[0], zzcoeff[0], self._rrtype+':::%s'%(fsstype)
+        return zzchi2[0], zzcoeff[0], make_fulltype(self._rrtype, fsstype)
 
     def get_best_archetype(self,target,weights,flux,wflux,dwave,z, per_camera, n_nearest, trans=None, solve_method='bvls', prior=None, use_gpu=False):
 

@@ -1163,7 +1163,5 @@ def solve_matrices(M, y, solve_algorithm="PCA", solver_args=None, use_gpu=False)
             except np.linalg.LinAlgError:
                 raise
             return zcoeff
-    elif solve_algorithm == "NMF":
-        raise NotImplementedError("NMF is not yet implemented.")
     else:
         raise NotImplementedError("The solve_algorithm "+solve_algorithm+" is not implemented.")
