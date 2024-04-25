@@ -186,15 +186,20 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
     else:
         nz = zminfit_npoints
 
+    if template.template_type == 'STAR':
+        max_velo_diff = constants.max_velo_diff_star
+    else:
+        max_velo_diff = constants.max_velo_diff
+
     for imin in find_minima(zchi2):
         if len(results) == nminima:
             break
 
-        #- Skip this minimum if it is within constants.max_velo_diff km/s of a
+        #- Skip this minimum if it is within max_velo_diff km/s of a
         # previous one dv is in km/s
         zprev = np.array([tmp['z'] for tmp in results])
         dv = get_dv(z=redshifts[imin],zref=zprev)
-        if np.any(np.abs(dv) < constants.max_velo_diff):
+        if np.any(np.abs(dv) < max_velo_diff):
             continue
 
         #- Sample more finely around the minimum
@@ -309,10 +314,10 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
             zwarn |= ZW.Z_FITLIMIT
 
         #- Skip this better defined minimum if it is within
-        #- constants.max_velo_diff km/s of a previous one
+        #- max_velo_diff km/s of a previous one
         zprev = np.array([tmp['z'] for tmp in results])
         dv = get_dv(z=zbest, zref=zprev)
-        if np.any(np.abs(dv) < constants.max_velo_diff):
+        if np.any(np.abs(dv) < max_velo_diff):
             continue
 
         if archetype is None:
