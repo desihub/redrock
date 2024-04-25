@@ -177,11 +177,6 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
 
     (weights, flux, wflux) = spectral_data(spectra)
 
-    # Redshifts near [OII]; used only for galaxy templates
-    if template.template_type == 'GALAXY':
-        isOII = (3724 <= template.wave) & (template.wave <= 3733)
-        OIItemplate = template.flux[:, isOII].T
-     
     if (use_gpu):
         #Get CuPy arrays of weights, flux, wflux
         #These are created on the first call of gpu_spectral_data() for a
