@@ -209,8 +209,6 @@ class Archetype():
 
         if legcoeff is not None:
             deg_legendre = len(legcoeff)
-            wave_min = wave.min()
-            wave_max = wave.max()
             legendre = np.array([scipy.special.legendre(i)( reduced_wavelength(wave) ) for i in range(deg_legendre)])
             model += legendre.T.dot(legcoeff).T
 
