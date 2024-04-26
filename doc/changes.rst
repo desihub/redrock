@@ -14,6 +14,7 @@ redrock Change Log
   fulltype,spectype,subtype parsing (PR `#297`_).
 * Fix warning from zero-sized array (PR `#298`_).
 * Standardize wavelength -> [-1,1] mapping for Legendre poly (PR `#299`_).
+* set max_velo_diff to 100 km/s for stars (PR `#300`_).
 
 .. _`#290`: https://github.com/desihub/redrock/pull/290
 .. _`#292`: https://github.com/desihub/redrock/pull/292
@@ -22,6 +23,7 @@ redrock Change Log
 .. _`#297`: https://github.com/desihub/redrock/pull/297
 .. _`#298`: https://github.com/desihub/redrock/pull/298
 .. _`#299`: https://github.com/desihub/redrock/pull/299
+.. _`#300`: https://github.com/desihub/redrock/pull/300
 
 0.19.0 (2024-04-19)
 -------------------
