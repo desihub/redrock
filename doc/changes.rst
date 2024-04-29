@@ -15,7 +15,7 @@ redrock Change Log
 * Fix warning from zero-sized array (PR `#298`_).
 * Standardize wavelength -> [-1,1] mapping for Legendre poly (PR `#299`_).
 * Set max_velo_diff to 100 km/s for stars (PR `#300`_).
-* Ensure `FITMETHOD` holds 4-string `NONE` (addresses `#301`) (PR `#303`_).
+* Ensure `FITMETHOD` holds 4-string `NONE` (fixes `#301`_) (PR `#303`_).
 
 .. _`#290`: https://github.com/desihub/redrock/pull/290
 .. _`#292`: https://github.com/desihub/redrock/pull/292
