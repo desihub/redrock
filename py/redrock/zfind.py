@@ -439,7 +439,9 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     else:
                         spectype, subtype = parse_fulltype(fulltype)
 
-                if spectype.upper() == 'STAR':
+                # set max_velo_diff differently for STARs, but watch out
+                # for archtypes which have spectype as list instead of scalar
+                if (np.isscalar(spectype) and spectype.upper() == 'STAR') or spectype[0].upper() == 'STAR':
                     max_velo_diff = constants.max_velo_diff_star
                 else:
                     max_velo_diff = constants.max_velo_diff
