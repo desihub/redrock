@@ -1035,7 +1035,7 @@ def rrdesi(options=None, comm=None):
             zfit['subtype'][ii] = ''
             zfit['coeff'][ii] = 0.
             # ADM enforce 4-string in case we've only populated PCA/NMF.
-            zfit['fitmethod'] = zfit['fitmethod'].astype('S4')
+            zfit['fitmethod'] = zfit['fitmethod'].astype('U4')
             zfit['fitmethod'][ii] = 'NONE'
 
             ii = np.isin(zfit['targetid'], targetids[broken])
@@ -1081,7 +1081,7 @@ def rrdesi(options=None, comm=None):
                         zbest.rename_column(colname, colname.upper())
 
                 # Allow 4 char for ARCH (vs. PCA/NMF) even if archetypes aren't used
-                zbest['FITMETHOD'] = zbest['FITMETHOD'].astype('S4')
+                zbest['FITMETHOD'] = zbest['FITMETHOD'].astype('U4')
 
                 write_zbest(args.outfile, zbest,
                         targets.fibermap, targets.exp_fibermap,
