@@ -22,8 +22,6 @@ from .igm import transmission_Lyman
 from .rebin import rebin_template, trapz_rebin
 from .zscan import spectral_data
 
-from desispec.coaddition import coadd_cameras
-
 valid_template_methods = ('PCA', 'NMF')
 
 class Template(object):
