@@ -2,9 +2,17 @@
 redrock Change Log
 ==================
 
-0.19.1 (unreleased)
+0.20.1 (unreleased)
 -------------------
 
+* No changes yet.
+
+0.20.0 (2024-05-03)
+-------------------
+
+Used for DESI Jura run.
+
+* Add rrdesi --model option to pre-generate model files (PR `#283`_).
 * Add load_templates_from_header (PR `#290`_).
 * Add units to fibermap output (PR `#292`_).
 * Set ZWARN/NODATA to z=0 GALAXY, no SUBTYPE, zero coefficients (PR `#294`_).
@@ -16,7 +24,10 @@ redrock Change Log
 * Standardize wavelength -> [-1,1] mapping for Legendre poly (PR `#299`_).
 * Set max_velo_diff to 100 km/s for stars (PR `#300`_).
 * Ensure `FITMETHOD` holds 4-string `NONE` (addresses `#301`) (PR `#303`_).
+* Fix FITMETHOD bytes vs. str for details file output (PR `#304`_).
+* Remove unnecessary desispec dependency (PR `#306`_).
 
+.. _`#283`: https://github.com/desihub/redrock/pull/283
 .. _`#290`: https://github.com/desihub/redrock/pull/290
 .. _`#292`: https://github.com/desihub/redrock/pull/292
 .. _`#294`: https://github.com/desihub/redrock/pull/294
@@ -27,6 +38,8 @@ redrock Change Log
 .. _`#300`: https://github.com/desihub/redrock/pull/300
 .. _`#301`: https://github.com/desihub/redrock/issues/301
 .. _`#303`: https://github.com/desihub/redrock/pull/303
+.. _`#304`: https://github.com/desihub/redrock/pull/304
+.. _`#306`: https://github.com/desihub/redrock/pull/306
 
 0.19.0 (2024-04-19)
 -------------------
