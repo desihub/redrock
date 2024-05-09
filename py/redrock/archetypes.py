@@ -203,7 +203,6 @@ class Archetype():
 
         nleg = legendre[list(legendre.keys())[0]].shape[0]
         iBest = np.argsort(zzchi2)[0:n_nearest]
-        tdata = dict()
         if (binned is not None):
             if (use_gpu):
                 binned = { hs:binned[hs][:,iBest].get() for hs in binned }
@@ -218,22 +217,23 @@ class Archetype():
                     #Only multiply if trans[hs] is not None
                     #Both arrays are on CPU so no need to wrap with asarray
                     binned[hs] *= trans[hs][:,None]
-        for hs, w in dwave.items():
-            tdata[hs] = binned[hs][None,:,:]
-            if (nleg > 0):
-                tdata[hs] = np.append(tdata[hs], legendre[hs].transpose()[None,:,:], axis=2)
-                if per_camera and self._solver_method == 'bvls' and use_gpu:
-                    #Using BVLS and GPU - append negative copies of legendre terms as well to use NNLS with additional bases to approximate BVLS
-                    tdata[hs] = np.append(tdata[hs], -1*legendre[hs].transpose()[None,:,:], axis=2)
-            nbasis = tdata[hs].shape[2]
             
         if per_camera:
             #Use CPU mode since small tdata
             #CW - 4/19/24 - pass use_gpu and solver method to per_camera_coeff_with_least_square_batch
             #it will decide there if narch == 1 to use CPU and it will calculate correct prior array
-            (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux, nleg, 1, method=self._solver_method, n_nbh=n_nearest, prior_sigma=prior_sigma, use_gpu=use_gpu, ncam=ncam)
+            #CW - 5/2/24 - pass binned instead of tdata to put all BVLS/NNLS code into per_camera_coeff_with_least_square_batch
+            #(zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, binned, weights, flux, wflux, nleg, 1, method=self._solver_method, n_nbh=n_nearest, prior_sigma=prior_sigma, use_gpu=use_gpu, bands=target.bands)
+            (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, binned, weights, flux, wflux, nleg, 1, method=self._solver_method, n_nbh=n_nearest, prior_sigma=prior_sigma, use_gpu=use_gpu, ncam=ncam)
         else:
             #Use CPU mode for calc_zchi2 since small tdata
+            #Calculate tdata here because binned is passed to per_camera_coeff_with_least_square_batch
+            tdata = dict()
+            for hs, w in dwave.items():
+                tdata[hs] = binned[hs][None,:,:]
+                if (nleg > 0):
+                    tdata[hs] = np.append(tdata[hs], legendre[hs].transpose()[None,:,:], axis=2)
+                nbasis = tdata[hs].shape[2]
             (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, weights, flux, wflux, 1, nbasis, use_gpu=False)
 
         sstype = ['%s'%(self._subtype[k]) for k in iBest] # subtypes of best archetypes
@@ -311,9 +311,6 @@ class Archetype():
         #Rebin in batch
         binned = self.rebin_template_batch(z, dwave, trapz=True, dedges=dedges, use_gpu=use_gpu)
 
-        tdata = dict()
-        nbasis = 1
-        
         ## Prior must be redefined to remove nearest neighbour approach, 
         # because prior was defined based on n_nearest argument..
         # this logic is needed because the first fitting is done with just one archetype 
@@ -328,22 +325,26 @@ class Archetype():
             if (trans[hs] is not None):
                 #Only multiply if trans[hs] is not None
                 binned[hs] *= arrtype.asarray(trans[hs][:,None])
-            #Create 3-d tdata with narch x nwave x nbasis where nbasis = 1+nleg
-            if nleg > 0:
-                tdata[hs] = arrtype.append(binned[hs].transpose()[:,:,None], arrtype.tile(arrtype.asarray(legendre[hs]).transpose()[None,:,:], (self._narch, 1, 1)), axis=2)
-                if solve_method == 'bvls' and use_gpu:
-                    #Using BVLS - append negative copies of legendre terms as well to use NNLS with additional bases to approximate BVLS
-                    tdata[hs] = arrtype.append(tdata[hs], arrtype.tile(-1*arrtype.asarray(legendre[hs]).transpose()[None,:,:], (self._narch, 1, 1)), axis=2)
-            else:
-                tdata[hs] = binned[hs].transpose()[:,:,None]
-            nbasis = tdata[hs].shape[2]
+
         if per_camera:
-            #Hard code NNLS as solve method for GPU mode only, use solve_method (BVLS) for CPU
+            #Use per_camera_coeff_with_least_square_batch which has all logic associated with BVLS/NNLS solver methods
             if (use_gpu):
-                (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, tdata, gpuweights, gpuflux, gpuwflux, nleg, self._narch, method=solve_method, n_nbh=1, prior_sigma=prior_sigma, use_gpu=use_gpu, ncam=ncam)
+                #(zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, binned, gpuweights, gpuflux, gpuwflux, nleg, self._narch, method=solve_method, n_nbh=1, prior_sigma=prior_sigma, use_gpu=use_gpu, bands=bands)
+                (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, binned, gpuweights, gpuflux, gpuwflux, nleg, self._narch, method=solve_method, n_nbh=1, prior_sigma=prior_sigma, use_gpu=use_gpu, ncam=ncam)
             else:
-                (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux, nleg, self._narch, method=solve_method, n_nbh=1, prior_sigma=prior_sigma, use_gpu=use_gpu, ncam=ncam)
+                #(zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, binned, weights, flux, wflux, nleg, self._narch, method=solve_method, n_nbh=1, prior_sigma=prior_sigma, use_gpu=use_gpu, bands=bands)
+                (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, binned, weights, flux, wflux, nleg, self._narch, method=solve_method, n_nbh=1, prior_sigma=prior_sigma, use_gpu=use_gpu, ncam=ncam)
         else:
+            #Calculate tdata here because binned is passed to per_camera_coeff_with_least_square_batch
+            tdata = dict()
+            nbasis = 1
+            for hs, wave in dwave.items():
+                #Create 3-d tdata with narch x nwave x nbasis where nbasis = 1+nleg
+                if nleg > 0:
+                    tdata[hs] = arrtype.append(binned[hs].transpose()[:,:,None], arrtype.tile(arrtype.asarray(legendre[hs]).transpose()[None,:,:], (self._narch, 1, 1)), axis=2)
+                else:
+                    tdata[hs] = binned[hs].transpose()[:,:,None]
+                nbasis = tdata[hs].shape[2]
             if (use_gpu):
                 (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, gpuweights, gpuflux, gpuwflux, self._narch, nbasis, use_gpu=use_gpu)
             else:
