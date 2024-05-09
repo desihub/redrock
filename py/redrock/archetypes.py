@@ -199,6 +199,7 @@ class Archetype():
         #is multiplied by trans in get_best_archetype
         spectra = target.spectra
         nleg = target.nleg
+        bands = None
         legendre = target.legendre(nleg=nleg, use_gpu=False) #Get previously calculated legendre
 
         nleg = legendre[list(legendre.keys())[0]].shape[0]
@@ -223,8 +224,8 @@ class Archetype():
             #CW - 4/19/24 - pass use_gpu and solver method to per_camera_coeff_with_least_square_batch
             #it will decide there if narch == 1 to use CPU and it will calculate correct prior array
             #CW - 5/2/24 - pass binned instead of tdata to put all BVLS/NNLS code into per_camera_coeff_with_least_square_batch
-            #(zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, binned, weights, flux, wflux, nleg, 1, method=self._solver_method, n_nbh=n_nearest, prior_sigma=prior_sigma, use_gpu=use_gpu, bands=target.bands)
-            (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, binned, weights, flux, wflux, nleg, 1, method=self._solver_method, n_nbh=n_nearest, prior_sigma=prior_sigma, use_gpu=use_gpu, ncam=ncam)
+            (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, binned, weights, flux, wflux, nleg, 1, method=self._solver_method, n_nbh=n_nearest, prior_sigma=prior_sigma, use_gpu=use_gpu, bands=bands)
+            #(zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, binned, weights, flux, wflux, nleg, 1, method=self._solver_method, n_nbh=n_nearest, prior_sigma=prior_sigma, use_gpu=use_gpu, ncam=ncam)
         else:
             #Use CPU mode for calc_zchi2 since small tdata
             #Calculate tdata here because binned is passed to per_camera_coeff_with_least_square_batch
@@ -267,6 +268,7 @@ class Archetype():
         """
         spectra = target.spectra
         nleg = target.nleg
+        bands = None
         legendre = target.legendre(nleg=nleg, use_gpu=use_gpu) #Get previously calculated legendre
         solve_method = self._solver_method #get solve method from archetype class instead of passing as arg
 
@@ -329,11 +331,11 @@ class Archetype():
         if per_camera:
             #Use per_camera_coeff_with_least_square_batch which has all logic associated with BVLS/NNLS solver methods
             if (use_gpu):
-                #(zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, binned, gpuweights, gpuflux, gpuwflux, nleg, self._narch, method=solve_method, n_nbh=1, prior_sigma=prior_sigma, use_gpu=use_gpu, bands=bands)
-                (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, binned, gpuweights, gpuflux, gpuwflux, nleg, self._narch, method=solve_method, n_nbh=1, prior_sigma=prior_sigma, use_gpu=use_gpu, ncam=ncam)
+                (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, binned, gpuweights, gpuflux, gpuwflux, nleg, self._narch, method=solve_method, n_nbh=1, prior_sigma=prior_sigma, use_gpu=use_gpu, bands=bands)
+                #(zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, binned, gpuweights, gpuflux, gpuwflux, nleg, self._narch, method=solve_method, n_nbh=1, prior_sigma=prior_sigma, use_gpu=use_gpu, ncam=ncam)
             else:
-                #(zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, binned, weights, flux, wflux, nleg, self._narch, method=solve_method, n_nbh=1, prior_sigma=prior_sigma, use_gpu=use_gpu, bands=bands)
-                (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, binned, weights, flux, wflux, nleg, self._narch, method=solve_method, n_nbh=1, prior_sigma=prior_sigma, use_gpu=use_gpu, ncam=ncam)
+                (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, binned, weights, flux, wflux, nleg, self._narch, method=solve_method, n_nbh=1, prior_sigma=prior_sigma, use_gpu=use_gpu, bands=bands)
+                #(zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, binned, weights, flux, wflux, nleg, self._narch, method=solve_method, n_nbh=1, prior_sigma=prior_sigma, use_gpu=use_gpu, ncam=ncam)
         else:
             #Calculate tdata here because binned is passed to per_camera_coeff_with_least_square_batch
             tdata = dict()

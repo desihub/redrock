@@ -272,7 +272,7 @@ def prior_on_coeffs(n_nbh, deg_legendre, sigma, ncamera, add_negative_legendre_t
                 prior[idx2][idx1] = -prior[idx2][idx2]
     return prior
 
-def per_camera_coeff_with_least_square_batch(target, binned, weights, flux, wflux, nleg, narch, method=None, n_nbh=None, prior_sigma=None, use_gpu=False, ncam=None):
+def per_camera_coeff_with_least_square_batch(target, binned, weights, flux, wflux, nleg, narch, method=None, n_nbh=None, prior_sigma=None, use_gpu=False, bands=None):
     
     """This function calculates coefficients for archetype mode in each camera using normal linear algebra matrix solver or BVLS (bounded value least square) method
 
@@ -292,6 +292,7 @@ def per_camera_coeff_with_least_square_batch(target, binned, weights, flux, wflu
         n_nbh (int): number of nearest best archetypes
         prior (array): prior matrix added to the Legendre coefficients (1/sigma^2)
         use_gpu (bool): use GPU or not
+        bands (list): list of wavelength bands
         ncam (int): number of cameras for given instrument
     
     Returns:
@@ -302,18 +303,17 @@ def per_camera_coeff_with_least_square_batch(target, binned, weights, flux, wflu
     ### TODO - implement BVLS on GPU
     # number of cameras in DESI: b, r, z
     spectra = target.spectra
-#    ncam = len(bands)
-#    nbasis = n_nbh+nleg*ncam # n_nbh : for actual physical archetype(s), nleg: number of legendre polynomials, ncamera: number of cameras
+    if bands is None:
+        bands = ['b', 'z', 'r']
+    ncam = len(bands)
 
-#    if bands is None or bands[0] is None:
-#        bands = ['b', 'z', 'r']
-#    ret_zcoeff = {}
-#    ret_zcoeff['alpha'] = []
-#    if nleg>0:
-#        for b in bands: # bands as save in targets object
-#            ret_zcoeff[b] = []
+    ret_zcoeff = {}
+    ret_zcoeff['alpha'] = []
+    if nleg>0:
+        for b in bands: # bands as save in targets object
+            ret_zcoeff[b] = []
 
-#    new_bands = sorted(bands) # saves as correct order
+    new_bands = sorted(bands) # saves as correct order
 
     method = method.upper()
     add_negative_legendre_terms = False
@@ -324,17 +324,17 @@ def per_camera_coeff_with_least_square_batch(target, binned, weights, flux, wflu
     prior = prior_on_coeffs(n_nbh, nleg, prior_sigma, ncam, add_negative_legendre_terms)
     legendre = target.legendre(nleg=nleg, use_gpu=False) #Get previously calculated legendre
 
-#    if add_negative_legendre_terms:
-#        #Hard-code NNLS with additional legendre terms if BVLS AND gpu mode
-#        method = 'NNLS'
-#        #tdata should already have the additional negative legendre terms
-#        nleg *= 2
-#        if narch == 1:
-#            #Use CPU if only 1 narch (nearest neighbor)
-#            use_gpu = False
+    if add_negative_legendre_terms:
+        #Hard-code NNLS with additional legendre terms if BVLS AND gpu mode
+        method = 'NNLS'
+        #tdata should already have the additional negative legendre terms
+        nleg *= 2
+        if narch == 1:
+            #Use CPU if only 1 narch (nearest neighbor)
+            use_gpu = False
 
-#    #Calculate nbasis after accounting for legendre terms
-#    nbasis = n_nbh+nleg*ncam # n_nbh : for actual physical archetype(s), nleg: number of legendre polynomials, ncamera: number of cameras
+    #Calculate nbasis after accounting for legendre terms
+    nbasis = n_nbh+nleg*ncam # n_nbh : for actual physical archetype(s), nleg: number of legendre polynomials, ncamera: number of cameras
 
     #Calculate tdata arrays here instead of in archetypes
     #Select np or cp for operations as arrtype
@@ -350,36 +350,19 @@ def per_camera_coeff_with_least_square_batch(target, binned, weights, flux, wflu
             tdata[hs] = binned[hs][None,:,:]
             if nleg > 0:
                 tdata[hs] = np.append(tdata[hs], legendre[hs].transpose()[None,:,:], axis=2)
-                #if add_negative_legendre_terms:
-                if method == 'BVLS' and use_gpu:
+                if add_negative_legendre_terms:
+                #if method == 'BVLS' and use_gpu:
                     #Using BVLS and GPU - append negative copies of legendre terms as well to use NNLS with additional bases to approximate BVLS
                     tdata[hs] = np.append(tdata[hs], -1*legendre[hs].transpose()[None,:,:], axis=2)
         else:
             if nleg > 0:
                 tdata[hs] = arrtype.append(binned[hs].transpose()[:,:,None], arrtype.tile(arrtype.asarray(legendre[hs]).transpose()[None,:,:], (narch, 1, 1)), axis=2)
-                #if add_negative_legendre_terms:
-                if method == 'BVLS' and use_gpu:
+                if add_negative_legendre_terms:
+                #if method == 'BVLS' and use_gpu:
                     #Using BVLS - append negative copies of legendre terms as well to use NNLS with additional bases to approximate BVLS
                     tdata[hs] = arrtype.append(tdata[hs], arrtype.tile(-1*arrtype.asarray(legendre[hs]).transpose()[None,:,:], (narch, 1, 1)), axis=2)
             else:
                 tdata[hs] = binned[hs].transpose()[:,:,None]
-
-    if (method == 'BVLS' and use_gpu):
-        #Hard-code se NNLS with additional legendre terms if BVLS AND gpu mode
-        method = 'NNLS'
-        #tdata should already have the additional negative legendre terms
-        nleg *= 2
-        if narch == 1:
-            #Use CPU if only 1 narch (nearest neighbor)
-            use_gpu = False
-
-    #Calculate nbasis after accounting for legendre terms
-    nbasis = n_nbh+nleg*ncam # n_nbh : for actual physical archetype(s), nleg: number of legendre polynomials, ncamera: number of cameras
-    
-    if nleg>0:
-        ret_zcoeff= {'alpha':[], 'b':[], 'r':[], 'z':[]}
-    else:
-        ret_zcoeff= {'alpha':[]} # in case no Legendre polynomials are used at all, only archetypes.
 
     #Setup dict of solver args to pass bounds to solver
     solver_args = dict()
@@ -432,11 +415,9 @@ def per_camera_coeff_with_least_square_batch(target, binned, weights, flux, wflu
         split_coeff =  np.split(zzcoeff[:,n_nbh:], ncam, axis=1) # n_camera = 3
         # In target spectra redrock saves values as 'b', 'z', 'r'.
         # So just re-ordering them here to 'b', 'r', 'z' for easier reading
-        old_coeff = {band: split_coeff[i] for i, band in enumerate(['b', 'z', 'r'])}
-        #old_coeff = {band: split_coeff[i] for i, band in enumerate(bands)}
+        old_coeff = {band: split_coeff[i] for i, band in enumerate(bands)}
 
-        for band in ['b', 'r', 'z']:# 3 cameras
-        #for band in new_bands:# 3 cameras
+        for band in new_bands:# 3 cameras
             ret_zcoeff[band] = old_coeff[band]
     coeff = np.concatenate(list(ret_zcoeff.values()), axis=1)
     #print(f'{time.time()-start} [sec] took for per camera BVLS method\n')
