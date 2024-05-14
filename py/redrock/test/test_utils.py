@@ -38,6 +38,27 @@ class TestUtils(unittest.TestCase):
         dist = utils.distribute_work(nproc, ids, capacities=capacities)
         self.assertEqual(list(map(len, dist)), [1, 3])
 
+    def test_reduced_wavelength(self):
+        x = utils.reduced_wavelength(np.arange(10))
+        self.assertEqual(x[0], -1.0)
+        self.assertEqual(x[-1], 1.0)
+        x = utils.reduced_wavelength(np.linspace(3600, 5800, 10))
+        self.assertEqual(x[0], -1.0)
+        self.assertEqual(x[-1], 1.0)
+
+        #- even out-of-order non-linear ok
+        x = utils.reduced_wavelength(np.random.uniform(-5, 20, size=100))
+        self.assertEqual(np.min(x), -1.0)
+        self.assertEqual(np.max(x), 1.0)
+
+        #- also works on cupy if installed,
+        #- and answer remains on GPU as a cupy array
+        if cp_available:
+            x = utils.reduced_wavelength(cp.linspace(3600, 5800, 10))
+            self.assertEqual(x[0], -1.0)
+            self.assertEqual(x[-1], 1.0)
+            self.assertTrue(isinstance(x, cp.ndarray))
+
 def test_suite():
     """Allows testing of only this module with the command::
 

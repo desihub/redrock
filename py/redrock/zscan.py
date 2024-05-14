@@ -273,7 +273,6 @@ def prior_on_coeffs(n_nbh, deg_legendre, sigma, ncamera, add_negative_legendre_t
     return prior
 
 def per_camera_coeff_with_least_square_batch(target, binned, weights, flux, wflux, nleg, narch, method=None, n_nbh=None, prior_sigma=None, use_gpu=False, bands=None):
-    
     """This function calculates coefficients for archetype mode in each camera using normal linear algebra matrix solver or BVLS (bounded value least square) method
 
     BVLS described in : https://www.stat.berkeley.edu/~stark/Preprints/bvls.pdf
@@ -293,7 +292,6 @@ def per_camera_coeff_with_least_square_batch(target, binned, weights, flux, wflu
         prior (array): prior matrix added to the Legendre coefficients (1/sigma^2)
         use_gpu (bool): use GPU or not
         bands (list): list of wavelength bands
-        ncam (int): number of cameras for given instrument
     
     Returns:
         coefficients and chi2
@@ -708,7 +706,8 @@ def calc_batch_dot_product_3d3d_gpu(a, b, transpose_a=False, fullprecision=True)
 ###    are very obviously analagous though and should be highly
 ###    maintainable.  The main difference is the extra loop on the CPU version
 
-def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, solve_matrices_algorithm=None, solver_args=None, use_gpu=False, fullprecision=True, prior=None):
+def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, solve_matrices_algorithm=None,
+                     solver_args=None, use_gpu=False, fullprecision=True, prior=None):
     
     """Calculate a batch of chi2.
     For many redshifts and a set of spectral data, compute the chi2 for
@@ -864,6 +863,24 @@ def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, solve_mat
             zchi2[i] = np.dot( (flux - model)**2, weights )
     return (zchi2, zcoeff)
 
+def calc_negOII_penalty(OIItemplate, coeff):
+    """return penalty term for model having negative [OII] flux
+
+    Args:
+        OIItemplate[nwave, nbasis]: portion of template around [OII] doublet
+        coeff[nz, nbasis]: coefficients from full template fit to data
+
+    Returns:
+        penalty[nz]: penalty per redshift bin
+    """
+    #- evaluate template and sum over [OII] doublet
+    OIIflux = np.sum(coeff @ OIItemplate, axis=1)
+
+    #- Linear penalty with negative [OII]; no mathematical basis but
+    #- pragmatically works ok
+    penalty = -OIIflux * (OIIflux < 0)
+
+    return penalty
 
 ###!!! NOTE - this is the main method for the v3 algorithm
 ###    In this version, everything is done in batch on the GPU but the
@@ -912,12 +929,6 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
     zchi2penalty = np.zeros( (ntargets, nz) )
     zcoeff = np.zeros( (ntargets, nz, nbasis) )
 
-    # Redshifts near [OII]; used only for galaxy templates
-    if dtemplate.template.template_type == 'GALAXY':
-        isOII = (3724 <= dtemplate.template.wave) & \
-            (dtemplate.template.wave <= 3733)
-        OIItemplate = dtemplate.template.flux[:,isOII].T
-
     ## Redshifted templates are now already in format needed - dict of 3d
     # arrays (CUPY or numpy).
     tdata = dtemplate.local.data
@@ -946,12 +957,14 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
         # for all templates for all three spectra for this target
 
         # For coarse z scan, use fullprecision = False to maximize speed
-        (zchi2[j,:], zcoeff[j,:,:]) = calc_zchi2_batch(target_data[j].spectra, tdata, weights, flux, wflux, nz, nbasis, dtemplate.template.solve_matrices_algorithm, use_gpu=use_gpu, fullprecision=False)
+        (zchi2[j,:], zcoeff[j,:,:]) = calc_zchi2_batch(
+            target_data[j].spectra, tdata, weights, flux, wflux, nz, nbasis,
+            dtemplate.template.solve_matrices_algorithm, use_gpu=use_gpu,
+            fullprecision=False)
 
-        #- Penalize chi2 for negative [OII] flux; ad-hoc
-        if dtemplate.template.template_type == 'GALAXY':
-            OIIflux = np.sum(zcoeff[j] @ OIItemplate.T, axis=1)
-            zchi2penalty[j][OIIflux < 0] = -OIIflux[OIIflux < 0]
+        #- Galaxy templates penalize chi2 for negative [OII] flux; ad-hoc
+        if hasattr(dtemplate.template, 'OIItemplate'):
+            zchi2penalty[j] = calc_negOII_penalty(dtemplate.template.OIItemplate, zcoeff[j])
 
         if dtemplate.comm is None and progress is not None:
             progress.put(1)

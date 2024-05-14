@@ -2,19 +2,60 @@
 redrock Change Log
 ==================
 
-0.19.0 (unreleased)
+0.20.1 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.20.0 (2024-05-03)
+-------------------
+
+Used for DESI Jura run.
+
+* Add rrdesi --model option to pre-generate model files (PR `#283`_).
+* Add load_templates_from_header (PR `#290`_).
+* Add units to fibermap output (PR `#292`_).
+* Set ZWARN/NODATA to z=0 GALAXY, no SUBTYPE, zero coefficients (PR `#294`_).
+* Add TEMFILnn keywords to header to support non-standard template names
+  (PR `#295`_).
+* Fix read_zscan; add make_fulltype, parse_fulltype to standardize
+  fulltype,spectype,subtype parsing (PR `#297`_).
+* Fix warning from zero-sized array (PR `#298`_).
+* Standardize wavelength -> [-1,1] mapping for Legendre poly (PR `#299`_).
+* Set max_velo_diff to 100 km/s for stars (PR `#300`_).
+* Ensure `FITMETHOD` holds 4-string `NONE` (addresses `#301`) (PR `#303`_).
+* Fix FITMETHOD bytes vs. str for details file output (PR `#304`_).
+* Remove unnecessary desispec dependency (PR `#306`_).
+
+.. _`#283`: https://github.com/desihub/redrock/pull/283
+.. _`#290`: https://github.com/desihub/redrock/pull/290
+.. _`#292`: https://github.com/desihub/redrock/pull/292
+.. _`#294`: https://github.com/desihub/redrock/pull/294
+.. _`#295`: https://github.com/desihub/redrock/pull/295
+.. _`#297`: https://github.com/desihub/redrock/pull/297
+.. _`#298`: https://github.com/desihub/redrock/pull/298
+.. _`#299`: https://github.com/desihub/redrock/pull/299
+.. _`#300`: https://github.com/desihub/redrock/pull/300
+.. _`#301`: https://github.com/desihub/redrock/issues/301
+.. _`#303`: https://github.com/desihub/redrock/pull/303
+.. _`#304`: https://github.com/desihub/redrock/pull/304
+.. _`#306`: https://github.com/desihub/redrock/pull/306
+
+0.19.0 (2024-04-19)
 -------------------
 
 * Write test files to temporary directory (PR `#263`_).
 * Check template dimension so code works on a single template (PR `#264`_). 
 * Versioned templates, NMF support, and updated IGM models (PR `#271`_).
+* Mask significantly negative flux (PR `#282`_).
+* Add ``results.read_zscan(..., select=targetids=...)`` option (PR `#289`_).
 * Archetype updates:
 
   * Added default --nminima for archetypes (PR `#265`_).
   * Adjust coeff size for Legendre for archetypes (PR `#266`_).
   * Docstring cleanup (PR `#267`_).
   * Fix --archetype_nnearest option (PR `#272`_).
-
+  * fix --archetype-legendre-degree=0 crash corner case (PR `#278`_).
 
 .. _`#263`: https://github.com/desihub/redrock/pull/263
 .. _`#264`: https://github.com/desihub/redrock/pull/264
@@ -23,6 +64,9 @@ redrock Change Log
 .. _`#267`: https://github.com/desihub/redrock/pull/267
 .. _`#271`: https://github.com/desihub/redrock/pull/271
 .. _`#272`: https://github.com/desihub/redrock/pull/272
+.. _`#278`: https://github.com/desihub/redrock/pull/278
+.. _`#282`: https://github.com/desihub/redrock/pull/282
+.. _`#289`: https://github.com/desihub/redrock/pull/289
 
 0.18.0 (2023-09-14)
 -------------------

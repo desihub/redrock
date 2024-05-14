@@ -1,0 +1,12 @@
+Test data generated with a templates.txt file:
+```
+/global/common/software/desi/perlmutter/desiconda/20230111-2.1.0/code/redrock-templates/main/rrtemplate-GALAXY-None-v2.6.fits
+/global/common/software/desi/perlmutter/desiconda/20230111-2.1.0/code/redrock-templates/main/rrtemplate-QSO-HIZ-v1.1.fits
+```
+
+and the command:
+```
+rrdesi -n 3 -i $DESI_ROOT/spectro/redux/fuji/tiles/cumulative/100/20210505/coadd-0-100-thru20210505.fits \
+  -t templates.txt -o redrock-test.fits -d rrdetails-test.h5
+```
+

@@ -14,10 +14,13 @@ import traceback
 
 import numpy as np
 from astropy.io import fits
+from astropy.table import Table
+from fitsio import FITS
 
 from .utils import native_endian, elapsed
 from .igm import transmission_Lyman
 from .rebin import rebin_template, trapz_rebin
+from .zscan import spectral_data
 
 valid_template_methods = ('PCA', 'NMF')
 
@@ -35,8 +38,10 @@ class Template(object):
     def __init__(self, filename=None, spectype=None, redshifts=None,
                  wave=None, flux=None, subtype=None, method='PCA',
                  igm_model='Inoue14',
-                 zscan_galaxy=None, zscan_qso=None, zscan_star=None):
+                 zscan_galaxy=None, zscan_qso=None, zscan_star=None,
+                 version=None):
 
+        self._filename = filename
         if filename is not None:
             fx = None
             if os.path.exists(filename):
@@ -104,13 +109,13 @@ class Template(object):
                         "template type {}".format(self._rrtype))
                 zmin = self._redshifts[0]
                 zmax = self._redshifts[-1]
-                print("DEBUG: Using default redshift range {:.4f}-{:.4f} for "
-                    "{}".format(zmin, zmax, os.path.basename(filename)))
+                # print("DEBUG: Using default redshift range {:.4f}-{:.4f} for "
+                #     "{}".format(zmin, zmax, os.path.basename(filename)))
             else:
                 zmin = self._redshifts[0]
                 zmax = self._redshifts[-1]
-                print("DEBUG: Using redshift range {:.4f}-{:.4f} for "
-                    "{}".format(zmin, zmax, os.path.basename(filename)))
+                # print("DEBUG: Using redshift range {:.4f}-{:.4f} for "
+                #     "{}".format(zmin, zmax, os.path.basename(filename)))
 
             self._subtype = None
             if 'RRSUBTYP' in hdr:
@@ -143,6 +148,7 @@ class Template(object):
             self._subtype = subtype
             self._igm_model = igm_model
             self._method = method
+            self._version = version
 
         self._nbasis = self.flux.shape[0]
         self._nwave = self.flux.shape[1]
@@ -158,9 +164,25 @@ class Template(object):
             raise ValueError(f'Template method {self._method} unrecognized; '
                               f'should be one of {valid_template_methods}')
 
-        print(f'INFO: {self.full_type} templates using {self._method} for fitting')
-        print(f'INFO: {self.full_type} templates using {self._igm_model} IGM model')
+        # Special case for GALAXY templates and PCA fitting, which can include
+        # negative templates or coefficients: Cache a template that covers just
+        # [OII].
+        if self._rrtype == 'GALAXY' and self._method == "PCA":
+            isOII = (3724 <= self.wave) & (self.wave <= 3733)
+            self.OIItemplate = self.flux[:,isOII]
 
+        if filename is not None:
+            print(f'INFO: {os.path.basename(filename)} {self}')
+        else:
+            print(f'INFO: {self}')
+
+    def __str__(self):
+        zmin = round(self._redshifts[0], 4)
+        zmax = round(self._redshifts[-1], 4)
+        return f'{self._rrtype} {self._subtype} {self._method} IGM={self._igm_model} z={zmin}-{zmax}'
+
+    def __repr__(self):
+        return str(self)
 
     @property
     def nbasis(self):
@@ -180,12 +202,17 @@ class Template(object):
 
     @property
     def full_type(self):
-        """Return formatted type:subtype string.
+        """Return formatted fulltype = spectype:::subtype string.
         """
-        if self._subtype != '':
-            return '{}:::{}'.format(self._rrtype, self._subtype)
-        else:
-            return self._rrtype
+        return make_fulltype(self._rrtype, self._subtype)
+
+    @property
+    def version(self):
+        return self._version
+
+    @property
+    def filename(self):
+        return self._filename
 
     @property
     def redshifts(self):
@@ -204,11 +231,18 @@ class Template(object):
         return self._method
 
     @property
+    def method(self):
+        """
+        Alias for self.solve_matrices_algorithm, i.e. PCA or NMF
+        """
+        return self._method
+
+    @property
     def igm_model(self):
         return self._igm_model
 
 
-    def eval(self, coeff, wave, z):
+    def eval(self, coeff, wave, z, R=None):
         """Return template for given coefficients, wavelengths, and redshift
 
         Args:
@@ -216,18 +250,50 @@ class Template(object):
             wave : wavelengths at which to evaluate template flux
             z : redshift at which to evaluate template flux
 
+        Options:
+            R : array[nwave,nwave] resolution matrix to convolve with model
+
         Returns:
             template flux array
 
         Notes:
-            A single factor of (1+z)^-1 is applied to the resampled flux
-            to conserve integrated flux after redshifting.
-
+            No factors of (1+z) are applied to the resampled flux, i.e.
+            evaluating the same coeffs at different z does not conserve
+            integrated flux, but more directly maps model=templates.dot(coeff)
         """
-        assert len(coeff) == self.nbasis
-        flux = self.flux.T.dot(coeff).T / (1+z)
-        return trapz_rebin(self.wave*(1+z), flux, wave)
+        coeff = coeff[0:self.nbasis]
+        flux = self.flux.T.dot(coeff).T
+        model = trapz_rebin(self.wave*(1+z), flux, wave)
+        if R is not None:
+            model = R.dot(model)
 
+        return model
+
+def parse_fulltype(fulltype):
+    """Parse template fulltype into (spectype, subtype)
+    """
+    fulltype = fulltype.strip()
+    if ':::' in fulltype:
+        spectype, subtype = fulltype.split(':::')
+    else:
+        spectype = fulltype
+        subtype = ''
+
+    return spectype, subtype
+
+def make_fulltype(spectype, subtype):
+    """combine (spectype, subtype) into fulltype
+    """
+    spectype = spectype.strip()
+    if subtype is not None:
+        subtype = subtype.strip()
+
+    if subtype is not None and subtype != '':
+        fulltype = f'{spectype}:::{subtype}'
+    else:
+        fulltype = spectype
+
+    return fulltype
 
 def find_templates(template_path=None):
     """Return list of Redrock template files
@@ -254,13 +320,14 @@ def find_templates(template_path=None):
         print(f'DEBUG: Reading templates from {template_path}')
 
     if os.path.isdir(template_path):
-        default_templates_file = f'{template_path}/default_templates.txt'
+        default_templates_file = f'{template_path}/templates-default.txt'
         template_dir = template_path
+
     elif template_path.endswith('.txt'):
         if not os.path.exists(template_path):
             raise ValueError(f'Missing {template_path=}')
         default_templates_file = template_path
-        template_dir = os.path.dirname(template_path)
+        template_dir = os.path.dirname(os.path.abspath(template_path))
     elif template_path.endswith( ('.fits', '.fits.gz', '.fits.fz') ):
         #- single template file, return that as a list
         return [template_path,]
@@ -293,18 +360,84 @@ def find_templates(template_path=None):
     return template_files
 
 
-def load_templates(template_path=None):
+def header2templatefiles(hdr, template_dir=None):
+    """Derive template filenames from header keywords
+
+    Args:
+        hdr: dict-like with keys TEMNAMnn+TEMVERnn and/or TEMFILnn
+
+    Options:
+        template_dir (str): full path to redrock-templates directory
+
+    Returns list of template filenames, including directory path
     """
-    Return list of Template objects
+    filenames = list()
+    for i in range(100):
+        filekey = f'TEMFIL{i:02d}'
+        typekey = f'TEMNAM{i:02d}'
+        verkey = f'TEMVER{i:02d}'
+        if filekey in hdr:
+            filenames.append( hdr[filekey] )
+        elif (typekey in hdr) and (verkey in hdr):
+            version = hdr[verkey].strip()
+            spectype, subtype = parse_fulltype(hdr[typekey])
+
+            #- special case unversioned STAR templates
+            if version=='unknown':
+                if spectype == 'STAR':
+                    version = '0.1'
+                else:
+                    raise ValueError(f'unknown version for {spectype=}')
+
+            #- blank subtype -> None for filename purposes
+            if subtype == '':
+                subtype = None
+
+            filenames.append(f'rrtemplate-{spectype}-{subtype}-v{version}.fits')
+
+    #- preprend template directory
+    if template_dir is None:
+        template_dir = os.environ['RR_TEMPLATE_DIR']
+
+    filenames = [os.path.join(template_dir, fn) for fn in filenames]
+
+    return filenames
+
+
+def load_templates_from_header(hdr, template_dir=None):
+    """Return templates matching header keywords
+
+    Args:
+        hdr: dict-like with keys TEMNAMnn+TEMVERnn and/or TEMFILnn
+
+    Options:
+        template_dir (str): full path to redrock-templates directory
+
+    Returns list of Template objects
+    """
+    template_filenames = header2templatefiles(hdr, template_dir=template_dir)
+    return load_templates(template_filenames)
+
+def load_templates(template_path=None, zscan_galaxy=None, zscan_star=None, zscan_qso=None,
+                   asdict=False):
+    """
+    Return list or dict of Template objects
+
+    Options:
+        template_path: list of template files, directory, or text file with list of templates
+        zscan_galaxy (str): zmin,zmax,dz redshift range for galaxies
+        zscan_star (str): zmin,zmax,dz redshift range for stars
+        zscan_qso (str): zmin,zmax,dz redshift range for QSOs
+        asdict (bool): return dict keyed by (spectype, subtype) instead of list
 
     `template_path` is list of template file paths, or path to provide to
     find_templates, i.e. a path to a directory with templates, a path to
     a text file containing a list of templates, a path to a single template
     file, or None to use $RR_TEMPLATE_DIR instead.
 
-    Returns: list of Template objects
+    Returns: list or dict of Template objects
 
-    Note: this always returns a list, even if template_path is a path to a
+    Note: this always returns a list/dict, even if template_path is a path to a
     single template file.
     """
     if isinstance(template_path, (str, type(None))):
@@ -314,9 +447,18 @@ def load_templates(template_path=None):
 
     templates = list()
     for filename in template_path:
-        templates.append(Template(filename))
+        tx = Template(filename, zscan_galaxy=zscan_galaxy,
+                      zscan_star=zscan_star, zscan_qso=zscan_qso)
+        templates.append(tx)
 
-    return templates
+    if asdict:
+        templates_dict = dict()
+        for tx in templates:
+            templates_dict[(tx.template_type, tx.sub_type)] = tx
+
+        return templates_dict
+    else:
+        return templates
 
 
 class DistTemplatePiece(object):
@@ -583,30 +725,22 @@ def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1,
             after distributed rebinning so each process has the full
             redshift range for the template.
 
-    Returns:
-        list: a list of DistTemplate objects.
-
+    Returns dist_templates: a list of DistTemplate objects, sampled at redshifts
     """
     timer = elapsed(None, "", comm=comm)
 
-    template_files = None
+    template_dict = None
     if (comm is None) or (comm.rank == 0):
-        template_files = find_templates(templates)
+        template_dict = load_templates(templates, asdict=True,
+                                       zscan_galaxy=zscan_galaxy,
+                                       zscan_star=zscan_star,
+                                       zscan_qso=zscan_qso)
 
     if comm is not None:
-        template_files = comm.bcast(template_files, root=0)
-
-    template_data = list()
-    if (comm is None) or (comm.rank == 0):
-        for t in template_files:
-            template_data.append(Template(filename=t, zscan_galaxy=zscan_galaxy,
-                                          zscan_star=zscan_star, zscan_qso=zscan_qso))
-
-    if comm is not None:
-        template_data = comm.bcast(template_data, root=0)
+        template_dict = comm.bcast(template_dict, root=0)
 
     timer = elapsed(timer, "Read and broadcast of {} templates"\
-        .format(len(template_files)), comm=comm)
+        .format(len(template_dict)), comm=comm)
 
     if (use_gpu):
         import cupy as cp
@@ -618,7 +752,7 @@ def load_dist_templates(dwave, templates=None, comm=None, mp_procs=1,
     # Compute the interpolated templates in a distributed way with every
     # process generating a slice of the redshift range.
     dtemplates = list()
-    for t in template_data:
+    for t in template_dict.values():
         if redistribute:
             dtemplate = ReDistTemplate(t, dwave, mp_procs=mp_procs, comm=comm, use_gpu=use_gpu, gpu_mode=gpu_mode)
         else:
@@ -656,23 +790,30 @@ def eval_model(data, wave, R=None, templates=None):
         a dictionary of model fluxes, one for each camera.
     """
     if templates is None:
-        templates = dict()
-        templatefn = find_templates()
-        for fn in templatefn:
-            tx = Template(fn)
-            templates[(tx.template_type, tx.sub_type)] = tx
+        templates = load_templates(asdict=True)
+
+    #- if wave is a dictionary of wavelength arrays, recursively call
+    #- eval_model to return dictionary of models
     if isinstance(wave, dict):
-        Rdict = R if R is not None else {x: None for x in wave}
-        return {x: eval_model(data, wave[x], R=Rdict[x], templates=templates)
-                for x in wave}
-    out = np.zeros((len(data), len(wave)), dtype='f4')
+        if R is None:
+            Rdict = {x: None for x in wave}
+        else:
+            if not isinstance(R, dict) or set(R.keys()) != set(wave.keys()):
+                raise ValueError('R must be dict with same keys as wave')
+            Rdict = R
+
+        out = dict()
+        for key in wave:
+            out[key] = eval_model(data, wave[key], R=Rdict[key], templates=templates)
+
+        return out
+
+    models = np.zeros((len(data), len(wave)), dtype='f4')
     for i in range(len(data)):
         tx = templates[(data['SPECTYPE'][i], data['SUBTYPE'][i])]
         coeff = data['COEFF'][i][0:tx.nbasis]
-        model = tx.flux.T.dot(coeff).T
-        mx = trapz_rebin(tx.wave*(1+data['Z'][i]), model, wave)
-        if R is None:
-            out[i] = mx
-        else:
-            out[i] = R[i].dot(mx)
-    return out
+        z = data['Z'][i]
+        models[i] = tx.eval(coeff, wave, z, R=R[i])
+
+    return models
+

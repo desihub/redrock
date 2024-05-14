@@ -9,13 +9,13 @@ from __future__ import absolute_import, division, print_function
 
 import numpy as np
 import scipy.constants
-import scipy.special
 
 from . import constants
 
 from .rebin import rebin_template
 
 from .zscan import calc_zchi2_one, spectral_data, calc_zchi2_batch
+from .zscan import calc_negOII_penalty
 
 from .zwarning import ZWarningMask as ZW
 
@@ -106,8 +106,6 @@ def minfit(x, y):
 
     return (x0, xerr, y0, zwarn)
 
-
-
 def legendre_calculate(nleg, dwave):
     wave = np.concatenate([ w for w in dwave.values() ])
     wmin = wave.min()
@@ -116,7 +114,8 @@ def legendre_calculate(nleg, dwave):
 
     return legendre
 
-def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=False, deg_legendre=None, zminfit_npoints=15, per_camera=False, n_nearest=None, prior_sigma=None):
+def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=False, deg_legendre=None,
+         zminfit_npoints=15, per_camera=False, n_nearest=None, prior_sigma=None):
     """Refines redshift measurement around up to nminima minima.
 
     TODO:
@@ -154,7 +153,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
     dwave = { s.wavehash:s.wave for s in spectra }
 
     (weights, flux, wflux) = spectral_data(spectra)
-    
+
     if (use_gpu):
         #Get CuPy arrays of weights, flux, wflux
         #These are created on the first call of gpu_spectral_data() for a
@@ -175,15 +174,20 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
     else:
         nz = zminfit_npoints
 
+    if template.template_type == 'STAR':
+        max_velo_diff = constants.max_velo_diff_star
+    else:
+        max_velo_diff = constants.max_velo_diff
+
     for imin in find_minima(zchi2):
         if len(results) == nminima:
             break
 
-        #- Skip this minimum if it is within constants.max_velo_diff km/s of a
+        #- Skip this minimum if it is within max_velo_diff km/s of a
         # previous one dv is in km/s
         zprev = np.array([tmp['z'] for tmp in results])
         dv = get_dv(z=redshifts[imin],zref=zprev)
-        if np.any(np.abs(dv) < constants.max_velo_diff):
+        if np.any(np.abs(dv) < max_velo_diff):
             continue
 
         #- Sample more finely around the minimum
@@ -231,6 +235,10 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
             (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, binned, weights, flux, wflux, nz, nbasis,
                                                  solve_matrices_algorithm=template.solve_matrices_algorithm,
                                                  use_gpu=use_gpu)
+
+        #- Penalize chi2 for negative [OII] flux; ad-hoc
+        if hasattr(template, 'OIItemplate'):
+            zzchi2 += calc_negOII_penalty(template.OIItemplate, zzcoeff)
 
         #- fit parabola to 3 points around minimum
         i = min(max(np.argmin(zzchi2),1), len(zz)-2)
@@ -296,16 +304,16 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
             zwarn |= ZW.Z_FITLIMIT
 
         #- Skip this better defined minimum if it is within
-        #- constants.max_velo_diff km/s of a previous one
+        #- max_velo_diff km/s of a previous one
         zprev = np.array([tmp['z'] for tmp in results])
         dv = get_dv(z=zbest, zref=zprev)
-        if np.any(np.abs(dv) < constants.max_velo_diff):
+        if np.any(np.abs(dv) < max_velo_diff):
             continue
 
         if archetype is None:
             results.append(dict(z=zbest, zerr=zerr, zwarn=zwarn,
                 chi2=chi2min, zz=zz, zzchi2=zzchi2,
-                coeff=coeff))
+                coeff=coeff, fitmethod=template.method))
         else:
             if prior_sigma is not None:
                 if per_camera:
@@ -320,7 +328,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
 
             results.append(dict(z=zbest, zerr=zerr, zwarn=zwarn,
                 chi2=chi2min, zz=zz, zzchi2=zzchi2,
-                coeff=coeff, fulltype=fulltype))
+                coeff=coeff, fulltype=fulltype, fitmethod=archetype.method))
 
     #- Sort results by chi2min; detailed fits may have changed order
     ii = np.argsort([tmp['chi2'] for tmp in results])

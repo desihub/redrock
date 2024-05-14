@@ -21,6 +21,8 @@ from .utils import elapsed
 
 from .targets import distribute_targets
 
+from .templates import parse_fulltype
+
 from .archetypes import All_archetypes
 
 from .priors import Priors
@@ -208,7 +210,8 @@ def sort_zfit_dict(zfit):
     sort_dict_by_cols(zfit, ('__badfit__', 'chi2'), sort_first_column_first=True)
     zfit.pop('__badfit__')
 
-def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=None, chi2_scan=None, use_gpu=False, zminfit_npoints=15, per_camera=None, deg_legendre=None, n_nearest=None, prior_sigma=None, ncamera=None):
+def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=None, chi2_scan=None, use_gpu=False,
+          zminfit_npoints=15, per_camera=None, deg_legendre=None, n_nearest=None, prior_sigma=None, ncamera=None):
     """Compute all redshift fits for the local set of targets and collect.
 
     Given targets and templates distributed across a set of MPI processes,
@@ -228,7 +231,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             multiprocessing processes to use.
         nminima (int, optional): number of chi^2 minima to consider.
             Passed to fitz().
-        archetypes (str, optional): file or directory containing archetypes
+        archetypes (list optional): list of Archetype objects
             to use for final fitz choice of best chi2 vs. z minimum.
         priors (str, optional): file containing redshift priors
         chi2_scan (str, optional): file containing already computed chi2 scan
@@ -249,7 +252,6 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
     """
 
     if archetypes:
-        archetypes = All_archetypes(archetypes_dir=archetypes).archetypes
         archetype_spectype = list(archetypes.keys()) # to account for the case if only one archetype is provided
     
     if not priors is None:
@@ -320,9 +322,8 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
     #creating list of template spectype to make use in case archetypes would be used
     all_spectype = []
     for spec in templates:
-        temp_spectype = spec.template._rrtype.split(':::')
-        if temp_spectype not in all_spectype:
-            all_spectype.append(temp_spectype)
+        if spec.template.template_type not in all_spectype:
+            all_spectype.append(spec.template.template_type)
 
     for t in np.array(list(templates))[sort]:
         ft = t.template.full_type
@@ -423,23 +424,27 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     continue
                 tmp = allresults[tid][fulltype]['zfit']
 
-                #- TODO: reconsider fragile parsing of fulltype
                 if archetypes is None:
-                    if fulltype.count(':::') > 0:
-                        spectype, subtype = fulltype.split(':::')
-                    else:
-                        spectype, subtype = (fulltype, '')
-
+                    spectype, subtype = parse_fulltype(fulltype)
                 else:
                     if 'fulltype' in tmp.keys():#to take care of case when archetype is applied only for one template
-                        spectype = [ el[0].split(':::')[0] for el in tmp['fulltype'] ] #el is a list with one element (corresponding to each minima)
-                        subtype = [ el[0].split(':::')[1] for el in tmp['fulltype'] ]
+                        spectype = list()
+                        subtype = list()
+                        #l el is a list with one element (corresponding to each minimum)
+                        for el in tmp['fulltype']:
+                            this_spectype, this_subtype = parse_fulltype(el[0])
+                            spectype.append(this_spectype)
+                            subtype.append(this_subtype)
                         del tmp['fulltype'] #it's a dictionary
                     else:
-                        if fulltype.count(':::') > 0:
-                            spectype, subtype = fulltype.split(':::')
-                        else:
-                            spectype, subtype = (fulltype, '')
+                        spectype, subtype = parse_fulltype(fulltype)
+
+                # set max_velo_diff differently for STARs, but watch out
+                # for archtypes which have spectype as list instead of scalar
+                if (np.isscalar(spectype) and spectype.upper() == 'STAR') or spectype[0].upper() == 'STAR':
+                    max_velo_diff = constants.max_velo_diff_star
+                else:
+                    max_velo_diff = constants.max_velo_diff
 
                 #Have to create arrays of correct length since using dict of
                 #np arrays instead of astropy Table
@@ -527,8 +532,8 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             tzfit['znum'] = np.arange(l)
 
             #- calc deltachi2 and set ZW.SMALL_DELTA_CHI2 flag
-            deltachi2, setzwarn = calc_deltachi2(
-                    tzfit['chi2'], tzfit['z'], tzfit['zwarn'])
+            deltachi2, setzwarn = calc_deltachi2(tzfit['chi2'], tzfit['z'], tzfit['zwarn'],
+                                                 dvlimit=max_velo_diff)
             tzfit['deltachi2'] = deltachi2
             tzfit['zwarn'][setzwarn] |= ZW.SMALL_DELTA_CHI2
 

@@ -7,9 +7,12 @@ Classes and functions for archetypes.
 import os
 from glob import glob
 from astropy.io import fits
+from astropy.table import Table
 import numpy as np
 from scipy.interpolate import interp1d
 import scipy.special
+
+from .utils import reduced_wavelength
 
 from .zscan import calc_zchi2_one, calc_zchi2_batch
 
@@ -18,6 +21,8 @@ from .rebin import trapz_rebin
 from .igm import transmission_Lyman
 
 from .zscan import per_camera_coeff_with_least_square_batch
+
+from .templates import make_fulltype
 
 class Archetype():
     """Class to store all different archetypes from the same spectype.
@@ -31,6 +36,7 @@ class Archetype():
     def __init__(self, filename):
 
         # Load the file
+        self._filename = filename
         h = fits.open(os.path.expandvars(filename), memmap=False)
 
         hdr = h['ARCHETYPES'].header
@@ -40,7 +46,7 @@ class Archetype():
         self._rrtype = hdr['RRTYPE'].strip()
         self._subtype = np.array(np.char.strip(h['ARCHETYPES'].data['SUBTYPE'].astype(str)))
         self._subtype = np.char.add(np.char.add(self._subtype,'_'),np.arange(self._narch,dtype=int).astype(str))
-        self._full_type = np.char.add(self._rrtype+':::',self._subtype)
+        self._full_type = np.array([make_fulltype(self._rrtype, subtype) for subtype in self._subtype])
         self._version = hdr['VERSION']
 
         self.wave = np.asarray(hdr['CRVAL1'] + hdr['CDELT1']*np.arange(self.flux.shape[1]))
@@ -66,6 +72,8 @@ class Archetype():
         # TODO: Allow Archetype files to specify bvls or nnls or pca solver method
         self._solver_method = 'bvls'
 
+        self.method = 'ARCH'  # for API symmetry with Template.method
+
         return
 
     @property
@@ -83,6 +91,27 @@ class Archetype():
             import cupy as cp
             self._gpuflux = cp.asarray(self.flux)
         return self._gpuflux
+
+    @property
+    def version(self):
+        return self._version
+
+    @property
+    def filename(self):
+        return self._filename
+
+    #- template_type, sub_type, and full_type like Template object methods
+    @property
+    def template_type(self):
+        return self._rrtype
+
+    @property
+    def sub_type(self):
+        return self._subtype
+
+    @property
+    def full_type(self):
+        return self._full_type
 
     def rebin_template(self,index,z,dwave,trapz=True):
         """
@@ -149,23 +178,46 @@ class Archetype():
             #return {hs:self._archetype['INTERP'](wave/(1.+z)) for hs, wave in dwave.items()}
         return result
 
-    def eval(self, subtype, dwave, coeff, wave, z):
+    def eval(self, subtype, coeff, wave, z, R=None, legcoeff=None):
+        """Return archetype for given subtype, coefficients, wavelengths, and redshift
+
+        Args:
+            subtype (str) : comma separated str of archetype subtype(s)
+            coeff : array of archetype coefficients
+            wave : wavelengths at which to evaluate template flux
+            z : redshift at which to evaluate template flux
+
+        Options:
+            R : array[nwave,nwave] resolution matrix to convolve with model
+            legcoeff : array of additional legendre coefficients
+
+        Returns:
+            archetype flux array
+
+        Notes:
+            No factors of (1+z) are applied to the resampled flux, i.e.
+            evaluating the same coeffs at different z does not conserve
+            integrated flux, but more directly maps model=templates.dot(coeff)
         """
 
-        """
+        subtypes = subtype.split(';')
+        model = np.zeros(len(wave))
+        for this_subtype, c in zip(subtypes, coeff[0:len(subtypes)]):
+            index = np.where(self._subtype == this_subtype)[0][0]
+            binned_archetype = trapz_rebin((1+z)*self.wave, self.flux[index], wave)
+            binned_archetype *= transmission_Lyman(z,wave,model=self.igm_model)
 
-        deg_legendre = (coeff!=0.).size-1
-        index = np.arange(self._narch)[self._subtype==subtype][0]
+            model += c*binned_archetype
 
-        w = np.concatenate([ w for w in dwave.values() ])
-        wave_min = w.min()
-        wave_max = w.max()
-        legendre = np.array([scipy.special.legendre(i)( (wave-wave_min)/(wave_max-wave_min)*2.-1. ) for i in range(deg_legendre)])
-        binned = trapz_rebin((1+z)*self.wave, self.flux[index], wave)*transmission_Lyman(z,wave,model=self.igm_model)
-        flux = np.append(binned[None,:],legendre, axis=0)
-        flux = flux.T.dot(coeff).T / (1+z)
+        if legcoeff is not None:
+            deg_legendre = len(legcoeff)
+            legendre = np.array([scipy.special.legendre(i)( reduced_wavelength(wave) ) for i in range(deg_legendre)])
+            model += legendre.T.dot(legcoeff).T
 
-        return flux
+        if R is not None:
+            model = R.dot(model)
+
+        return model
     
     def nearest_neighbour_model(self, target,weights,flux,wflux,dwave,z, n_nearest, zzchi2, trans, per_camera, dedges=None, binned=None, use_gpu=False, prior_sigma=None, ncam=None):
         
@@ -238,17 +290,17 @@ class Archetype():
             (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, weights, flux, wflux, 1, nbasis, use_gpu=False)
 
         sstype = ['%s'%(self._subtype[k]) for k in iBest] # subtypes of best archetypes
-        fsstype = '_'.join(sstype)
+        fsstype = ';'.join(sstype)
         #print(sstype)
         #print(z, zzchi2, zzcoeff, fsstype)
-        return zzchi2[0], zzcoeff[0], self._rrtype+':::%s'%(fsstype)
+        return zzchi2[0], zzcoeff[0], make_fulltype(self._rrtype, fsstype)
 
     def get_best_archetype(self,target,weights,flux,wflux,dwave,z, per_camera, n_nearest, trans=None, prior_sigma=None, use_gpu=False):
 
         """Get the best archetype for the given redshift and spectype.
 
         Args:
-            spectra (list): list of Spectrum objects.
+            target (object): target object.
             weights (array): concatenated spectral weights (ivar).
             flux (array): concatenated flux values.
             wflux (array): concatenated weighted flux values.
@@ -257,8 +309,8 @@ class Archetype():
             per_camera (bool): True if fitting needs to be done in each camera
             n_nearest (int): number of nearest neighbours to be used in chi2 space (including best archetype)
             trans (dict): pass previously calcualated Lyman transmission instead of recalculating
-            use_gpu (bool): use GPU or not
             prior_sigma (float): prior to add in the final solution matrix: added as 1/(prior_sigma**2) only for per-camera mode
+            use_gpu (bool): use GPU or not
             
         Returns:
             chi2 (float): chi2 of best archetype
@@ -271,6 +323,7 @@ class Archetype():
         bands = None
         legendre = target.legendre(nleg=nleg, use_gpu=use_gpu) #Get previously calculated legendre
         solve_method = self._solver_method #get solve method from archetype class instead of passing as arg
+        bands = target.bands
 
         #Select np or cp for operations as arrtype
         if (use_gpu):
@@ -291,10 +344,9 @@ class Archetype():
         else:
             ncam = 1 # entire spectra
         
-        wkeys = list(dwave.keys())
-        new_keys = [wkeys[0], wkeys[2], wkeys[1]]
-
-        obs_wave = np.concatenate([dwave[key] for key in new_keys])
+        #wkeys = list(dwave.keys())
+        #new_keys = [wkeys[0], wkeys[2], wkeys[1]]
+        #obs_wave = np.concatenate([dwave[key] for key in new_keys])
         
         #nleg = legendre[list(legendre.keys())[0]].shape[0]
         
@@ -327,7 +379,6 @@ class Archetype():
             if (trans[hs] is not None):
                 #Only multiply if trans[hs] is not None
                 binned[hs] *= arrtype.asarray(trans[hs][:,None])
-
         if per_camera:
             #Use per_camera_coeff_with_least_square_batch which has all logic associated with BVLS/NNLS solver methods
             if (use_gpu):
@@ -387,6 +438,36 @@ class All_archetypes():
 
         return
 
+def split_archetype_coeff(subtype, coeff, nbands, nleg=None):
+    """
+    Split coeff array into archetype + legendre terms
+
+    Args:
+        subtype (str): comma separated archetype subtypes
+        coeff (array): coefficients from redrock fit
+        nbands (int): number of spectrograph bands (e.g. 3 for DESI b/r/z)
+
+    Options
+        nleg (int): number of legendre terms per band
+
+    Returns (archcoeff, legcoeff) where archcoeff is array of archetype coefficients
+    for each subtype, and legcoeff is list of legendre coefficients per band.
+
+    If nleg is None, it will be derived from counting non-zero terms of coeff.
+    Expected length of non-zero coeffs is num_subtypes + nbands*nleg.
+    """
+    narchetypes = len(subtype.split(';'))
+    archcoeff = coeff[0:narchetypes]
+    all_legcoeff = coeff[narchetypes:]
+
+    if nleg is None:
+        # derive number of legendre coefficients used from non-zero terms
+        nleg = np.count_nonzero(all_legcoeff) // nbands
+
+    legcoeff = [all_legcoeff[i*nleg:(i+1)*nleg] for i in range(nbands)]
+
+    return archcoeff, legcoeff
+
 def find_archetypes(archetypes_dir=None):
     """Return list of rrarchetype-\*.fits archetype files
 
@@ -422,3 +503,6 @@ def find_archetypes(archetypes_dir=None):
             lstfilename = sorted([ f.replace(archetypes_dir_expand,archetypes_dir) for f in lstfilename])
 
     return lstfilename
+
+
+

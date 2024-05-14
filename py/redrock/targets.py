@@ -11,7 +11,7 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 import scipy.sparse
 
-from .utils import mp_array, distribute_work
+from .utils import mp_array, distribute_work, reduced_wavelength
 
 from . import constants
 
@@ -25,10 +25,11 @@ class Spectrum(object):
         R (scipy.sparse.dia_matrix): the resolution matrix in band diagonal
             format.
         Rcsr (scipy.sparse.csr_matrix): the resolution matrix in CSR format.
+        band (str): camera band name
 
     """
     # @profile
-    def __init__(self, wave, flux, ivar, R, Rcsr=None):
+    def __init__(self, wave, flux, ivar, R, Rcsr=None, band=None):
         if R is not None:
             w = np.asarray(R.sum(axis=1))[:,0]<constants.min_resolution_integral
             ivar[w] = 0.
@@ -39,10 +40,17 @@ class Spectrum(object):
         self.R = R
         self._Rcsr = Rcsr
         self._mpshared = False
-        if hasattr(R,'data'):
-            self.wavehash = hash((len(wave), wave[0], wave[1], wave[-2], wave[-1], R.data.shape[0]))
+
+        # "wavehash" tracks the different wavelength grids for different spectra
+        # if "band" is provided, use that, otherwise hash elements of the wave array
+        self.band = band
+        if band is not None:
+            self.wavehash = band
         else:
-            self.wavehash = hash((len(wave), wave[0], wave[1], wave[-2], wave[-1]))
+            if hasattr(R,'data'):
+                self.wavehash = hash((len(wave), wave[0], wave[1], wave[-2], wave[-1], R.data.shape[0]))
+            else:
+                self.wavehash = hash((len(wave), wave[0], wave[1], wave[-2], wave[-1]))
 
         #It is much more efficient to calculate edges once if rebinning
         #and copy to GPU and store here rather than doing this every time
@@ -75,6 +83,7 @@ class Spectrum(object):
 
     @property
     def Rcsr(self):
+        self.sharedmem_unpack()
         if self._Rcsr is None:
             self._Rcsr = self.R.tocsr()
         return self._Rcsr
@@ -168,6 +177,62 @@ class Target(object):
         self._legendre = None
         self._gpulegendre = None
         self.nleg = 0
+        self.bands = []
+        for s in spectra:
+            self.bands.append(s.band)
+
+    def eval_model(self, bestfit, templates, archetypes=None, nleg=None):
+        """
+        Evaluate the best fit model for the spectra in this Target.
+
+        Args:
+            bestfit: dict-like with SPECTYPE, SUBTYPE, COEFF, and Z
+            templates: dict[(SPECTYPE,SUBTYPE)] of Template objects
+
+        Options:
+            archetypes: dict[(SPECTYPE,SUBTYPE)] of Archetype objects
+
+        Returns ``model`` dict of rendered best fit models keyed by wavehash
+
+        Note: modifies self by setting self.model to be returned value.
+
+        Example after calling target.eval_model::
+
+            spec = target.spectra[i]
+            wavelengths = spec.wave
+            fluxdata = spec.flux
+            wavehash = spec.wavehash
+            fluxmodel = target.model[wavehash]
+        """
+        spectype = bestfit['SPECTYPE']
+        subtype = bestfit['SUBTYPE']
+        coeff = bestfit['COEFF']
+        z = bestfit['Z']
+        fitmethod = bestfit['FITMETHOD']
+
+        self.model = dict()
+        if np.all(coeff == 0.0):
+            # entirely masked data has coeffs=0
+            for sp in self.spectra:
+                self.model[sp.wavehash] = np.zeros(len(sp.wave), dtype=np.float32)
+        elif fitmethod == 'ARCH':
+            #- Archetype fits have N nearest neighbor archetype coeffs
+            #- followed by ncamera*nlegendre coefficients
+            #- import here to avoid circular import
+            from .archetypes import split_archetype_coeff
+            archcoeff, legcoeff = split_archetype_coeff(subtype, coeff, len(self.bands))
+
+            ax = archetypes[spectype]
+            for i, sp in enumerate(self.spectra):
+                self.model[sp.wavehash] = ax.eval(subtype, archcoeff, sp.wave, z, R=sp.Rcsr, legcoeff=legcoeff[i])
+
+        else:
+            tx = templates[(spectype, subtype)]
+            for sp in self.spectra:
+                self.model[sp.wavehash] = tx.eval(coeff, sp.wave, z, sp.Rcsr)
+
+        return self.model
+
 
     def legendre(self, nleg, use_gpu=False):
         if (use_gpu and self.nleg == nleg):
@@ -180,10 +245,7 @@ class Target(object):
         if (self._legendre is not None and self.nleg == nleg):
             return self._legendre
         dwave = { s.wavehash:s.wave for s in self.spectra }
-        wave = np.concatenate([ w for w in dwave.values() ])
-        wmin = wave.min()
-        wmax = wave.max()
-        self._legendre = { hs:np.array([scipy.special.legendre(i)( (w-wmin)/(wmax-wmin)*2.) for i in range(nleg)]) for hs, w in dwave.items() }
+        self._legendre = { hs:np.array([scipy.special.legendre(i)(reduced_wavelength(w)) for i in range(nleg)]) for hs, w in dwave.items() }
         self.nleg = nleg
         if (use_gpu):
             import cupy as cp
@@ -212,8 +274,14 @@ class Target(object):
 
         This method REPLACES the list of individual spectra with coadds.
         """
+        # preserve order of wavehashes
+        wavehashes = list()
+        for sp in self.spectra:
+            if sp.wavehash not in wavehashes:
+                wavehashes.append(sp.wavehash)
+
         coadd = list()
-        for key in set([s.wavehash for s in self.spectra]):
+        for key in wavehashes:
             wave = None
             unweightedflux = None
             weightedflux = None
@@ -228,6 +296,7 @@ class Target(object):
             for s in self.spectra:
                 if s.wavehash != key: continue
                 nspec += 1
+                current_band = s.band
                 if wave is None :
                     wave = s.wave
                     Rdiags = s.R.data * s.ivar
@@ -296,7 +365,7 @@ class Target(object):
             else:
                 Rcsr = None
 
-            spc = Spectrum(wave, flux, weights, R, Rcsr)
+            spc = Spectrum(wave, flux, weights, R, Rcsr, band=current_band)
             coadd.append(spc)
 
         # swap the coadds into place.
@@ -370,6 +439,31 @@ class DistTargets(object):
         """
         return self._local_data()
 
+    def eval_models(self, bestfit, templates, archetypes=None):
+        """
+        Calls target.eval_model(bestfit, templates, archetypes) for each local target
+
+        Args:
+            bestfit: dict-like with SPECTYPE, SUBTYPE, COEFF, and Z
+            templates: dict[(SPECTYPE,SUBTYPE)] of Template objects
+
+        Options:
+            archetypes: dict[(SPECTYPE,SUBTYPE)] of Archetype objects
+
+        Returns ``models`` list of dictionaries, with one item per local target,
+            and dictionaries keyed by the wavehashes of the spectra for that target.
+
+        See Target.eval_model for more details.
+
+        Note: sets target.model for each local target
+        """
+        models = list()
+        for tgt in self.local():
+            i = np.where(bestfit['TARGETID'] == tgt.id)[0][0]
+            model = tgt.eval_model(bestfit[i], templates, archetypes)
+            models.append(model)
+
+        return models
 
     def wavegrids(self):
         """Return the global dictionary of wavelength grids for each wave hash.

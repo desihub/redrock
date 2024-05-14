@@ -163,9 +163,17 @@ def mp_array(original):
     Returns;
         ndarray: the wrapped data.
 
+    If the input array has size=0, the original is returned without
+    wrapping it in a size=0 multiprocessing.RawArray (which generates
+    warnings)
     """
     import multiprocessing as mp
 
+    # A zero-length array generates the warning documented in
+    # https://github.com/desihub/redrock/issues/250; capture it.
+    if original.size == 0:
+        return original
+    
     typecode = original.dtype.char
     shape = original.shape
 
@@ -248,3 +256,16 @@ def getGPUCountMPI(comm):
     if comm.rank == 0:
         print("WARNING:  Found {:d} GPUs".format(len(pci_id_list)))
     return len(pci_id_list)
+
+def reduced_wavelength(wave):
+    """function to calculate reduced wavelength arrya for 
+    legendre polynomial in archetype mode, 
+    legendre polynomials are orthogonal in [-1,1]
+    Args:
+        wave (array): wavelength for which reduced wavelengths to be estimated
+    Return:
+        reduced wavelength in [-1,1] range
+    """
+    wavemax = wave.max()
+    wavemin = wave.min()
+    return 2*(wave - wavemin) / (wavemax - wavemin) - 1
