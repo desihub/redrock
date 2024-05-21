@@ -320,7 +320,6 @@ class Archetype():
         """
         spectra = target.spectra
         nleg = target.nleg
-        bands = None
         legendre = target.legendre(nleg=nleg, use_gpu=use_gpu) #Get previously calculated legendre
         solve_method = self._solver_method #get solve method from archetype class instead of passing as arg
         bands = target.bands
@@ -379,6 +378,7 @@ class Archetype():
             if (trans[hs] is not None):
                 #Only multiply if trans[hs] is not None
                 binned[hs] *= arrtype.asarray(trans[hs][:,None])
+
         if per_camera:
             #Use per_camera_coeff_with_least_square_batch which has all logic associated with BVLS/NNLS solver methods
             if (use_gpu):
