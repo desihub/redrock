@@ -403,7 +403,17 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
     allzfit = None
 
     if targets.comm is not None:
-        results = targets.comm.gather(results, root=0)
+        # gather can fail with especially large inputs, so use point-to-point
+        ### results = targets.comm.gather(results, root=0)
+        if targets.comm.rank == 0:
+            results = [results,]
+            for other_rank in range(1,targets.comm.size):
+                other_results = targets.comm.recv(source=other_rank, tag=42)
+                results.append(other_results)
+        else:
+            targets.comm.send(results, dest=0, tag=42)
+
+        targets.comm.barrier()
     else:
         results = [ results ]
 
