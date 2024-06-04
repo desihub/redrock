@@ -2,10 +2,20 @@
 redrock Change Log
 ==================
 
-0.20.1 (unreleased)
+0.20.2 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.20.1 (2024-06-04)
+-------------------
+
+Update for Jura run to finish extra large healpix.
+
+* Better MPI memory management for very large inputs (PRs `#310`_, `#311`_).
+
+.. _`#310`: https://github.com/desihub/redrock/pull/310
+.. _`#311`: https://github.com/desihub/redrock/pull/311
 
 0.20.0 (2024-05-03)
 -------------------
