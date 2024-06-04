@@ -425,7 +425,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
         # Ranks>0 send results to rank 0
         # first send num_batches (int), and then the batches of results (dict)
         else:
-            max_targets_per_send = 5
+            max_targets_per_send = 5000
             if len(results) < max_targets_per_send:
                 targets.comm.send(1, dest=0)
                 targets.comm.send(results, dest=0)
