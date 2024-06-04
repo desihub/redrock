@@ -570,7 +570,34 @@ class DistTargetsDESI(DistTargets):
                     hdata = hdus[extname].data[rows]
 
                 if comm is not None:
-                    hdata = comm.bcast(hdata, root=0)
+                    #- resolution data for dense healpix can exceed the
+                    #- mpi4py 2GB limit, so distribute in batches
+                    ### hdata = comm.bcast(hdata, root=0)
+
+                    #- tell each rank how many targets there are
+                    #- to know how many subsets to loop over
+                    ntarg = 0
+                    if comm_rank == 0:
+                        ntarg = hdata.shape[0]
+
+                    ntarg = comm.bcast(ntarg, root=0)
+
+                    #- distribute data in subsets of max size ntarg_per_bcast
+                    maxtarg_per_bcast = 10000
+                    if ntarg <= maxtarg_per_bcast:
+                        hdata = comm.bcast(hdata, root=0)
+                    else:
+                        hdata_subsets = list()
+                        for i in range(0, ntarg, maxtarg_per_bcast):
+                            rdat_subset = None
+                            if comm_rank == 0:
+                                rdat_subset = hdata[i:i+maxtarg_per_bcast]
+
+                            hdata_subsets.append( comm.bcast(rdat_subset, root=0) )
+
+                        #- put the subsets back together & cleanup temp memory
+                        hdata = np.vstack(hdata_subsets)
+                        del hdata_subsets
 
                 toff = 0
                 for t in self._my_targets:
@@ -738,6 +765,21 @@ def rrdesi(options=None, comm=None):
         print('WARNING: --ncpu is deprecated; use --mp instead')
         args.mp = args.ncpu
 
+    # if comm is bigger than needed, trim to avoid bcast to unused ranks
+    input_comm = comm
+    if ((comm is not None) and args.gpu and
+        (args.max_gpuprocs is not None) and (comm.size > args.max_gpuprocs)):
+        is_gpu_rank = (comm.rank < args.max_gpuprocs)
+        subcomm = comm.Split(color=is_gpu_rank)
+        if is_gpu_rank:
+            comm = subcomm
+        else:
+            print(f'INFO: Unused MPI rank {comm.rank}/{comm.size} exiting rrdesi')
+            return
+
+    # NOTE: from here, comm is now the subcommunicator used by GPUs;
+    # other unused ranks have exited
+
     comm_size = 1
     comm_rank = 0
     if comm is not None:
@@ -853,7 +895,7 @@ def rrdesi(options=None, comm=None):
     mpprocs = 0
     if comm is None:
         mpprocs = get_mp(args.mp)
-        print("Running with {} processes".format(mpprocs))
+        print("Running with {} multiprocesing processes".format(mpprocs))
         if "OMP_NUM_THREADS" in os.environ:
             nthread = int(os.environ["OMP_NUM_THREADS"])
             if nthread != 1:
@@ -868,7 +910,7 @@ def rrdesi(options=None, comm=None):
             print("WARNING:  be oversubscribed.")
         sys.stdout.flush()
     elif comm_rank == 0:
-        print("Running with {} processes".format(comm_size))
+        print("Running with {} MPI ranks".format(comm_size))
         sys.stdout.flush()
 
     # GPU configuration
@@ -886,6 +928,9 @@ def rrdesi(options=None, comm=None):
                 import cupy
                 max_gpuprocs = cupy.cuda.runtime.getDeviceCount()
         use_gpu = comm_rank < max_gpuprocs
+
+        if comm_rank == 0:
+            print(f'Using {max_gpuprocs} GPUs')
 
         # Determine cpu/gpu process capacities for target distribution
         if comm is not None:
