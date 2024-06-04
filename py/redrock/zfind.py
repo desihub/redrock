@@ -403,15 +403,42 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
     allzfit = None
 
     if targets.comm is not None:
-        # gather can fail with especially large inputs, so use point-to-point
+        # gather failes with results>2GB, so use point-to-point instead
         ### results = targets.comm.gather(results, root=0)
+
+        # Rank 0 receives results in batches from each of the other ranks;
+        # this preserves the same order as comm.gather
         if targets.comm.rank == 0:
             results = [results,]
             for other_rank in range(1,targets.comm.size):
-                other_results = targets.comm.recv(source=other_rank, tag=42)
+
+                # first get the number of batches expected
+                num_batches = targets.comm.recv(source=other_rank)
+
+                # then collect those batches
+                other_results = dict()
+                for _ in range(num_batches):
+                    other_results.update( targets.comm.recv(source=other_rank) )
+
                 results.append(other_results)
+
+        # Ranks>0 send results to rank 0
+        # first send num_batches (int), and then the batches of results (dict)
         else:
-            targets.comm.send(results, dest=0, tag=42)
+            max_targets_per_send = 5000
+            if len(results) < max_targets_per_send:
+                targets.comm.send(1, dest=0)
+                targets.comm.send(results, dest=0)
+            else:
+                # first send the number of batches that will be sent
+                num_batches = (len(results)-1) // max_targets_per_send + 1
+                targets.comm.send(num_batches, dest=0)
+
+                # split into (targetid, values) items for dict "slicing"
+                result_items = list(results.items())
+                for i in range(0, len(results), max_targets_per_send):
+                    subresults = dict(result_items[i:i+max_targets_per_send])
+                    targets.comm.send(subresults, dest=0)
 
         targets.comm.barrier()
     else:
