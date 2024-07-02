@@ -404,7 +404,7 @@ def header2templatefiles(hdr, template_dir=None):
     return filenames
 
 
-def load_templates_from_header(hdr, template_dir=None):
+def load_templates_from_header(hdr, template_dir=None, asdict=False):
     """Return templates matching header keywords
 
     Args:
@@ -412,11 +412,12 @@ def load_templates_from_header(hdr, template_dir=None):
 
     Options:
         template_dir (str): full path to redrock-templates directory
-
+        asdict (bool): return dict keyed by (spectype, subtype) instead of list
+    
     Returns list of Template objects
     """
     template_filenames = header2templatefiles(hdr, template_dir=template_dir)
-    return load_templates(template_filenames)
+    return load_templates(template_filenames, asdict=asdict)
 
 def load_templates(template_path=None, zscan_galaxy=None, zscan_star=None, zscan_qso=None,
                    asdict=False):
