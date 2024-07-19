@@ -76,9 +76,3 @@ setenv [string toupper $product] $PRODUCT_DIR
 #
 # Add any non-standard Module code below this point.
 #
-# MPI or multiprocessing handle parallelism, not OpenMP via numpy/MKL
-#
-setenv KMP_AFFINITY disabled
-setenv MPICH_GNI_FORK_MODE FULLCOPY
-setenv OMP_NUM_THREADS 1
-setenv HDF5_USE_FILE_LOCKING FALSE
