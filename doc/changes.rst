@@ -5,7 +5,9 @@ redrock Change Log
 0.20.2 (unreleased)
 -------------------
 
-* No changes yet.
+* Module file cleanup env vars moved to desimodules (PR `#313`_).
+
+.. _`#313`: https://github.com/desihub/redrock/pull/313
 
 0.20.1 (2024-06-04)
 -------------------
