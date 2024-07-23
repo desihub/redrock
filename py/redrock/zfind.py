@@ -110,7 +110,8 @@ def calc_deltachi2(chi2, z, zwarn, dvlimit=constants.max_velo_diff):
         zwarn : array of zwarn values
 
     Options:
-        dvlimit: exclude candidates that are closer than dvlimit [km/s]
+        dvlimit: exclude candidates that are closer than dvlimit [km/s],
+                uses max value of the pair
 
     Returns (deltachi2, setzwarn) where `deltachi2` is array of chi2 differences
         to next best good fit, and `setzwarn` is boolean array of whether
@@ -123,9 +124,14 @@ def calc_deltachi2(chi2, z, zwarn, dvlimit=constants.max_velo_diff):
     nz = len(chi2)
     deltachi2 = np.zeros(nz)
     okfit = (zwarn & badfit_mask) == 0
+
+    # if no dvlimit passed, use constant threshold
+    if np.isscalar(dvlimit):
+        dvlimit = np.full(len(chi2), dvlimit)
+
     for i in range(len(chi2)-1):
         dv = get_dv(z[i+1:], z[i])
-        ii = (np.abs(dv)>dvlimit) & okfit[i+1:]
+        ii = (np.abs(dv)>np.max(dvlimit[i],dvlimit[i+1:])) & okfit[i+1:]
         if np.any(ii):
             dchi2 = chi2[i+1:] - chi2[i]
             deltachi2[i] = np.min(dchi2[ii])
@@ -139,9 +145,10 @@ def calc_deltachi2(chi2, z, zwarn, dvlimit=constants.max_velo_diff):
         noti[i] = False
         alldeltachi2 = np.absolute(chi2[noti] - chi2[i])
         alldv = np.absolute(get_dv(z=z[noti], zref=z[i]))
+        alldvlimit = np.maximum(dvlimit[i], dvlimit[noti])
         zwarn = np.any( okfit[noti] &
                     (alldeltachi2 < constants.min_deltachi2) &
-                    (alldv >= dvlimit) )
+                    (alldv >= alldvlimit) )
         if zwarn:
             setzwarn[i] = True
 
@@ -476,13 +483,6 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     else:
                         spectype, subtype = parse_fulltype(fulltype)
 
-                # set max_velo_diff differently for STARs, but watch out
-                # for archtypes which have spectype as list instead of scalar
-                if (np.isscalar(spectype) and spectype.upper() == 'STAR') or spectype[0].upper() == 'STAR':
-                    max_velo_diff = constants.max_velo_diff_star
-                else:
-                    max_velo_diff = constants.max_velo_diff
-
                 #Have to create arrays of correct length since using dict of
                 #np arrays instead of astropy Table
                 nmin = len(tmp['chi2'])
@@ -496,6 +496,15 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     tmp['subtype'] = np.array([subtype]).reshape((nmin, 1))
                 
                 tmp['ncoeff'] = np.array([tmp['coeff'].shape[1]]*nmin).reshape((nmin, 1))
+                
+                # set max_velo_diff differently for STARs, but watch out
+                # for archtypes which have spectype as list instead of scalar
+                if (np.isscalar(spectype) and spectype.upper() == 'STAR') or spectype[0].upper() == 'STAR':
+                    max_velo_diff = constants.max_velo_diff_star
+                else:
+                    max_velo_diff = constants.max_velo_diff
+                tmp['max_velo_diff'] = np.full((nmin,1), max_velo_diff)
+               
                 tzfit.append(tmp)
                 del allresults[tid][fulltype]['zfit']
 
@@ -570,9 +579,11 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
 
             #- calc deltachi2 and set ZW.SMALL_DELTA_CHI2 flag
             deltachi2, setzwarn = calc_deltachi2(tzfit['chi2'], tzfit['z'], tzfit['zwarn'],
-                                                 dvlimit=max_velo_diff)
+                                                 dvlimit=tzfit['max_velo_diff'])
             tzfit['deltachi2'] = deltachi2
             tzfit['zwarn'][setzwarn] |= ZW.SMALL_DELTA_CHI2
+
+            # remove max_velo_diff_column here?
 
             # Store
             # Here convert to astropy table
