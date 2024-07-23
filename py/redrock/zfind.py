@@ -121,13 +121,14 @@ def calc_deltachi2(chi2, z, zwarn, dvlimit=constants.max_velo_diff):
         what the next chi2 would have been.  This can also occur for the
         last N targets if all N of them are within dvlimit of each other.
     '''
+    print(chi2,z,zwarn,dvlimit)
     nz = len(chi2)
     deltachi2 = np.zeros(nz)
     okfit = (zwarn & badfit_mask) == 0
 
     # if no dvlimit passed, use constant threshold
     if np.isscalar(dvlimit):
-        dvlimit = np.full(len(chi2), dvlimit)
+        dvlimit = np.full(nz, dvlimit)
 
     for i in range(len(chi2)-1):
         dv = get_dv(z[i+1:], z[i])
@@ -504,7 +505,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                 else:
                     max_velo_diff = constants.max_velo_diff
                 tmp['max_velo_diff'] = np.full((nmin,1), max_velo_diff)
-               
+              
                 tzfit.append(tmp)
                 del allresults[tid][fulltype]['zfit']
 
