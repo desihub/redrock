@@ -107,8 +107,10 @@ def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
 
     Modifies input tables.meta['EXTNAME']
     """
+    # header keywords for both PRIMARY and REDSHIFTS HDU
     header = _get_header(templates, archetypes, spec_header)
 
+    zbest.meta.update(header)
     zbest.meta['EXTNAME'] = 'REDSHIFTS'
     fibermap.meta['EXTNAME'] = 'FIBERMAP'
     exp_fibermap.meta['EXTNAME'] = 'EXP_FIBERMAP'
