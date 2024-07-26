@@ -71,6 +71,7 @@ class Archetype():
         self.igm_model = 'Inoue14'
         # TODO: Allow Archetype files to specify bvls or nnls or pca solver method
         self._solver_method = 'bvls'
+        #self._solver_method = 'bvls_via_nnls' #This uses the NNLS trick to emulate BVLS
 
         self.method = 'ARCH'  # for API symmetry with Template.method
 

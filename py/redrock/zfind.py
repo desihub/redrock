@@ -29,7 +29,7 @@ from .priors import Priors
 
 from .results import read_zscan_redrock
 
-from .zscan import calc_zchi2_targets
+from .zscan import calc_zchi2_targets, print_total_fitting_times
 
 from .fitz import fitz, get_dv
 
@@ -408,6 +408,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
         results = [ results ]
 
     if am_root:
+        print_total_fitting_times() #print in root the total fitting times
         allresults = dict()
         for p in results:
             allresults.update(p)
