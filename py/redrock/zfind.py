@@ -111,7 +111,7 @@ def calc_deltachi2(chi2, z, zwarn, dvlimit=constants.max_velo_diff):
 
     Options:
         dvlimit: exclude candidates that are closer than dvlimit [km/s],
-                uses max value of the pair
+                uses minimum value of the pair
 
     Returns (deltachi2, setzwarn) where `deltachi2` is array of chi2 differences
         to next best good fit, and `setzwarn` is boolean array of whether
@@ -131,7 +131,7 @@ def calc_deltachi2(chi2, z, zwarn, dvlimit=constants.max_velo_diff):
 
     for i in range(len(chi2)-1):
         dv = get_dv(z[i+1:], z[i])
-        ii = (np.abs(dv)>np.maximum(dvlimit[i],dvlimit[i+1:])) & okfit[i+1:]
+        ii = (np.abs(dv)>np.minimum(dvlimit[i],dvlimit[i+1:])) & okfit[i+1:]
         if np.any(ii):
             dchi2 = chi2[i+1:] - chi2[i]
             deltachi2[i] = np.min(dchi2[ii])
@@ -145,7 +145,7 @@ def calc_deltachi2(chi2, z, zwarn, dvlimit=constants.max_velo_diff):
         noti[i] = False
         alldeltachi2 = np.absolute(chi2[noti] - chi2[i])
         alldv = np.absolute(get_dv(z=z[noti], zref=z[i]))
-        alldvlimit = np.maximum(dvlimit[i], dvlimit[noti])
+        alldvlimit = np.minimum(dvlimit[i], dvlimit[noti])
         zwarn = np.any( okfit[noti] &
                     (alldeltachi2 < constants.min_deltachi2) &
                     (alldv >= alldvlimit) )
