@@ -11,7 +11,7 @@ import time
 import sys
 import traceback
 import numpy as np
-from scipy.optimize import lsq_linear, nnls
+from scipy.optimize import nnls
 
 #try:
 #    import cupy as cp
@@ -35,6 +35,11 @@ from .targets import distribute_targets
 block_size = 512 #Default block size, should work on all modern nVidia GPUs
 
 # cuda_source contains raw CUDA kernels to be loaded as CUPY module
+gbounds = None
+gnbh = None
+
+ftimes = np.zeros(3)
+fmethods = ["PCA", "NNLS", "BVLS"]
 
 cuda_source = r'''
         extern "C" {
@@ -238,8 +243,41 @@ def calc_zchi2_one(spectra, weights, flux, wflux, tdata, solve_matrices_algorith
 
     return zchi2, zcoeff
 
-def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux, nleg, narch, method=None, n_nbh=None, prior=None, use_gpu=False, bands=None):
-    
+def prior_on_coeffs(n_nbh, deg_legendre, sigma, ncamera, add_negative_legendre_terms=False):
+
+    """
+    Args:
+        n_nbh (int): number of dominant archetypes
+        deg_legendre (int): number of Legendre polynomials
+        sigma (int): prior sigma to be used for archetype fitting
+        ncamera (int): number of cameras for given instrument
+        add_negative_legendre_terms (bool): whether to adjust prior
+            to account for negative legendre terms
+    Returns:
+        2d array to be added while solving for archetype fitting
+
+    """
+
+    tot_legendre_terms = deg_legendre
+    if add_negative_legendre_terms:
+        #Double total legendre term count to reflect negative terms
+        tot_legendre_terms = deg_legendre*2
+    nbasis = n_nbh+tot_legendre_terms*ncamera # 3 desi cameras
+    prior = np.zeros((nbasis, nbasis), dtype='float64');np.fill_diagonal(prior, 1/(sigma**2))
+    for i in range(n_nbh):
+        prior[i][i]=0. ## Do not add prior to the archetypes, added only to the Legendre polynomials
+
+    if add_negative_legendre_terms:
+        #Add cross terms to prior array
+        for i in range(ncamera):
+            for j in range(deg_legendre):
+                idx1 = n_nbh+i*tot_legendre_terms+j
+                idx2 = n_nbh+i*tot_legendre_terms+deg_legendre+j
+                prior[idx1][idx2] = -prior[idx1][idx1]
+                prior[idx2][idx1] = -prior[idx2][idx2]
+    return prior
+
+def per_camera_coeff_with_least_square_batch(target, binned, weights, flux, wflux, nleg, narch, method=None, n_nbh=None, prior_sigma=None, use_gpu=False, bands=None):
     """This function calculates coefficients for archetype mode in each camera using normal linear algebra matrix solver or BVLS (bounded value least square) method
 
     BVLS described in : https://www.stat.berkeley.edu/~stark/Preprints/bvls.pdf
@@ -248,13 +286,13 @@ def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux
 
     Args:
         target (object): target object
-        tdata (dict): template data for model fit for ALL archetypes
+        binned (dict): template data for model fit for ALL archetypes
         weights (array): concatenated spectral weights (ivar).
         flux (array): concatenated flux values.
         wflux (array): concatenated weighted flux values.
         nleg (int): number of Legendre polynomials
         narch (int): number of archetypes
-        method (string): 'PCA', 'BVLS', 'NMF', or 'NNLS' (same as NMF)
+        method (string): 'PCA', 'BVLS', 'NMF', or 'NNLS' (same as NMF), or 'BVLS_VIA_NNLS'
         n_nbh (int): number of nearest best archetypes
         prior (array): prior matrix added to the Legendre coefficients (1/sigma^2)
         use_gpu (bool): use GPU or not
@@ -264,12 +302,14 @@ def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux
         coefficients and chi2
 
     """
-
-    ### TODO - implement BVLS on GPU
+    #Use globals gbounds and gnbh
+    global gbounds
+    global gnbh
     # number of cameras in DESI: b, r, z
     spectra = target.spectra
+    if bands is None:
+        bands = ['b', 'z', 'r']
     ncam = len(bands)
-    nbasis = n_nbh+nleg*ncam # n_nbh : for actual physical archetype(s), nleg: number of legendre polynomials, ncamera: number of cameras
 
     ret_zcoeff = {}
     ret_zcoeff['alpha'] = []
@@ -279,15 +319,84 @@ def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux
 
     new_bands = sorted(bands) # saves as correct order
 
-    #Setup dict of solver args to pass bounds to solver
     method = method.upper()
+    add_negative_legendre_terms = False
+    if (method == 'BVLS_VIA_NNLS' and use_gpu):
+        #Use trick of adding negative legendre terms and using NNLS
+        #to implement BVLS
+        add_negative_legendre_terms = True
+
+    #Calculate prior here
+    prior = prior_on_coeffs(n_nbh, nleg, prior_sigma, ncam, add_negative_legendre_terms)
+    legendre = target.legendre(nleg=nleg, use_gpu=False) #Get previously calculated legendre
+
+    if add_negative_legendre_terms:
+        #Hard-code NNLS with additional legendre terms if BVLS AND gpu mode
+        method = 'NNLS'
+        #tdata should already have the additional negative legendre terms
+        nleg *= 2
+        if narch == 1:
+            #Use CPU if only 1 narch (nearest neighbor)
+            use_gpu = False
+
+    if narch == 1:
+        use_gpu = False
+
+    #Calculate nbasis after accounting for legendre terms
+    nbasis = n_nbh+nleg*ncam # n_nbh : for actual physical archetype(s), nleg: number of legendre polynomials, ncamera: number of cameras
+
+    #Calculate tdata arrays here instead of in archetypes
+    #Select np or cp for operations as arrtype
+    if (use_gpu):
+        import cupy as cp
+        arrtype = cp
+    else:
+        arrtype = np
+    tdata = dict()
+    for hs in binned: 
+        #Create 3-d tdata with narch x nwave x nbasis where nbasis = 1+nleg
+        if narch == 1:
+            tdata[hs] = binned[hs][None,:,:]
+            if nleg > 0:
+                tdata[hs] = np.append(tdata[hs], legendre[hs].transpose()[None,:,:], axis=2)
+                if add_negative_legendre_terms:
+                #if method == 'BVLS' and use_gpu:
+                    #Using BVLS and GPU - append negative copies of legendre terms as well to use NNLS with additional bases to approximate BVLS
+                    tdata[hs] = np.append(tdata[hs], -1*legendre[hs].transpose()[None,:,:], axis=2)
+        else:
+            if nleg > 0:
+                tdata[hs] = arrtype.append(binned[hs].transpose()[:,:,None], arrtype.tile(arrtype.asarray(legendre[hs]).transpose()[None,:,:], (narch, 1, 1)), axis=2)
+                if add_negative_legendre_terms:
+                #if method == 'BVLS' and use_gpu:
+                    #Using BVLS - append negative copies of legendre terms as well to use NNLS with additional bases to approximate BVLS
+                    tdata[hs] = arrtype.append(tdata[hs], arrtype.tile(-1*arrtype.asarray(legendre[hs]).transpose()[None,:,:], (narch, 1, 1)), axis=2)
+            else:
+                tdata[hs] = binned[hs].transpose()[:,:,None]
+
+    #Setup dict of solver args to pass bounds to solver
     solver_args = dict()
     if (method == 'BVLS'):
         #only positive coefficients are allowed for the archetypes
-        bounds = np.zeros((2, nbasis))
-        bounds[0][n_nbh:]=-np.inf #constant and slope terms in archetype method (can be positive or negative)
-        bounds[1] = np.inf
-        solver_args['bounds'] = bounds
+        if use_gpu:
+            #bounds should always be the same and creating small arrays on
+            #GPU is expensive so use a global variable and create once
+            if gbounds is None:
+                gbounds = cp.zeros((2,nbasis))
+                gbounds[0][n_nbh:] = -cp.inf
+                gbounds[1] = cp.inf
+                gnbh = n_nbh
+            #In practice right now n_nbh will not change on any given run
+            #But future proofing just in case
+            if gnbh != n_nbh:
+                gbounds[0][:n_nbh] = 0
+                gbounds[0][n_nbh:] = -cp.inf
+            solver_args['bounds'] = gbounds
+        else:
+            #On CPU we can create bounds array every time cheaply
+            bounds = np.zeros((2, nbasis))
+            bounds[0][n_nbh:]=-np.inf #constant and slope terms in archetype method (can be positive or negative)
+            bounds[1] = np.inf
+            solver_args['bounds'] = bounds
 
     #Use branching options because GPU is faster in batch in 3d
     #but due to timing weirdness in numpy, CPU is faster looping over
@@ -317,6 +426,8 @@ def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux
                         tdata2[hs][:,k+nleg*i] = tdata[hs][j,:,k] # Legendre polynomials terms
                 tdata2[hs] = tdata2[hs][None,:,:]
             zzchi2[j], zzcoeff[j] = calc_zchi2_batch(spectra, tdata2, weights, flux, wflux, 1, nbasis, solve_matrices_algorithm=method, solver_args=solver_args, prior=prior, use_gpu=use_gpu)
+    if (add_negative_legendre_terms):
+        zzcoeff = remove_extra_legendre_terms(zzcoeff, n_nbh, ncam, nleg)
 
     # saving leading archetype coefficients in correct order
     ret_zcoeff['alpha'] = [zzcoeff[:,k] for k in range(n_nbh)] # archetype coefficient(s)
@@ -336,6 +447,15 @@ def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux
     coeff = np.concatenate(list(ret_zcoeff.values()), axis=1)
     #print(f'{time.time()-start} [sec] took for per camera BVLS method\n')
     return zzchi2, coeff
+
+def remove_extra_legendre_terms(zzcoeff, n_nbh, ncam, nleg):
+    nleg = nleg // 2
+    zzcoeff2 = np.zeros_like(zzcoeff, shape=(zzcoeff.shape[0], n_nbh+ncam*(nleg)))
+    zzcoeff2[:,:n_nbh] = zzcoeff[:,:n_nbh]
+    for j in range(ncam):
+        for l in range(nleg):
+            zzcoeff2[:,n_nbh+nleg*j+l] = zzcoeff[:,n_nbh+nleg*j*2+l] - zzcoeff[:,n_nbh+nleg*j*2+nleg+l]
+    return zzcoeff2
 
 def batch_dot_product_sparse(spectra, tdata, nz, use_gpu):
     """Calculate a batch dot product of the 3 sparse matrices in spectra
@@ -1117,20 +1237,24 @@ def solve_matrices(M, y, solve_algorithm="PCA", solver_args=None, use_gpu=False)
 
     if solve_algorithm.upper() == "PCA":
         #Use PCA via linalg.solve in either numpy or cupy
+        tx = time.time()
         if (use_gpu):
             #Use cupy linalg.solve to solve for zcoeff in batch for all_M and
             #all_y where all_M and all_y are 3d and 2d arrays representing
             #M and y at every redshift bin for the given template.
             #There is no Error thrown by cupy's version.
-            return cp.linalg.solve(M, y)
+            zcoeff = cp.linalg.solve(M, y)
         else:
             #Use numpy linalg.solve which throws exception
             try:
-                return np.linalg.solve(M, y)
+                zcoeff = np.linalg.solve(M, y)
             except np.linalg.LinAlgError:
                 raise
+        add_to_timer(0, time.time()-tx)
+        return zcoeff
     elif solve_algorithm in ("NMF", "NNLS"):
         if (use_gpu):
+            tx = time.time()
             nz = y.shape[0]
             Mcpu = M.get()
             ycpu = y.get()
@@ -1142,41 +1266,44 @@ def solve_matrices(M, y, solve_algorithm="PCA", solver_args=None, use_gpu=False)
                     zcoeff[j,:] = res[0]
                 except Exception:
                     zcoeff[j,:] = 9e99
+            add_to_timer(1, time.time()-tx)
             return cp.asarray(zcoeff)
         else:
             try:
+                tx = time.time()
                 res = nnls(M, y)
                 zcoeff = res[0]
-            except Exception:
+                add_to_timer(1, time.time()-tx)
+            except Exception as ex:
                 raise np.linalg.LinAlgError
             return zcoeff
     elif solve_algorithm == "BVLS":
+        tx = time.time()
         if (solver_args is not None and 'bounds' in solver_args):
             bounds = solver_args['bounds']
         else:
             nbasis = y.shape[-1]
-            bounds = np.zeros((2, nbasis))
+            bounds = np.zeros_like(y, shape=(2, nbasis))
             bounds[0]=-np.inf
             bounds[1]=np.inf
         if (use_gpu):
-            nz = y.shape[0]
-            Mcpu = M.get()
-            ycpu = y.get()
-            zcoeff = np.zeros(y.shape)
-            #Copy to CPU, run scipy.optimize.lsq_linear, copy back to GPU
-            for j in range(nz):
-                try:
-                    res = lsq_linear(Mcpu[j,:,:], ycpu[j,:], bounds=bounds, method='bvls')
-                    zcoeff[j,:] = res.x
-                except np.linalg.LinAlgError:
-                    zcoeff[j,:] = 9e99
-            return cp.asarray(zcoeff)
+            from .optimize import gpu_lsq_linear as lsq_linear
+            lsq_opts = dict(return_cost=False, return_optimality=False)
         else:
-            try:
-                res = lsq_linear(M, y, bounds=bounds, method='bvls')
-                zcoeff = res.x
-            except np.linalg.LinAlgError:
-                raise
-            return zcoeff
+            from scipy.optimize import lsq_linear
+            lsq_opts = dict()
+        res = lsq_linear(M, y, bounds=bounds, method='bvls', **lsq_opts)
+        zcoeff = res.x
+        add_to_timer(2, time.time()-tx)
+        return zcoeff
     else:
         raise NotImplementedError("The solve_algorithm "+solve_algorithm+" is not implemented.")
+
+def add_to_timer(i, t):
+    ftimes[i] += t
+
+def print_total_fitting_times():
+    for j in range(len(ftimes)):
+        if ftimes[j] > 0:
+            print("Total fitting time (method {}): {:0.1f} seconds".format(fmethods[j], ftimes[j]))
+    sys.stdout.flush()
