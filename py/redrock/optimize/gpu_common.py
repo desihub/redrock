@@ -72,6 +72,6 @@ def compute_grad(J, f):
     if isinstance(J, LinearOperator):
         return J.rmatvec(f)
     else:
-        return cp.einsum("ikj,ik->ij", J.swapaxes(1,2), f)
+        return cp.einsum("ikj,ij->ik", J.swapaxes(1,2), f)
         #return J.T.dot(f)
 

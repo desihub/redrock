@@ -62,7 +62,7 @@ def bvls(A, b, x_lsq, lb, ub, ib, tol, max_iter, verbose, rcond=None, return_cos
     # if its feasible then stop, otherwise, set violating variables to
     # corresponding bounds and continue on the reduced set of free variables.
 
-    while free_set.size > 0:
+    while free_set.any():
         if verbose == 2 and return_optimality:
             optimality = compute_kkt_optimality(g, on_bound)
             print_iteration_linear(iteration, cost, cost_change, step_norm,
@@ -83,8 +83,8 @@ def bvls(A, b, x_lsq, lb, ub, ib, tol, max_iter, verbose, rcond=None, return_cos
         #b_free = b - A.dot(x * active_set)
         #z = lstsq(A_free, b_free, rcond=rcond)[0]
 
-        lbv = z < lb
-        ubv = z > ub
+        lbv = (z < lb)*free_set
+        ubv = (z > ub)*free_set
         #lbv = z < lb[free_set]
         #ubv = z > ub[free_set]
         v = lbv | ubv
@@ -108,8 +108,9 @@ def bvls(A, b, x_lsq, lb, ub, ib, tol, max_iter, verbose, rcond=None, return_cos
             on_bound[ubv] = 1
 
         #ind = free_set[~v]
+        ind = free_set*~v
         #x[ind] = z[~v]
-        x[~v] = z[~v]
+        x[ind] = z[ind]
 
         r = cp.einsum("ijk,ik->ij", A, x) - b
         #r = A.dot(x) - b
@@ -125,7 +126,8 @@ def bvls(A, b, x_lsq, lb, ub, ib, tol, max_iter, verbose, rcond=None, return_cos
             step_norm = norm(x-x_old, axis=1)
 
         if cp.any(v):
-            free_set = free_set[~v]
+            free_set[v] = False
+            #free_set = free_set[~v]
         else:
             break
 
@@ -149,8 +151,10 @@ def bvls(A, b, x_lsq, lb, ub, ib, tol, max_iter, verbose, rcond=None, return_cos
         if termination_status is not None:
             break
 
-        move_to_free = cp.argmax(g * on_bound, axis=1)
-        on_bound[idx,move_to_free] = 0
+        g_on = g * on_bound
+        move_to_free = cp.argmax(g_on, axis=1)
+        #on_bound[idx,move_to_free] = cp.minimum(0, on_bound[idx,move_to_free])
+        on_bound[idx,move_to_free] = (g_on[idx,move_to_free] < 0)*on_bound[idx,move_to_free]
         
         while True:   # BVLS Loop B
             free_set = on_bound == 0
@@ -172,23 +176,28 @@ def bvls(A, b, x_lsq, lb, ub, ib, tol, max_iter, verbose, rcond=None, return_cos
             #b_free = b - A.dot(x * active_set)
             #z = lstsq(A_free, b_free, rcond=rcond)[0]
 
-            lbv = z < lb 
-            ubv = z > ub 
-            v = (lbv | ubv)*free_set
+            lbv = (z < lb)*free_set
+            ubv = (z > ub)*free_set
+            v = (lbv | ubv)
+
             #lbv, = np.nonzero(z < lb_free)
             #ubv, = np.nonzero(z > ub_free)
             #v = np.hstack((lbv, ubv))
 
             #if v.size > 0:
             if v.any():
-                alphas = cp.zeros(x.shape)
+                #alphas = cp.zeros(x.shape)
+                av = v.any(axis=1)
+                alphas = cp.full(x.shape, cp.inf)
                 alphas[lbv] = (lb[lbv]-x[lbv]) / (z[lbv]-x[lbv])
                 alphas[ubv] = (ub[ubv]-x[ubv]) / (z[ubv]-x[ubv])
 
                 i = cp.argmin(alphas, axis=1)
                 alpha = alphas[idx,i]
-                x_free = x[v] * (1-alpha[v]) 
-                x_free += alpha[v]*z[v]
+                #x_free = x[v] * (1-alpha[v])
+                #x_free += alpha[v]*z[v]
+                x_free = x[v] * (1-alpha[av])
+                x_free += alpha[av]*z[v]
                 x[v] = x_free
 
                 #Update on_bound
