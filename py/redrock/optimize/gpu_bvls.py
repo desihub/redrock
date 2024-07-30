@@ -187,18 +187,23 @@ def bvls(A, b, x_lsq, lb, ub, ib, tol, max_iter, verbose, rcond=None, return_cos
             #if v.size > 0:
             if v.any():
                 #alphas = cp.zeros(x.shape)
-                av = v.any(axis=1)
+                #av = v.any(axis=1)
                 alphas = cp.full(x.shape, cp.inf)
                 alphas[lbv] = (lb[lbv]-x[lbv]) / (z[lbv]-x[lbv])
                 alphas[ubv] = (ub[ubv]-x[ubv]) / (z[ubv]-x[ubv])
 
                 i = cp.argmin(alphas, axis=1)
-                alpha = alphas[idx,i]
+                alpha = alphas[idx,i].reshape((d,1))
                 #x_free = x[v] * (1-alpha[v])
                 #x_free += alpha[v]*z[v]
-                x_free = x[v] * (1-alpha[av])
-                x_free += alpha[av]*z[v]
-                x[v] = x_free
+
+                #x_free = x[v] * (1-alpha[av])
+                #x_free += alpha[av]*z[v]
+                #x[v] = x_free
+
+                x_free = x*(1-alpha)
+                x_free += alpha*z
+                x[v] = x_free[v]
 
                 #Update on_bound
                 on_bound[cp.where(lbv[idx,i]), i[cp.where(lbv[idx,i])]] = -1
