@@ -2,12 +2,19 @@
 redrock Change Log
 ==================
 
-0.20.2 (unreleased)
+0.20.2 (2024-08-15)
 -------------------
 
 * Module file cleanup env vars moved to desimodules (PR `#313`_).
+* Propagate header keywords to the ``REDSHIFTS`` HDU (PR `#314`_).
+* Changes to address issues with ``max_velo_diff`` variable (PR `#317`_).
+* Add ``asdict`` header keyword to :func:`~redrock.templates.load_templates_from_header` (direct commit to main `66a93c77`_).
 
 .. _`#313`: https://github.com/desihub/redrock/pull/313
+.. _`#314`: https://github.com/desihub/redrock/pull/314
+.. _`#317`: https://github.com/desihub/redrock/pull/317
+.. _`66a93c77`: https://github.com/desihub/redrock/commit/66a93c7773cdeec391cf9c17d0964edbf4a13d3e
+
 
 0.20.1 (2024-06-04)
 -------------------
@@ -57,7 +64,7 @@ Used for DESI Jura run.
 -------------------
 
 * Write test files to temporary directory (PR `#263`_).
-* Check template dimension so code works on a single template (PR `#264`_). 
+* Check template dimension so code works on a single template (PR `#264`_).
 * Versioned templates, NMF support, and updated IGM models (PR `#271`_).
 * Mask significantly negative flux (PR `#282`_).
 * Add ``results.read_zscan(..., select=targetids=...)`` option (PR `#289`_).
