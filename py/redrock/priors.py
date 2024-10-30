@@ -114,6 +114,9 @@ class Priors():
 
         prior = np.where(np.abs(z - z0) < s0/2, 0., np.NaN)
 
+        if np.all(np.isnan(prior)):
+            return prior
+
         index_left, index_right = np.argwhere(prior>=0.0)[0], np.argwhere(prior>=0.0)[-1]
 
         if index_left == 0:

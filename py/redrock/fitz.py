@@ -347,7 +347,14 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
     ii = np.argsort([tmp['chi2'] for tmp in results])
     results = [results[i] for i in ii]
 
-    assert len(results) > 0
+    if len(results) == 0:
+        #- Return blank arrays of 0 minima
+        xfloat = np.zeros((0,1), dtype=float)
+        xint = np.zeros((0,1), dtype=int)
+        xstr = np.zeros((0,1), dtype=str)
+        return dict(z=xfloat, zerr=xfloat, zwarn=xint, chi2=xfloat, zz=xfloat, zzchi2=xfloat,
+                    coeff=xfloat, fitmethod=xstr, npixels=xint)
+
     #- Convert list of dicts -> Table
     #from astropy.table import Table
     #results = Table(results)
