@@ -2,10 +2,18 @@
 redrock Change Log
 ==================
 
-0.20.3 (unreleased)
+0.20.4 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.20.3 (2024-11-05)
+-------------------
+
+* Support `--templates` accepting multiple files, not just single file or
+  text file with list of files (PR `#320`_).
+
+.. _`#320`: https://github.com/desihub/redrock/pull/320
 
 0.20.2 (2024-08-15)
 -------------------
