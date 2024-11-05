@@ -81,6 +81,11 @@ class TestTemplates(unittest.TestCase):
         for filename in templates:
             self.assertIn(os.path.basename(filename), self.default_templates)
 
+        # find templates also accepts a list of templates which it just returns
+        t2 = find_templates(templates[1:3])
+        self.assertListEqual(t2, templates[1:3])
+
+        # or read from text file a set of alternate templates
         templates = find_templates(self.testTemplateDir+'/templates-alternate.txt')
 
         # works without a path prefix

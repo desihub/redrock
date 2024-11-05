@@ -487,6 +487,10 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                 #np arrays instead of astropy Table
                 nmin = len(tmp['chi2'])
 
+                if nmin == 0:
+                    print(f'WARNING: no {fulltype} chi2 vs. z minima for targetid {tid}')
+                    continue
+
                 if np.isscalar(spectype):
                     tmp['spectype'] = np.full((nmin, 1), spectype)
                     tmp['subtype'] = np.full((nmin, 1), subtype)
@@ -551,7 +555,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                                 ibad[k]=False
 
                 tzfit['zwarn'][ibad] |= ZW.NEGATIVE_MODEL
-            
+
             tzfit['zwarn'][ tzfit['npixels']==0 ] |= ZW.NODATA
             tzfit['zwarn'][ (tzfit['npixels']<10*tzfit['ncoeff']) ] |= \
                 ZW.LITTLE_COVERAGE

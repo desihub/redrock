@@ -298,12 +298,15 @@ def make_fulltype(spectype, subtype):
 def find_templates(template_path=None):
     """Return list of Redrock template files
 
-    `template_path` can be one of 4 things:
+    `template_path` can be one of 5 things:
 
+       * None (use $RR_TEMPLATE_DIR instead)
+       * list/tuple/set/array of template files
        * path to directory containing template files
        * path to single template file to use
        * path to text file listing which template files to use
-       * None (use $RR_TEMPLATE_DIR instead)
+
+    Returns list of template files to use
     """
     if template_path is None:
         if 'RR_TEMPLATE_DIR' in os.environ:
@@ -318,6 +321,11 @@ def find_templates(template_path=None):
         raise IOError("ERROR: can't find template_path, $RR_TEMPLATE_DIR, or {rrcode}/templates/")
     else:
         print(f'DEBUG: Reading templates from {template_path}')
+
+    # for symmetry with load_templates(template_path), also
+    # support list/tuple/etc of strings and just return that
+    if isinstance(template_path, (list, tuple, set, np.ndarray)):
+        return template_path
 
     if os.path.isdir(template_path):
         default_templates_file = f'{template_path}/templates-default.txt'
