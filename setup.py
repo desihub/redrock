@@ -6,6 +6,7 @@ from __future__ import absolute_import, division, print_function
 #
 import glob
 import os
+import sys
 #
 # setuptools' sdist command ignores MANIFEST.in
 #
@@ -20,9 +21,8 @@ setup_keywords = dict()
 #
 setup_keywords['cmdclass'] = {'sdist': DistutilsSdist}
 try:
-    from desiutil.setup import DesiTest, DesiVersion, get_version
+    from desiutil.setup import DesiVersion, get_version
     setup_keywords['cmdclass']['version'] = DesiVersion
-    setup_keywords['cmdclass']['test'] = DesiTest
 except ImportError:
     def get_version(productname):
         """Get the value of ``__version__`` without having to import the module.
@@ -93,6 +93,12 @@ setup_keywords['test_suite']='{name}.test.test_suite'.format(**setup_keywords)
 #
 if 'RR_TEMPLATE_DIR' not in os.environ:
     setup_keywords['package_data'] = {'redrock': ['templates/*.fits']}
+#
+# Check for old `python setup.py test` invocation
+#
+if "test" in sys.argv:
+    print("Please run pytest instead")
+    sys.exit(1)
 #
 # Run setup command.
 #
