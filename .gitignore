@@ -36,6 +36,8 @@ MANIFEST
 # Other
 .*.swp
 *~
+.vscode
+.env
 
 # testing
 .coverage
