@@ -177,9 +177,3 @@ class TestZFind(unittest.TestCase):
         self.assertTrue(np.allclose(d['z'], np.array([1.0, 2.0, 3.0, 4.0, 5.0])))
 
 
-def test_suite():
-    """Allows testing of only this module with the command::
-
-        python setup.py test -m redrock.test.test_zfind
-    """
-    return unittest.defaultTestLoader.loadTestsFromName(__name__)
