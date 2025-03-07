@@ -4,10 +4,11 @@ import os, tempfile
 from shutil import rmtree
 import unittest
 from uuid import uuid1
+import importlib.resources
 import numpy as np
 
 from .. import utils as rrutils
-from ..templates import DistTemplate, find_templates, load_templates, load_dist_templates
+from ..templates import DistTemplate, find_templates, load_templates, load_dist_templates, get_template_dir
 
 from . import util as testutil
 
@@ -19,6 +20,7 @@ class TestTemplates(unittest.TestCase):
         cls.testDir = tempfile.mkdtemp()        
         cls.testfile = os.path.join(cls.testDir, 'test-{uuid}.h5'.format(uuid=uuid1()))
         cls.starting_cwd = os.getcwd()
+        cls.orig_rr_template_dir = os.getenv('RR_TEMPLATE_DIR')
 
         # create dummy template files in a separate dir
         cls.testTemplateDir = tempfile.mkdtemp()
@@ -63,6 +65,28 @@ class TestTemplates(unittest.TestCase):
 
         #- make sure we are in starting directory every time
         os.chdir(self.starting_cwd)
+
+        #- reset $RR_TEMPLATE_DIR
+        if self.orig_rr_template_dir is None:
+            if 'RR_TEMPLATE_DIR' in os.environ:
+                del os.environ['RR_TEMPLATE_DIR']
+        else:
+            os.environ['RR_TEMPLATE_DIR'] = self.orig_rr_template_dir
+
+    def test_get_template_dir(self):
+        tdir = get_template_dir('blat')
+        self.assertEqual(tdir, 'blat')
+
+        tdir = get_template_dir('/blat/foo')
+        self.assertEqual(tdir, '/blat/foo')
+
+        os.environ['RR_TEMPLATE_DIR'] = '/biz/bat'
+        tdir = get_template_dir()
+        self.assertEqual(tdir, '/biz/bat')
+
+        del os.environ['RR_TEMPLATE_DIR']
+        tdir = get_template_dir()
+        self.assertEqual(tdir, str(importlib.resources.files('redrock').joinpath('data/templates')))
 
     ### @unittest.skipIf('RR_TEMPLATE_DIR' not in os.environ, '$RR_TEMPLATE_DIR not set')
     def test_find_templates(self):
