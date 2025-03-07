@@ -15,9 +15,9 @@ import redrock.templates
 
 def main():
     parser = argparse.ArgumentParser(description="install Redrock templates")
-    parser.add_argument('-v', '--version', default='main', help="Template version(tag) to install")
+    parser.add_argument('-v', '--version', default='main', help="Template version/tag/branch to install (default %(default)s)")
     parser.add_argument('--template-url', default='https://github.com/desihub/redrock-templates',
-                        help="URL of GitHub repository with redrock templates")
+                        help="URL of repository with redrock templates (default %(default)s)")
     parser.add_argument('-o', '--outdir', help="output directory (default install with redrock code)")
     args = parser.parse_args()
 
