@@ -237,9 +237,3 @@ class TestZScan(unittest.TestCase):
             toff += 1
 
 
-def test_suite():
-    """Allows testing of only this module with the command::
-
-        python setup.py test -m <modulename>
-    """
-    return unittest.defaultTestLoader.loadTestsFromName(__name__)

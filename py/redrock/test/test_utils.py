@@ -59,9 +59,3 @@ class TestUtils(unittest.TestCase):
             self.assertEqual(x[-1], 1.0)
             self.assertTrue(isinstance(x, cp.ndarray))
 
-def test_suite():
-    """Allows testing of only this module with the command::
-
-        python setup.py test -m <modulename>
-    """
-    return unittest.defaultTestLoader.loadTestsFromName(__name__)

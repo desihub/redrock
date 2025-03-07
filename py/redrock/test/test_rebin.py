@@ -154,9 +154,3 @@ class TestRebin(unittest.TestCase):
                 self.assertTrue(type(c) == np.ndarray)
                 self.assertTrue(c.shape == (4,))
 
-def test_suite():
-    """Allows testing of only this module with the command::
-
-        python setup.py test -m <modulename>
-    """
-    return unittest.defaultTestLoader.loadTestsFromName(__name__)
