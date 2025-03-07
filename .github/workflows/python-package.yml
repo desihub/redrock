@@ -39,7 +39,7 @@ jobs:
                 python -m pip install git+https://github.com/desihub/desiutil.git@${DESIUTIL_VERSION}#egg=desiutil
                 python -m pip install -r requirements.txt
                 curl -L https://github.com/desihub/redrock-templates/archive/${RR_TEMPLATE_VER}.tar.gz | tar -x -z -v -C py/redrock
-                /bin/mv py/redrock/redrock-templates-${RR_TEMPLATE_VER} py/redrock/templates
+                /bin/mv py/redrock/redrock-templates-${RR_TEMPLATE_VER} py/redrock/data/templates
 
             - name: Run the test
               run: pytest
@@ -72,7 +72,7 @@ jobs:
                 python -m pip install git+https://github.com/desihub/desiutil.git@${DESIUTIL_VERSION}#egg=desiutil
                 python -m pip install -r requirements.txt
                 curl -L https://github.com/desihub/redrock-templates/archive/${RR_TEMPLATE_VER}.tar.gz | tar -x -z -v -C py/redrock
-                /bin/mv py/redrock/redrock-templates-${RR_TEMPLATE_VER} py/redrock/templates
+                /bin/mv py/redrock/redrock-templates-${RR_TEMPLATE_VER} py/redrock/data/templates
             - name: Run the test with coverage
               run: pytest --cov
             - name: Coveralls
