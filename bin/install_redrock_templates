@@ -23,7 +23,7 @@ def main():
 
     #- Don't get confused by previously defined $RR_TEMPLATE_DIR
     if 'RR_TEMPLATE_DIR' in os.environ:
-        print('WARNING: ignoring $RR_TEMPLATE_DIR; use --outdir to force a specific location instead')
+        print('WARNING: ignoring $RR_TEMPLATE_DIR; use --outdir to force a specific location if needed')
         del os.environ['RR_TEMPLATE_DIR']
 
     #- Check if the output directory already exists

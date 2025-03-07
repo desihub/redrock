@@ -32,7 +32,7 @@ from ..utils import elapsed, get_mp, distribute_work, getGPUCountMPI
 
 from ..targets import (Spectrum, Target, DistTargets)
 
-from ..templates import load_dist_templates
+from ..templates import load_dist_templates, get_template_dir
 
 from ..results import write_zscan
 
@@ -78,6 +78,10 @@ def _get_header(templates, archetypes=None, spec_header=None):
     for key in ['RR_TEMPLATE_DIR', 'RR_ARCHETYPE_DIR']:
         if key in os.environ:
             setdep(header, key, os.environ[key])
+
+    setdep(header, 'RR_TEMPLATE_DIR', get_template_dir())
+    if 'RR_ARCHETYPE_DIR' in os.environ:
+        setdep(header, 'RR_ARCHETYPE_DIR', os.environ['RR_ARCHETYPE_DIR'])
 
     if spec_header is not None:
         for key in ('SPGRP', 'SPGRPVAL', 'TILEID', 'SPECTRO', 'PETAL',
