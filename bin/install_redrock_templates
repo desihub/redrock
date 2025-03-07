@@ -1,0 +1,74 @@
+#!/usr/bin/env python
+
+"""
+Install Redrock templates into the code directory so that they can be used
+without $RR_TEMPLATE_DIR being set
+"""
+
+import os
+import sys
+import importlib
+import subprocess
+import argparse
+
+import redrock.templates
+
+def main():
+    parser = argparse.ArgumentParser(description="install Redrock templates")
+    parser.add_argument('-v', '--version', default='main',
+                        help="Template version/tag/branch to install (default %(default)s)")
+    parser.add_argument('--template-url', default='https://github.com/desihub/redrock-templates',
+                        help="URL of repository with redrock templates (default %(default)s)")
+    parser.add_argument('-o', '--outdir',
+                        help="write template files into this directory instead of into the code installation")
+    args = parser.parse_args()
+
+    #- Don't get confused by previously defined $RR_TEMPLATE_DIR
+    if 'RR_TEMPLATE_DIR' in os.environ:
+        print('WARNING: ignoring $RR_TEMPLATE_DIR; use --outdir to force a specific location if needed')
+        del os.environ['RR_TEMPLATE_DIR']
+
+    #- Check if the output directory already exists
+    templatedir = redrock.templates.get_template_dir(args.outdir)
+    if os.path.exists(templatedir):
+        print(f'ERROR: {templatedir} already exists; remove then rerun')
+        return 1
+
+    #- GitHub doesn't require '.git', but other git servers might
+    if not args.template_url.endswith('.git'):
+        args.template_url += '.git'
+
+    #- full clone for main, depth 1 for other tags/branches
+    if args.version == 'main':
+        gitcmd = f"git clone {args.template_url} {templatedir}"
+    else:
+        gitcmd = f"git clone --depth 1 --branch {args.version} {args.template_url} {templatedir}"
+
+    #- Proceed with installing
+    print(f'Installing redrock-templates/{args.version} to {templatedir}')
+    print(gitcmd)
+    p = subprocess.run(gitcmd.split(), capture_output=True)
+    if p.returncode != 0:
+        if len(p.stdout)>0:
+            print(p.stdout.decode())   #- .decode because it is bytes not str
+        if len(p.stderr)>0:
+            print(p.stderr.decode())
+
+        print('ERROR: failed to install redrock-templates/{args.version}')
+        return p.returncode
+
+    #- Check that the installation worked
+    print('Checking that the installed templates work')
+    if args.outdir is not None:
+        os.environ['RR_TEMPLATE_DIR'] = templatedir
+    templates = redrock.templates.load_templates()
+    assert len(templates) > 0
+    print('SUCCESS')
+
+    if args.outdir is not None:
+        print(f'Remember to set $RR_TEMPLATE_DIR={templatedir} before running Redrock')
+
+    return 0
+
+if __name__ == '__main__':
+    sys.exit(main())

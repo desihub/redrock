@@ -11,6 +11,8 @@ import sys
 from glob import glob
 import os
 import traceback
+import importlib
+import pathlib
 
 import numpy as np
 from astropy.io import fits
@@ -32,7 +34,7 @@ class Template(object):
 
     Args:
         filename (str): the path to the template file, either absolute or
-            relative to the RR_TEMPLATE_DIR environment variable.
+            relative to the template path ($RR_TEMPLATE_DIR or installed with code)
 
     """
     def __init__(self, filename=None, spectype=None, redshifts=None,
@@ -47,7 +49,7 @@ class Template(object):
             if os.path.exists(filename):
                 fx = fits.open(filename, memmap=False)
             else:
-                xfilename = os.path.join(os.getenv('RR_TEMPLATE_DIR'), filename)
+                xfilename = os.path.join(get_template_dir(), filename)
                 if os.path.exists(xfilename):
                     fx = fits.open(xfilename, memmap=False)
                 else:
@@ -295,12 +297,23 @@ def make_fulltype(spectype, subtype):
 
     return fulltype
 
+def get_template_dir(template_path=None):
+    """Return template_path is set, otherwise $RR_TEMPLATE_DIR, or (code)/data/templates"""
+    if template_path is None:
+        if 'RR_TEMPLATE_DIR' in os.environ:
+            template_path = os.environ['RR_TEMPLATE_DIR']
+        else:
+            template_path = str(importlib.resources.files('redrock').joinpath('data/templates'))
+
+    return template_path
+
+
 def find_templates(template_path=None):
     """Return list of Redrock template files
 
     `template_path` can be one of 5 things:
 
-       * None (use $RR_TEMPLATE_DIR instead)
+       * None (use get_template_dir())
        * list/tuple/set/array of template files
        * path to directory containing template files
        * path to single template file to use
@@ -308,17 +321,9 @@ def find_templates(template_path=None):
 
     Returns list of template files to use
     """
-    if template_path is None:
-        if 'RR_TEMPLATE_DIR' in os.environ:
-            template_path = os.environ['RR_TEMPLATE_DIR']
-        else:
-            thisdir = os.path.dirname(__file__)
-            tempdir = os.path.join(os.path.abspath(thisdir), 'templates')
-            if os.path.exists(tempdir):
-                template_path = tempdir
-
-    if template_path is None:
-        raise IOError("ERROR: can't find template_path, $RR_TEMPLATE_DIR, or {rrcode}/templates/")
+    template_path = get_template_dir(template_path)
+    if isinstance(template_path, (str, pathlib.PosixPath)) and not os.path.exists(template_path):
+        raise ValueError("ERROR: can't find template_path, $RR_TEMPLATE_DIR, or (rrcode)/data/templates/")
     else:
         print(f'DEBUG: Reading templates from {template_path}')
 
@@ -405,7 +410,7 @@ def header2templatefiles(hdr, template_dir=None):
 
     #- preprend template directory
     if template_dir is None:
-        template_dir = os.environ['RR_TEMPLATE_DIR']
+        template_dir = get_template_dir()
 
     filenames = [os.path.join(template_dir, fn) for fn in filenames]
 
@@ -442,7 +447,7 @@ def load_templates(template_path=None, zscan_galaxy=None, zscan_star=None, zscan
     `template_path` is list of template file paths, or path to provide to
     find_templates, i.e. a path to a directory with templates, a path to
     a text file containing a list of templates, a path to a single template
-    file, or None to use $RR_TEMPLATE_DIR instead.
+    file, or None to use $RR_TEMPLATE_DIR or templates installed with code instead.
 
     Returns: list or dict of Template objects
 
