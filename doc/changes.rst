@@ -2,10 +2,23 @@
 redrock Change Log
 ==================
 
-0.20.4 (unreleased)
+0.20.5 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.20.4 (2025-03-14)
+-------------------
+
+* Remove DesiTest usage; drops ``setup.py test`` support (PR `#323`_)
+* Update readthedocs configuration (PR `#324`_)
+* Remove deprecated test_suite code (PR `#326`_)
+* Add ``install_redrock_templates`` script (PR `#327`_)
+
+.. _`#323`: https://github.com/desihub/redrock/pull/323
+.. _`#324`: https://github.com/desihub/redrock/pull/324
+.. _`#326`: https://github.com/desihub/redrock/pull/326
+.. _`#327`: https://github.com/desihub/redrock/pull/327
 
 0.20.3 (2024-11-05)
 -------------------
