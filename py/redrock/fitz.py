@@ -106,25 +106,13 @@ def minfit(x, y):
 
     return (x0, xerr, y0, zwarn)
 
-def prior_on_coeffs(n_nbh, deg_legendre, sigma, ncamera):
-    
-    """
-    Args:
-        n_nbh (int): number of dominant archetypes
-        deg_legendre (int): number of Legendre polynomials 
-        sigma (int): prior sigma to be used for archetype fitting
-        ncamera (int): number of cameras for given instrument
-    Returns:
-        2d array to be added while solving for archetype fitting
+def legendre_calculate(nleg, dwave):
+    wave = np.concatenate([ w for w in dwave.values() ])
+    wmin = wave.min()
+    wmax = wave.max()
+    legendre = { hs:np.array([scipy.special.legendre(i)( (w-wmin)/(wmax-wmin)*2.) for i in range(nleg)]) for hs, w in dwave.items() }
 
-    """
-    
-    nbasis = n_nbh+deg_legendre*ncamera # 3 desi cameras
-    prior = np.zeros((nbasis, nbasis), dtype='float64');np.fill_diagonal(prior, 1/(sigma**2))
-    for i in range(n_nbh):
-        prior[i][i]=0. ## Do not add prior to the archetypes, added only to the Legendre polynomials
-    return prior
-
+    return legendre
 
 def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=False, deg_legendre=None,
          zminfit_npoints=15, per_camera=False, n_nearest=None, prior_sigma=None):
@@ -293,6 +281,8 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
                 coeff = np.zeros(template.nbasis)
                 zwarn |= ZW.Z_FITLIMIT
                 zwarn |= ZW.BAD_MINFIT
+                #Set trans to None so as not to pass an empty dict to archetypes! CW 2/26/24
+                trans = None
             else:
                 #- Unknown problem; re-raise error
                 raise err
@@ -331,12 +321,9 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
                 else:
                     ncamera = 1
                 if n_nearest is None:
-                    prior = prior_on_coeffs(1, deg_legendre, prior_sigma, ncamera)
-                else:
-                    prior = prior_on_coeffs(n_nearest, deg_legendre, prior_sigma, ncamera)
-            else:
-                prior=None
-            chi2min, coeff, fulltype = archetype.get_best_archetype(target,weights,flux,wflux,dwave,zbest, per_camera, n_nearest, trans=trans, use_gpu=use_gpu, prior=prior)
+                    n_nearest = 1
+            #Pass prior_sigma as a scalar and move calculation of prior array to zscan.py in per_camera_coeff_with_least_square_batch
+            chi2min, coeff, fulltype = archetype.get_best_archetype(target,weights,flux,wflux,dwave,zbest, per_camera, n_nearest, trans=trans, use_gpu=use_gpu, prior_sigma=prior_sigma)
             del trans
 
             results.append(dict(z=zbest, zerr=zerr, zwarn=zwarn,
