@@ -7,7 +7,7 @@ from uuid import uuid1
 import numpy as np
 
 from .. import utils as rrutils
-from ..results import read_zscan, write_zscan
+from ..results import read_zscan, write_zscan, read_zfit
 from ..zfind import zfind
 from ..templates import DistTemplate
 
@@ -83,5 +83,50 @@ class TestIO(unittest.TestCase):
                 self.assertEqual(len(zz['redshifts']), len(zz['zchi2']))
                 self.assertGreater(len(zz['zfit']), 0, f'Empty zfit Table for {targetid=} {fulltype=}')
 
+        #- targetid subsets
+        targetids = np.unique(zfit['targetid'])
+
+        zscan, zfit = read_zscan(zscanfile, select_targetids=targetids[1])
+        self.assertEqual(len(np.unique(zfit['targetid'])), 1)
+        self.assertEqual(np.unique(zfit['targetid'])[0], targetids[1])
+
+        zscan, zfit = read_zscan(zscanfile, select_targetids=targetids[0:2])
+        self.assertEqual(len(np.unique(zfit['targetid'])), 2)
+        self.assertTrue(np.all(np.unique(zfit['targetid']) == targetids[0:2]))
+
+        #- UPPERCASE column names
+        zscan, zfit = read_zscan(zscanfile, upper=True)
+        self.assertIn('TARGETID', zfit.colnames)
+
+        #- only zscan; not (zscan,zfit)
+        results = read_zscan(zscanfile, nozfit=True)
+        self.assertTrue(isinstance(results, dict))  #- not tuple
+        self.assertIn(targetids[0], results.keys())
+
+    def test_read_zfit(self):
+        """Test read_zfit with pre-generated data"""
+        import importlib
+        filename = importlib.resources.files('redrock.test').joinpath('data/rrdetails-test.h5')
+        zfit = read_zfit(filename)
+        targetids = np.unique(zfit['targetid'])
+        self.assertEqual(len(targetids), 3)
+
+        #- Select two targetids
+        zfit2 = read_zfit(filename, select_targetids=targetids[0:2])
+        targetids2 = np.unique(zfit2['targetid'])
+        self.assertEqual(len(targetids2), 2)
+        self.assertTrue(np.all(targetids2 == targetids[0:2]))
+
+        #- Select a single targetid as integer
+        zfit1 = read_zfit(filename, select_targetids=targetids[1])
+        targetids1 = np.unique(zfit1['targetid'])
+        self.assertEqual(len(targetids1), 1)
+        self.assertEqual(targetids1[0], targetids[1])
+
+        #- force column names to UPPERCASE
+        zfit = read_zfit(filename, upper=True)
+        self.assertIn('TARGETID', zfit.colnames)
+        self.assertIn('Z', zfit.colnames)
+        self.assertNotIn('z', zfit.colnames)
 
 

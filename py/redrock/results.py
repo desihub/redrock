@@ -13,7 +13,7 @@ import numpy as np
 from astropy.table import Table
 
 from .utils import encode_column
-from .templates import parse_fulltype
+from .templates import parse_fulltype, make_fulltype
 
 def write_zscan(filename, zscan, zfit, clobber=False):
     """Writes redrock.zfind results to a file.
@@ -88,28 +88,33 @@ def write_zscan(filename, zscan, zfit, clobber=False):
     os.rename(tempfile, filename)
 
 
-def read_zscan(filename, select_targetids=None):
+def read_zscan(filename, select_targetids=None, upper=False, nozfit=False):
     """Read redrock.zfind results from a file.
 
     Args:
         filename (str): redrock details (.h5) filename
-        select_targetids (list): array of TARGETIDs to read
+
+    Options:
+        select_targetids (int or array of int): TARGETID(s) to read
+        upper (bool): convert table column names to UPPERCASE
+        nozfit (bool): do not include zfit information
 
     Returns:
-        tuple: ``(zscan, zfit)`` where
-        ``zfit`` is a Table with the N best fits for each target
-        per spectype and subtype; and
-        ``zscan`` is a nested dictionary ``zscan[targetid][templatetype]``
-        with keys:
+        ``zscan``, or ``(zscan, zfit)`` tuple where
+        ``zscan`` is a nested dictionary ``zscan[targetid][templatetype]`` with keys:
 
                 - redshifts: array of redshifts scanned
                 - zchi2: array of chi2 of fit vs. redshifts
                 - penalty: array of chi2 penalties for unphysical fits at each z
                 - zcoeff: array of coefficients fit per redshifts
                 - zfit: table of N best-fit redshifts for just this target and templatetype
+
+        ``zfit`` is a Table with the N best fits for each target per spectype and subtype
     """
     import h5py
-    # zbest = Table.read(filename, format='hdf5', path='zbest')
+    if np.isscalar(select_targetids):
+        select_targetids = [select_targetids,]
+
     with h5py.File(os.path.expandvars(filename), mode='r') as fx:
         targetids = fx['targetids'][()]  # .value
         fulltypes = list(fx['zscan'].keys())
@@ -137,23 +142,62 @@ def read_zscan(filename, select_targetids=None):
                 zscan[targetid][fulltype]['zchi2'] = zchi2[i]
                 zscan[targetid][fulltype]['penalty'] = penalty[i]
                 zscan[targetid][fulltype]['zcoeff'] = zcoeff[i]
-                thiszfit = fx['/zfit/{}/zfit'.format(targetid)][()]
-                ii = (thiszfit['spectype'].astype('U') == spectype)
-                ii &= (thiszfit['subtype'].astype('U') == subtype)
-                thiszfit = Table(thiszfit[ii])
-                thiszfit.remove_columns(['targetid', 'znum', 'deltachi2'])
-                thiszfit.replace_column('spectype',
-                    encode_column(thiszfit['spectype']))
-                thiszfit.replace_column('subtype',
-                    encode_column(thiszfit['subtype']))
-                zscan[targetid][fulltype]['zfit'] = thiszfit
 
-        zfit = [fx['zfit/{}/zfit'.format(tid)][()] for tid in targetids[indx]]
+        if nozfit:
+            return zscan
+
+        #- Add zfit information too
+        zfit = read_zfit(filename, select_targetids=select_targetids, upper=upper)
+        if upper:
+            targetid_col = 'TARGETID'
+            spectype_col = 'SPECTYPE'
+            subtype_col = 'SUBTYPE'
+        else:
+            targetid_col = 'targetid'
+            spectype_col = 'spectype'
+            subtype_col = 'subtype'
+
+        for zfit_tid in zfit.group_by( (targetid_col, spectype_col, subtype_col) ).groups:
+            targetid = zfit_tid[targetid_col][0]
+            spectype = zfit_tid[spectype_col][0]
+            subtype = zfit_tid[subtype_col][0]
+            fulltype = make_fulltype(spectype, subtype)
+            zscan[targetid][fulltype]['zfit'] = zfit_tid
+
+        return zscan, zfit
+
+def read_zfit(filename, select_targetids=None, upper=False):
+    """
+    Read and stack `zfit` tables from filename with N best fits
+
+    Args:
+        filename (str): path to Redrock details hdf5 file
+
+    Options:
+        select_targetids (int or array of int): read only these targetids
+        upper (bool): convert table column names to UPPERCASE
+
+    Returns: astropy Table of zfit results, or dict of Tables keyed by targetid
+    """
+    import h5py
+    if np.isscalar(select_targetids):
+        select_targetids = [select_targetids,]
+
+    zfit = dict()
+    with h5py.File(os.path.expandvars(filename), mode='r') as fx:
+        if select_targetids is None:
+            select_targetids = fx['targetids'][:]
+
+        zfit = [fx[f'zfit/{tid}/zfit'][:] for tid in select_targetids]
         zfit = Table(np.hstack(zfit))
         zfit.replace_column('spectype', encode_column(zfit['spectype']))
         zfit.replace_column('subtype', encode_column(zfit['subtype']))
 
-    return zscan, zfit
+    if upper:
+        for colname in list(zfit.colnames):
+            zfit.rename_column(colname, colname.upper())
+
+    return zfit
 
 
 def read_zscan_redrock(filename):
