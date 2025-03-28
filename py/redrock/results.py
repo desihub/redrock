@@ -52,10 +52,19 @@ def write_zscan(filename, zscan, zfit, clobber=False):
             if zfit[colname].dtype.kind == 'U':
                 zfit.replace_column(colname, np.char.encode(zfit[colname], 'ascii'))
 
+    #- convert columns to lower precision for final output
+    for col in ['zerr', 'chi2', 'zz', 'zzchi2', 'coeff', 'deltachi2']:
+        zfit[col] = zfit[col].astype(np.float32)
+
+    zfit['zwarn'] = zfit['zwarn'].astype(np.int32)
+    zfit['npixels'] = zfit['npixels'].astype(np.int32)
+    zfit['znum'] = zfit['znum'].astype(np.int8)
+    zfit['ncoeff'] = zfit['ncoeff'].astype(np.int8)
+
     zbest = zfit[zfit['znum'] == 0]
     zbest.remove_column('znum')
 
-    zbest.write(filename, path='zbest', format='hdf5')
+    # zbest.write(tempfile, path='zbest', format='hdf5')
 
     targetids = np.asarray(zbest['targetid'])
     spectypes = list(zscan[targetids[0]].keys())
@@ -63,13 +72,14 @@ def write_zscan(filename, zscan, zfit, clobber=False):
     tempfile = filename + '.tmp'
     fx = h5py.File(tempfile, mode='w')
     fx['targetids'] = targetids
+    fx['zbest'] = zbest.as_array()
 
     for spectype in spectypes:
-        zchi2 = np.vstack([zscan[t][spectype]['zchi2'] for t in targetids])
-        penalty = np.vstack([zscan[t][spectype]['penalty'] for t in targetids])
+        zchi2 = np.vstack([zscan[t][spectype]['zchi2'].astype(np.float32) for t in targetids])
+        penalty = np.vstack([zscan[t][spectype]['penalty'].astype(np.float32) for t in targetids])
         zcoeff = list()
         for t in targetids:
-            tmp = zscan[t][spectype]['zcoeff']
+            tmp = zscan[t][spectype]['zcoeff'].astype(np.float32)
             tmp = tmp.reshape((1,)+tmp.shape)
             zcoeff.append(tmp)
         zcoeff = np.vstack(zcoeff)
@@ -82,7 +92,6 @@ def write_zscan(filename, zscan, zfit, clobber=False):
     for targetid in targetids:
         ii = np.where(zfit['targetid'] == targetid)[0]
         fx['zfit/{}/zfit'.format(targetid)] = zfit[ii].as_array()
-        #- TODO: fx['zfit/{}/model']
 
     fx.close()
     os.rename(tempfile, filename)
