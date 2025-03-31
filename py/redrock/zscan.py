@@ -13,6 +13,10 @@ import traceback
 import numpy as np
 from scipy.optimize import lsq_linear, nnls
 
+#- Largest all-nines number that works for both float32 and float64,
+#- to be used for chi2 of failed fits, etc.
+HUGE_CHI2=9999999.0
+
 #try:
 #    import cupy as cp
 #    import cupyx.scipy
@@ -175,9 +179,9 @@ def _zchi2_one(Tb, weights, flux, wflux, zcoeff, solve_matrices_algorithm):
     try:
         zcoeff[:] = solve_matrices(M, y, solve_algorithm=solve_matrices_algorithm, use_gpu=False)
     except np.linalg.LinAlgError:
-        return 9e99
+        return HUGE_CHI2
     except NotImplementedError:
-        return 9e99
+        return HUGE_CHI2
 
     model = Tb.dot(zcoeff)
 
@@ -645,7 +649,7 @@ def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, solve_mat
     """
     zchi2 = np.zeros(nz)
     if (weights.sum() == 0):
-        zchi2[:] = 9e99
+        zchi2[:] = HUGE_CHI2
         zcoeff = np.zeros((nz, nbasis))
         return (zchi2, zcoeff)
     if (use_gpu):
@@ -709,7 +713,7 @@ def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, solve_mat
             zcoeff = solve_matrices(all_M, all_y, solve_algorithm=solve_matrices_algorithm,
                                     solver_args=solver_args, use_gpu=True)
         except NotImplementedError:
-            zchi2[:] = 9e99
+            zchi2[:] = HUGE_CHI2
             zcoeff = np.zeros((nz, nbasis))
             return (zchi2, zcoeff)
 
@@ -757,10 +761,10 @@ def calc_zchi2_batch(spectra, tdata, weights, flux, wflux, nz, nbasis, solve_mat
             try:
                 zcoeff[i,:] = solve_matrices(M, y, solve_algorithm=solve_matrices_algorithm, solver_args=solver_args, use_gpu=False)
             except np.linalg.LinAlgError:
-                zchi2[i] = 9e99
+                zchi2[i] = HUGE_CHI2
                 continue
             except NotImplementedError:
-                zchi2[i] = 9e99
+                zchi2[i] = HUGE_CHI2
                 continue
 
             #4) Calculate dot products individually for each template
@@ -850,7 +854,7 @@ def calc_zchi2(target_ids, target_data, dtemplate, progress=None, use_gpu=False)
             #Use spectral_data() to get numpy arrays
             (weights, flux, wflux) = spectral_data(target_data[j].spectra)
         if np.sum(weights) == 0:
-            zchi2[j,:] = 9e99
+            zchi2[j,:] = HUGE_CHI2
             #Update progress for multiprocessing!!
             if dtemplate.comm is None and progress is not None:
                 progress.put(1)
@@ -1141,7 +1145,7 @@ def solve_matrices(M, y, solve_algorithm="PCA", solver_args=None, use_gpu=False)
                     res = nnls(Mcpu[j,:,:], ycpu[j,:])
                     zcoeff[j,:] = res[0]
                 except Exception:
-                    zcoeff[j,:] = 9e99
+                    zcoeff[j,:] = HUGE_CHI2
             return cp.asarray(zcoeff)
         else:
             try:
@@ -1169,7 +1173,7 @@ def solve_matrices(M, y, solve_algorithm="PCA", solver_args=None, use_gpu=False)
                     res = lsq_linear(Mcpu[j,:,:], ycpu[j,:], bounds=bounds, method='bvls')
                     zcoeff[j,:] = res.x
                 except np.linalg.LinAlgError:
-                    zcoeff[j,:] = 9e99
+                    zcoeff[j,:] = HUGE_CHI2
             return cp.asarray(zcoeff)
         else:
             try:
