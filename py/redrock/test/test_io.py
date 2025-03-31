@@ -61,13 +61,22 @@ class TestIO(unittest.TestCase):
         zscan2, zfit2 = read_zscan(self.testfile)
 
         self.assertEqual(zfit1.colnames, zfit2.colnames)
+
+        #- z and targetid retain original precision/size; others may have lower precision
+        self.assertEqual(zfit1['z'].dtype, zfit2['z'].dtype)
+        self.assertEqual(zfit1['targetid'].dtype, zfit2['targetid'].dtype)
+
         for cn in zfit1.colnames:
-            np.testing.assert_equal(zfit1[cn], zfit2[cn])
+            d2 = zfit2[cn]
+            d1 = zfit1[cn].astype(d2.dtype)  #- e.g. float64 -> float32
+            np.testing.assert_equal(d1, d2)
 
         for targetid in zscan1:
             for spectype in zscan1[targetid]:
                 for key in zscan1[targetid][spectype]:
                     d1 = zscan1[targetid][spectype][key]
+                    if key != 'redshifts':
+                        d1 = d1.astype(np.float32)
                     d2 = zscan2[targetid][spectype][key]
                     self.assertTrue(np.all(d1==d2), 'data mismatch {}/{}/{}'.format(targetid, spectype, key))
 
