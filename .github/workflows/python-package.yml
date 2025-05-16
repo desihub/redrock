@@ -38,8 +38,8 @@ jobs:
                 python -m pip install --upgrade pip setuptools wheel
                 python -m pip install pytest
                 python -m pip install git+https://github.com/desihub/desiutil.git@${DESIUTIL_VERSION}#egg=desiutil
-                python -m pip install -r requirements.txt
                 python -m pip install --upgrade --upgrade-strategy only-if-needed "numpy${{ matrix.numpy-version }}"
+                python -m pip install -r requirements.txt
 
                 PYTHONPATH=$(pwd)/py:$PYTHONPATH PATH=$(pwd)/bin:$PATH install_redrock_templates -v ${RR_TEMPLATE_VER}
                 ### curl -L https://github.com/desihub/redrock-templates/archive/${RR_TEMPLATE_VER}.tar.gz | tar -x -z -v -C py/redrock
