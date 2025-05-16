@@ -17,7 +17,7 @@ jobs:
             fail-fast: true
             matrix:
                 os: [ubuntu-latest]
-                python-version: ['3.10',]
+                python-version: ['3.10', '3.12']
                 numpy-version: ['<2.0', '>2.0']
                 # astropy-version: ['<3.0', '<4.1']  #, '<5.0']
         env:
