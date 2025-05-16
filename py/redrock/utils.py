@@ -31,12 +31,12 @@ def native_endian(data):
     Returns:
         array: original array if input in native endianness, otherwise a copy
             with the bytes swapped.
-
     """
     if data.dtype.isnative:
         return data
     else:
-        return data.byteswap().newbyteorder()
+        ### return data.byteswap().newbyteorder()  # only works with numpy<2
+        return data.byteswap().view(data.dtype.newbyteorder('native'))  # works with numpy 1.x or 2.x
 
 
 def encode_column(c):

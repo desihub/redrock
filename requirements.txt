@@ -1,5 +1,4 @@
-# Based on desimodules/22.2.
-numpy<2.0
+numpy
 astropy
 scipy
 h5py
