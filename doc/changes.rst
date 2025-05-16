@@ -5,7 +5,11 @@ redrock Change Log
 0.20.5 (unreleased)
 -------------------
 
-* No changes yet.
+* Use single precision for outputs; update readers (PR `#329`_).
+* Fix ``native_endian`` for numpy 2.x (PR `#332`_).
+
+.. _`#329`: https://github.com/desihub/redrock/pull/329
+.. _`#332`: https://github.com/desihub/redrock/pull/332
 
 0.20.4 (2025-03-14)
 -------------------
