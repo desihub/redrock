@@ -386,10 +386,15 @@ class Archetype():
             else:
                 (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux, nleg, self._narch, method=solve_method, n_nbh=1, prior=prior, use_gpu=use_gpu, bands=bands)
         else:
+            bounds = np.zeros((2, nbasis))
+            bounds[0][1:]=-np.inf
+            bounds[1] = np.inf
+            solver_args = {'bounds':bounds}
+
             if (use_gpu):
-                (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, gpuweights, gpuflux, gpuwflux, self._narch, nbasis, use_gpu=use_gpu)
+                (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, gpuweights, gpuflux, gpuwflux, self._narch, nbasis, use_gpu=use_gpu, solve_matrices_algorithm=solve_method, solver_args=solver_args)
             else:
-                (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, weights, flux, wflux, self._narch, nbasis, use_gpu=use_gpu)
+                (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, weights, flux, wflux, self._narch, nbasis, use_gpu=use_gpu, solve_matrices_algorithm=solve_method, solver_args=solver_args)
 
         if n_nearest is not None:
             best_chi2, best_coeff, best_fulltype = self.nearest_neighbour_model(target,weights,flux,wflux,dwave,z, n_nearest, zzchi2, trans, per_camera, dedges=dedges, binned=binned, use_gpu=use_gpu, prior=nnearest_prior, ncam=ncam)
