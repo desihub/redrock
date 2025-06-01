@@ -387,10 +387,8 @@ class Archetype():
                 (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux, nleg, self._narch, method=solve_method, n_nbh=1, prior=prior, use_gpu=use_gpu, bands=bands)
         else:
             bounds = np.zeros((2, nbasis))
-            bounds[0][1:]=-np.inf
             bounds[1] = np.inf
             solver_args = {'bounds':bounds}
-
             if (use_gpu):
                 (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, gpuweights, gpuflux, gpuwflux, self._narch, nbasis, use_gpu=use_gpu, solve_matrices_algorithm=solve_method, solver_args=solver_args)
             else:
