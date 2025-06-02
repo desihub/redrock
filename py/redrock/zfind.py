@@ -513,13 +513,15 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                 del allresults[tid][fulltype]['zfit']
 
             maxncoeff = max([tmp['coeff'].shape[1] for tmp in tzfit])
+    
             for tmp in tzfit:
                 if tmp['coeff'].shape[1] < maxncoeff:
                     n = maxncoeff - tmp['coeff'].shape[1]
                     nx = tmp['coeff'].shape[0]
                     c = np.append(tmp['coeff'], np.zeros((nx, n)), axis=1)
                     tmp['coeff'] = c
-
+            print(tmp["coeff"].shape)
+            print(tzfit[0]["coeff"].shape)
             #tzfit = astropy.table.vstack(tzfit)
             ## Equivalent of astropy.table.vstack(tzfit) - vstack each array
             tzfit2 = dict()
@@ -530,12 +532,14 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                 tzfit2[k] = np.vstack(tzfit2[k])
                 if (tzfit2[k].shape[1] == 1):
                     tzfit2[k] = tzfit2[k].flatten()
+            print(tzfit2["coeff"].shape)
             tzfit = tzfit2
-
+             
             #Have to create arrays of correct length since using dict of
             #np arrays instead of astropy Table
             l = len(tzfit['chi2'])
             tzfit['targetid'] = np.array([tid]*l)
+         
             if (archetypes):
                 if (len(archetype_spectype)==len(all_spectype)):
                     if n_nearest is None:

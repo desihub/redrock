@@ -999,8 +999,8 @@ def rrdesi(options=None, comm=None):
             if comm_rank == 0:
                 print('no archetypes or --archetypes-no-legendre; will turn off all the Legendre related arguments')
             archetype_legendre_prior = None
-            archetype_legendre_degree =0
-            archetype_legendre_percamera = False
+            args.archetype_legendre_degree =0
+            archetype_legendre_percamera = True
         else:
             if comm_rank == 0 and args.archetypes is not None:
                 print('Will be using default archetype values.') 
@@ -1051,7 +1051,7 @@ def rrdesi(options=None, comm=None):
         # refinement.  This function only returns data on the rank 0 process.
 
         start = elapsed(None, "", comm=comm)
-
+        
         scandata, zfit = zfind(targets, dtemplates, mpprocs,
             nminima=nminima, archetypes=archetypes,
             priors=args.priors, chi2_scan=args.chi2_scan, use_gpu=use_gpu, zminfit_npoints=args.zminfit_npoints, per_camera=archetype_legendre_percamera, deg_legendre=args.archetype_legendre_degree, n_nearest=args.archetype_nnearest, prior_sigma=archetype_legendre_prior, ncamera=ncamera)

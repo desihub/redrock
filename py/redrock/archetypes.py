@@ -315,7 +315,7 @@ class Archetype():
         nleg = target.nleg
         legendre = target.legendre(nleg=nleg, use_gpu=use_gpu) #Get previously calculated legendre
         bands = target.bands
-
+        
         #Select np or cp for operations as arrtype
         if (use_gpu):
             import cupy as cp
@@ -342,10 +342,7 @@ class Archetype():
         nleg = legendre[list(legendre.keys())[0]].shape[0]
         zzchi2 = np.zeros(self._narch, dtype=np.float64)
         zzcoeff = np.zeros((self._narch,  1+ncam*(nleg)), dtype=np.float64)
-        
-        #TODO: return best fit model as well
-        #zzmodel = np.zeros((self._narch, obs_wave.size), dtype=np.float64)
-
+    
         if (trans is None):
             #Calculate Lyman transmission if not passed as dict
             trans = { hs:transmission_Lyman(z,w, use_gpu=False, model=self.igm_model) for hs, w in dwave.items() }
@@ -393,6 +390,7 @@ class Archetype():
                 (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, gpuweights, gpuflux, gpuwflux, self._narch, nbasis, use_gpu=use_gpu, solve_matrices_algorithm=solve_method, solver_args=solver_args)
             else:
                 (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, weights, flux, wflux, self._narch, nbasis, use_gpu=use_gpu, solve_matrices_algorithm=solve_method, solver_args=solver_args)
+            zzcoeff  = zzcoeff.reshape(self._narch, nbasis, 1)
 
         if n_nearest is not None:
             best_chi2, best_coeff, best_fulltype = self.nearest_neighbour_model(target,weights,flux,wflux,dwave,z, n_nearest, zzchi2, trans, per_camera, dedges=dedges, binned=binned, use_gpu=use_gpu, prior=nnearest_prior, ncam=ncam)
@@ -400,7 +398,7 @@ class Archetype():
             return best_chi2, best_coeff, best_fulltype
         else:
             iBest = np.argmin(zzchi2)
-            #print(z, zzchi2[iBest], zzcoeff[iBest], self._full_type[iBest])
+            print(z, zzchi2[iBest], zzcoeff[iBest], self._full_type[iBest])
             return zzchi2[iBest], zzcoeff[iBest], self._full_type[iBest]
 
 

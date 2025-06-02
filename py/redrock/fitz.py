@@ -338,7 +338,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
                 prior=None
             chi2min, coeff, fulltype = archetype.get_best_archetype(target,weights,flux,wflux,dwave,zbest, per_camera, n_nearest, trans=trans, use_gpu=use_gpu, prior=prior)
             del trans
-
+            print(chi2min, fulltype)
             results.append(dict(z=zbest, zerr=zerr, zwarn=zwarn,
                 chi2=chi2min, zz=zz, zzchi2=zzchi2,
                 coeff=coeff, fulltype=fulltype, fitmethod=archetype.method))
