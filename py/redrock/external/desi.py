@@ -46,7 +46,7 @@ from ..archetypes import All_archetypes, Archetype
 
 def _get_header(templates, archetypes=None, spec_header=None):
     """Get standardized header with template and archetype versions
-    
+
     Args:
         templates : list or dict of template objects
 
@@ -159,7 +159,7 @@ def write_bestmodel(outfile, zbest, modeldict, wavedict, templates,
     HDUs instead of B/R/Z_FLUX HDUs.
     """
     header = _get_header(templates, archetypes, spec_header)
-    
+
     zbest.meta['EXTNAME'] = 'REDSHIFTS'
     hx = fits.HDUList()
     hx.append(fits.PrimaryHDU(header=header))
@@ -670,19 +670,19 @@ def rrdesi(options=None, comm=None):
     parser.add_argument("--archetypes", type=str, default=None,
         required=False,
         help="archetype file or directory for final redshift comparison")
-    
+
     parser.add_argument("--archetype-legendre-degree", type=int, default=2,
         required=False, help="if archetypes are provided legendre polynomials upto deg_legendre-1 will be used (default is 2)")
-    
+
     parser.add_argument("--archetype-nnearest", type=int, default=None,
         required=False, help="number of nearest archetypes (in chi2 space) to be used in archetype modeling, must be greater than 1 (default is None)")
 
     parser.add_argument("--archetype-legendre-percamera", default=True, action="store_true",
         required=False, help="If True, in archetype mode the fitting will be done for each camera/band")
-    
+
     parser.add_argument("--archetype-legendre-prior", type=float, default=0.1,
                         required=False, help="sigma to add as prior in solving linear equation, 1/sig**2 will be added, default is 0.1, Note: provide anything <=0 if you do not want to add any prior")
-    
+
     parser.add_argument("--archetypes-no-legendre", default=False, action="store_true",
         required=False, help="Use this flag with archetypes if want to TURN OFF all archetype related default values")
 
@@ -694,7 +694,7 @@ def rrdesi(options=None, comm=None):
 
     parser.add_argument("-o", "--outfile", type=str, default=None,
         required=False, help="output FITS file with best redshift per target")
-    
+
     parser.add_argument("--model", type=str, default=None,
         required=False, help="output FITS file containing spectral model")
 
@@ -724,7 +724,7 @@ def rrdesi(options=None, comm=None):
 
     parser.add_argument("--nminima", type=int, default=None,
         required=False, help="the number of redshift minima to search")
-    
+
     parser.add_argument("--allspec", default=False, action="store_true",
         required=False, help="use individual spectra instead of coadd")
 
@@ -766,7 +766,7 @@ def rrdesi(options=None, comm=None):
         args = parser.parse_args()
     else:
         args = parser.parse_args(options)
-    
+
     if args.ncpu is not None:
         print('WARNING: --ncpu is deprecated; use --mp instead')
         args.mp = args.ncpu
@@ -794,7 +794,7 @@ def rrdesi(options=None, comm=None):
 
     # Check arguments- all processes have this, so just check on the first
     # process
-    
+
     # if user sets --nminima, use that
     if args.nminima is not None:
         nminima = args.nminima
@@ -803,7 +803,7 @@ def rrdesi(options=None, comm=None):
         nminima = 3    # default for non-archetypes
     else:
         nminima = 9    # default for archetypes
-    
+
     if comm_rank == 0:
         if args.debug and comm_size != 1:
             print("--debug can only be used if the communicator has one "
@@ -866,7 +866,7 @@ def rrdesi(options=None, comm=None):
                             comm.Abort()
                         else:
                             sys.exit(1)
-                
+
                 if os.path.isfile(args.archetypes):
                     print('Archetype is a file and it exists and readable')
                     print('Archetype will only be applied to SPECTYPE %s'%(os.path.basename(args.archetypes).split('-')[1].split('.')[0].upper()))
@@ -993,20 +993,20 @@ def rrdesi(options=None, comm=None):
 
         # Get the dictionary of wavelength grids (with keys as wavehashes)
         dwave = targets.wavegrids()
-        
+
         ncamera = len(list(dwave.keys())) # number of cameras for given instrument
         if args.archetypes_no_legendre or args.archetypes is None:
             if comm_rank == 0:
                 print('no archetypes or --archetypes-no-legendre; will turn off all the Legendre related arguments')
             archetype_legendre_prior = None
             args.archetype_legendre_degree =0
-            archetype_legendre_percamera = True
+            archetype_legendre_percamera = False
         else:
             if comm_rank == 0 and args.archetypes is not None:
-                print('Will be using default archetype values.') 
+                print('Will be using default archetype values.')
                 print('Number of minimum redshift for which archetype redshift fitting will be done = %d'%(nminima))
 
-            if ncamera>=1: 
+            if ncamera>=1:
                 archetype_legendre_percamera = True
                 if comm_rank == 0 and args.archetypes is not None:
                     print('Number of cameras = %d, percamera fitting will be done'%(ncamera))
@@ -1033,7 +1033,7 @@ def rrdesi(options=None, comm=None):
             if args.archetype_nnearest is not None:
                 if comm_rank == 0 and args.archetypes is not None:
                     print('nearest neighbour = %d is provided, will do the final fitting for N-best nearest archetypes in chi2 space..'%(args.archetype_nnearest))
-        
+
         stop = elapsed(start, "Read and distribution of {} targets"\
             .format(len(targets.all_target_ids)), comm=comm)
 
@@ -1051,7 +1051,7 @@ def rrdesi(options=None, comm=None):
         # refinement.  This function only returns data on the rank 0 process.
 
         start = elapsed(None, "", comm=comm)
-        
+
         scandata, zfit = zfind(targets, dtemplates, mpprocs,
             nminima=nminima, archetypes=archetypes,
             priors=args.priors, chi2_scan=args.chi2_scan, use_gpu=use_gpu, zminfit_npoints=args.zminfit_npoints, per_camera=archetype_legendre_percamera, deg_legendre=args.archetype_legendre_degree, n_nearest=args.archetype_nnearest, prior_sigma=archetype_legendre_prior, ncamera=ncamera)
@@ -1117,7 +1117,7 @@ def rrdesi(options=None, comm=None):
             if comm_rank == 0:
                 write_zscan(args.details, scandata, zfit, clobber=True)
             stop = elapsed(start, "Writing zscan data took", comm=comm)
-        
+
         if args.outfile:
             start = elapsed(None, "", comm=comm)
             if comm_rank == 0:
@@ -1125,7 +1125,7 @@ def rrdesi(options=None, comm=None):
 
                 # Remove extra columns not needed for zbest
                 zbest.remove_columns(['zz', 'zzchi2', 'znum'])
-                
+
                 # Change to upper case like SDSS / DESI
                 for colname in zbest.colnames:
                     if colname.islower():
@@ -1139,7 +1139,7 @@ def rrdesi(options=None, comm=None):
                         targets.tsnr2,
                         templates, archetypes=archetypes,
                         spec_header=targets.header0)
-            
+
             if comm is not None:
                 zbest = comm.bcast(zbest, root=0)
 
