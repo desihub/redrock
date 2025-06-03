@@ -107,18 +107,18 @@ def minfit(x, y):
     return (x0, xerr, y0, zwarn)
 
 def prior_on_coeffs(n_nbh, deg_legendre, sigma, ncamera):
-    
+
     """
     Args:
         n_nbh (int): number of dominant archetypes
-        deg_legendre (int): number of Legendre polynomials 
+        deg_legendre (int): number of Legendre polynomials
         sigma (int): prior sigma to be used for archetype fitting
         ncamera (int): number of cameras for given instrument
     Returns:
         2d array to be added while solving for archetype fitting
 
     """
-    
+
     nbasis = n_nbh+deg_legendre*ncamera # 3 desi cameras
     prior = np.zeros((nbasis, nbasis), dtype='float64');np.fill_diagonal(prior, 1/(sigma**2))
     for i in range(n_nbh):
@@ -146,7 +146,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
         deg_legendre (int): in archetype mode polynomials upto deg_legendre-1 will be used
         zminfit_npoints (int): number of finer redshift pixels to search for final redshift - default 15
         per_camera: (bool): True if fitting needs to be done in each camera for archetype mode
-        n_nearest: (int): number of nearest neighbours to be used in chi2 space (including best archetype) 
+        n_nearest: (int): number of nearest neighbours to be used in chi2 space (including best archetype)
         prior_sigma (float): prior to add in the final solution matrix: added as 1/(prior_sigma**2) only for per-camera mode
 
     Returns:
@@ -243,7 +243,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
                                                  solve_matrices_algorithm=template.solve_matrices_algorithm,
                                                  use_gpu=use_gpu)
         else:
-            #Use numpy CPU arrays for weights, flux, wflux 
+            #Use numpy CPU arrays for weights, flux, wflux
             (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, binned, weights, flux, wflux, nz, nbasis,
                                                  solve_matrices_algorithm=template.solve_matrices_algorithm,
                                                  use_gpu=use_gpu)
@@ -259,7 +259,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
         #trans = dict()
         trans = { hs:None for hs, w in dwave.items() } #define trans with keys and None values
         try:
-            #Calculate xmin and xmax from template and pass as scalars 
+            #Calculate xmin and xmax from template and pass as scalars
             xmin = template.minwave*(1+zmin)
             xmax = template.maxwave*(1+zmin)
             if (use_gpu):
@@ -338,7 +338,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
                 prior=None
             chi2min, coeff, fulltype = archetype.get_best_archetype(target,weights,flux,wflux,dwave,zbest, per_camera, n_nearest, trans=trans, use_gpu=use_gpu, prior=prior)
             del trans
-            print(chi2min, fulltype)
+
             results.append(dict(z=zbest, zerr=zerr, zwarn=zwarn,
                 chi2=chi2min, zz=zz, zzchi2=zzchi2,
                 coeff=coeff, fulltype=fulltype, fitmethod=archetype.method))
