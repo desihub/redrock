@@ -664,7 +664,7 @@ def rrdesi(options=None, comm=None):
     parser = argparse.ArgumentParser(description="Estimate redshifts from"
         " DESI target spectra.")
 
-    parser.add_argument("-t", "--templates", type=str, nargs='+', default=None,
+    parser.add_argument("-t", "--templates", type=str, default=None,
         required=False, help="template file or directory")
 
     parser.add_argument("--archetypes", type=str, default=None,
