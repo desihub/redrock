@@ -5,6 +5,12 @@ TODO: expand tests
 """
 
 import unittest
+import numpy as np
+from scipy.interpolate import interp1d
+from . import util
+from ..archetypes import Archetype
+from ..zscan import spectral_data
+from ..fitz import prior_on_coeffs
 
 class TestArchetypes(unittest.TestCase):
 
@@ -39,5 +45,38 @@ class TestArchetypes(unittest.TestCase):
         ac, lc = split_archetype_coeff('ELG_12;LRG_5', [1,0,], nbands=3)
         self.assertEqual(ac, [1,0])
         self.assertEqual(lc, [list(), list(), list()])
+
+    def test_archetype_with_legendre(self):
+        """Test archetype method with legendre and prior terms"""
+        self.target = util.get_target()
+        spectra = self.target.spectra
+        self.target.nleg = 2
+        # Build dictionary of wavelength grids
+        dwave = { s.wavehash:s.wave for s in spectra }
+        self.target.bands = ['b', 'r']
+        (weights, flux, wflux) = spectral_data(self.target.spectra)
+        prior = prior_on_coeffs(1, self.target.nleg, 0.1, len(dwave.keys()))
+        filename = '../data/rrarchetype-galaxy.fits'
+        archetypes = Archetype(filename)
+
+        chi2, coeff, fulltype = archetypes.get_best_archetype(self.target, weights, flux, wflux, dwave, z=0.5, per_camera=True, n_nearest=None, trans=None, solve_method='bvls', prior=prior, use_gpu=False)
+
+    def test_archetype_without_legendre(self):
+        """Test archetype method without legendre and prior terms"""
+        self.target = util.get_target()
+        spectra = self.target.spectra
+        self.target.nleg = 0
+        # Build dictionary of wavelength grids
+        dwave = { s.wavehash:s.wave for s in spectra }
+        self.target.bands = ['b', 'r']
+        (weights, flux, wflux) = spectral_data(self.target.spectra)
+        prior = None
+        filename = '../data/rrarchetype-galaxy.fits'
+        archetypes = Archetype(filename)
+        chi2, coeff, fulltype = archetypes.get_best_archetype(self.target, weights, flux, wflux, dwave, z=0.5, per_camera=False, n_nearest=None, trans=None, solve_method='bvls', prior=prior, use_gpu=False)
+
+
+
+
 
 
