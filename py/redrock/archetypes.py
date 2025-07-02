@@ -458,7 +458,7 @@ def split_archetype_coeff(subtype, coeff, nbands, nleg=None):
     return archcoeff, legcoeff
 
 def find_archetypes(archetypes_dir=None):
-    """Return list of rrarchetype-*.fits archetype files
+    """Return list of rrarchetype-\*.fits archetype files
 
     Search directories in this order, returning results from first one found:
         - archetypes_dir
