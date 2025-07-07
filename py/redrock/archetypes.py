@@ -384,9 +384,10 @@ class Archetype():
                 (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux, nleg, self._narch, method=solve_method, n_nbh=1, prior=prior, use_gpu=use_gpu, bands=bands)
         else:
             bounds = np.zeros((2, nbasis))
-            bounds[1:] = -np.inf
+            bounds[0][1:] = -np.inf # first term is archetype, must have lower bound 0, the legendre term could have bounds from -inf to inf
             bounds[1] = np.inf
             solver_args = {'bounds':bounds}
+            # this logic will also support cases, when we want to run archetypes in no per camera mode but with Legendre polynomials
             if (use_gpu):
                 (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, gpuweights, gpuflux, gpuwflux, self._narch, nbasis, use_gpu=use_gpu, solve_matrices_algorithm=solve_method.upper(), solver_args=solver_args)
             else:
