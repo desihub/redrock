@@ -664,7 +664,7 @@ def rrdesi(options=None, comm=None):
     parser = argparse.ArgumentParser(description="Estimate redshifts from"
         " DESI target spectra.")
 
-    parser.add_argument("-t", "--templates", type=str, default=None,
+    parser.add_argument("-t", "--templates", type=str, nargs='+', default=None,
         required=False, help="template file or directory")
 
     parser.add_argument("--archetypes", type=str, default=None,
@@ -677,8 +677,8 @@ def rrdesi(options=None, comm=None):
     parser.add_argument("--archetype-nnearest", type=int, default=None,
         required=False, help="number of nearest archetypes (in chi2 space) to be used in archetype modeling, must be greater than 1 (default is None)")
 
-    parser.add_argument("--archetype-legendre-percamera", default=True, action="store_true",
-        required=False, help="If True, in archetype mode the fitting will be done for each camera/band")
+    parser.add_argument("--archetype-legendre-percamera", choices=["True", "False"], default=None,
+        required=False, help="Enable or disable per-camera fitting in archetype mode. Defaults to True if ncamera > 1.")
 
     parser.add_argument("--archetype-legendre-prior", type=float, default=0.1,
                         required=False, help="sigma to add as prior in solving linear equation, 1/sig**2 will be added, default is 0.1, Note: provide anything <=0 if you do not want to add any prior")
@@ -999,17 +999,24 @@ def rrdesi(options=None, comm=None):
             if comm_rank == 0:
                 print('no archetypes or --archetypes-no-legendre; will turn off all the Legendre related arguments')
             archetype_legendre_prior = None
-            args.archetype_legendre_degree =0
+            args.archetype_legendre_degree = 0 # to make sure no Legendre polynomial is used, only archetypes is used to fit the spectra
             archetype_legendre_percamera = False
         else:
             if comm_rank == 0 and args.archetypes is not None:
                 print('Will be using default archetype values.')
                 print('Number of minimum redshift for which archetype redshift fitting will be done = %d'%(nminima))
 
-            if ncamera>=1:
-                archetype_legendre_percamera = True
+            if ncamera > 1:
+                if args.archetype_legendre_percamera is None:
+                    archetype_legendre_percamera = True  # default behavior
+                    printstr = "and per camera (default)"
+                else:
+                    archetype_legendre_percamera = args.archetype_legendre_percamera == "True"
+                    printstr = "and per camera" if archetype_legendre_percamera else "but no per camera"
+
                 if comm_rank == 0 and args.archetypes is not None:
-                    print('Number of cameras = %d, percamera fitting will be done'%(ncamera))
+                    print(f"Number of cameras = {ncamera}, {printstr} fitting will be done")
+
             else:
                 archetype_legendre_percamera = False
                 if comm_rank == 0 and args.archetypes is not None:
@@ -1039,6 +1046,9 @@ def rrdesi(options=None, comm=None):
 
         # Read the template data
         # Pass both use_gpu (this proc) and args.gpu (if any proc is using GPU)
+        if len(args.templates) == 1:
+            args.templates = args.templates[0] # to make sure directory also works
+
         dtemplates = load_dist_templates(dwave, templates=args.templates,
                                          zscan_galaxy=args.zscan_galaxy,
                                          zscan_qso=args.zscan_qso,
