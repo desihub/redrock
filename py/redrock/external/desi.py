@@ -1020,7 +1020,7 @@ def rrdesi(options=None, comm=None):
             else:
                 archetype_legendre_percamera = False
                 if comm_rank == 0 and args.archetypes is not None:
-                    print('No per camera fitting will be done.')
+                    print(f'Number of cameras = {ncamera}, No per camera fitting will be done.')
             if args.archetype_legendre_degree>0:
                 if comm_rank == 0 and args.archetypes is not None:
                     print('legendre polynomials of degrees %s will be added to Archetypes'%([i for i in range(args.archetype_legendre_degree)]))
