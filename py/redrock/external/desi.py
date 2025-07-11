@@ -613,7 +613,7 @@ class DistTargetsDESI(DistTargets):
                             self._my_data[toff].spectra[tspec_res[t]].R = dia
                             #- Coadds replace Rcsr so only compute if not coadding
                             if not coadd and cache_Rcsr:
-                                self._my_data[toff].spectra[tspec_res[t]].Rcsr = dia.tocsr()
+                                self._my_data[toff].spectra[tspec_res[t]]._Rcsr = dia.tocsr()
                             tspec_res[t] += 1
                     toff += 1
 
