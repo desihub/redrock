@@ -540,7 +540,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             if (archetypes):
                 if (len(archetype_spectype)==len(all_spectype)):
                     if n_nearest is None:
-                        if tzfit["coeff"].ndim==1: ## this makes sure that code soen't fail if --archetypes-no-legendre is provided
+                        if tzfit["coeff"].ndim==1: ## this makes sure that code doesn't fail if --archetypes-no-legendre is provided
                             tzfit["coeff"] = tzfit["coeff"].reshape(-1, 1)
                         ibad = tzfit['coeff'][:,0]<=0. # means that best archetype has negative model
                     else:
