@@ -1046,7 +1046,7 @@ def rrdesi(options=None, comm=None):
 
         # Read the template data
         # Pass both use_gpu (this proc) and args.gpu (if any proc is using GPU)
-        if len(args.templates) == 1:
+        if (args.templates is not None) and len(args.templates) == 1:
             args.templates = args.templates[0] # to make sure directory also works
 
         dtemplates = load_dist_templates(dwave, templates=args.templates,
