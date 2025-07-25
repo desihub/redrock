@@ -6,6 +6,7 @@ TODO: expand tests
 
 import unittest
 import os
+import importlib
 import numpy as np
 from scipy.interpolate import interp1d
 from . import util
@@ -16,9 +17,10 @@ from ..fitz import prior_on_coeffs
 class TestArchetypes(unittest.TestCase):
 
     def setUp(self):
-        self.filename = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), '..', 'data', 'rrarchetype-galaxy.fits')
-        )
+        self.filename = importlib.resources.files('redrock.test').joinpath('data/rrarchetype-galaxy-test.fits')
+        # self.filename = os.path.abspath(
+        #     os.path.join(os.path.dirname(__file__), '..', 'data', 'rrarchetype-galaxy.fits')
+        # )
         self.archetypes = Archetype(self.filename)  # moved here
 
     def test_archetype_load(self):
