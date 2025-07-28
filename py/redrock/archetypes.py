@@ -216,11 +216,11 @@ class Archetype():
             model = R.dot(model)
 
         return model
-    
+
     def nearest_neighbour_model(self, target,weights,flux,wflux,dwave,z, n_nearest, zzchi2, trans, per_camera, dedges=None, binned=None, use_gpu=False, prior=None, ncam=None):
-        
+
         """Nearest neighbour archetype approach; fitting with a combinating of nearest archetypes in chi2 space
-        
+
         Args:
             target (Target): the target object that contains spectra
             weights (array): concatenated spectral weights (ivar).
@@ -237,7 +237,7 @@ class Archetype():
             use_gpu (bool): use GPU or not
             prior (2d array): prior matrix on coefficients (1/sig**2)
             ncam (int): Number of camera for given Instrument
-        
+
         Returns:
             chi2 (float): chi2 of best fit model
             zcoeff (array): zcoeff of best fit model
@@ -273,7 +273,7 @@ class Archetype():
             if (nleg > 0):
                 tdata[hs] = np.append(tdata[hs], legendre[hs].transpose()[None,:,:], axis=2)
             nbasis = tdata[hs].shape[2]
-            
+
         if per_camera:
             #Use CPU mode since small tdata
             (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux, nleg, 1, method='bvls', n_nbh=n_nearest, prior=prior, use_gpu=False, bands=target.bands)
@@ -304,7 +304,7 @@ class Archetype():
             solve_method (string): bvls or pca
             prior (2d array): prior matrix on coefficients (1/sig**2)
             use_gpu (bool): use GPU or not
-            
+
         Returns:
             chi2 (float): chi2 of best archetype
             zcoef (array): zcoeff of best archetype
@@ -334,17 +334,14 @@ class Archetype():
             ncam=len(list(dwave.keys())) # for e.g., DESI has three cameras namely b, r, z
         else:
             ncam = 1 # entire spectra
-        
+
         #wkeys = list(dwave.keys())
         #new_keys = [wkeys[0], wkeys[2], wkeys[1]]
         #obs_wave = np.concatenate([dwave[key] for key in new_keys])
-        
+
         nleg = legendre[list(legendre.keys())[0]].shape[0]
         zzchi2 = np.zeros(self._narch, dtype=np.float64)
         zzcoeff = np.zeros((self._narch,  1+ncam*(nleg)), dtype=np.float64)
-        
-        #TODO: return best fit model as well
-        #zzmodel = np.zeros((self._narch, obs_wave.size), dtype=np.float64)
 
         if (trans is None):
             #Calculate Lyman transmission if not passed as dict
@@ -360,10 +357,10 @@ class Archetype():
 
         tdata = dict()
         nbasis = 1
-        
-        ## Prior must be redefined to remove nearest neighbour approach, 
+
+        ## Prior must be redefined to remove nearest neighbour approach,
         # because prior was defined based on n_nearest argument..
-        # this logic is needed because the first fitting is done with just one archetype 
+        # this logic is needed because the first fitting is done with just one archetype
         #and then nearest neighbour approach is implemented
         if n_nearest is not None:
             nnearest_prior = prior.copy() # prior corresponding to nearest_nbh method
@@ -386,10 +383,15 @@ class Archetype():
             else:
                 (zzchi2, zzcoeff) = per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux, nleg, self._narch, method=solve_method, n_nbh=1, prior=prior, use_gpu=use_gpu, bands=bands)
         else:
+            bounds = np.zeros((2, nbasis))
+            bounds[0][1:] = -np.inf # first term is archetype, must have lower bound 0, the legendre term could have bounds from -inf to inf
+            bounds[1] = np.inf
+            solver_args = {'bounds':bounds}
+            # this logic will also support cases, when we want to run archetypes in no per camera mode but with Legendre polynomials
             if (use_gpu):
-                (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, gpuweights, gpuflux, gpuwflux, self._narch, nbasis, use_gpu=use_gpu)
+                (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, gpuweights, gpuflux, gpuwflux, self._narch, nbasis, use_gpu=use_gpu, solve_matrices_algorithm=solve_method.upper(), solver_args=solver_args)
             else:
-                (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, weights, flux, wflux, self._narch, nbasis, use_gpu=use_gpu)
+                (zzchi2, zzcoeff) = calc_zchi2_batch(spectra, tdata, weights, flux, wflux, self._narch, nbasis, use_gpu=use_gpu, solve_matrices_algorithm=solve_method.upper(), solver_args=solver_args)
 
         if n_nearest is not None:
             best_chi2, best_coeff, best_fulltype = self.nearest_neighbour_model(target,weights,flux,wflux,dwave,z, n_nearest, zzchi2, trans, per_camera, dedges=dedges, binned=binned, use_gpu=use_gpu, prior=nnearest_prior, ncam=ncam)

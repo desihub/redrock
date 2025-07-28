@@ -260,7 +260,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
 
     if archetypes:
         archetype_spectype = list(archetypes.keys()) # to account for the case if only one archetype is provided
-    
+
     if not priors is None:
         priors = Priors(priors)
 
@@ -498,9 +498,9 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     assert len(spectype)==nmin
                     tmp['spectype'] = np.array([spectype]).reshape((nmin, 1))
                     tmp['subtype'] = np.array([subtype]).reshape((nmin, 1))
-                
+
                 tmp['ncoeff'] = np.array([tmp['coeff'].shape[1]]*nmin).reshape((nmin, 1))
-                
+
                 # set max_velo_diff differently for STARs, but watch out
                 # for archtypes which have spectype as list instead of scalar
                 if (np.isscalar(spectype) and spectype.upper() == 'STAR') or spectype[0].upper() == 'STAR':
@@ -508,18 +508,18 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                 else:
                     max_velo_diff = constants.max_velo_diff
                 tmp['max_velo_diff'] = np.full((nmin,1), max_velo_diff)
-              
+
                 tzfit.append(tmp)
                 del allresults[tid][fulltype]['zfit']
 
             maxncoeff = max([tmp['coeff'].shape[1] for tmp in tzfit])
+
             for tmp in tzfit:
                 if tmp['coeff'].shape[1] < maxncoeff:
                     n = maxncoeff - tmp['coeff'].shape[1]
                     nx = tmp['coeff'].shape[0]
                     c = np.append(tmp['coeff'], np.zeros((nx, n)), axis=1)
                     tmp['coeff'] = c
-
             #tzfit = astropy.table.vstack(tzfit)
             ## Equivalent of astropy.table.vstack(tzfit) - vstack each array
             tzfit2 = dict()
@@ -536,9 +536,12 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             #np arrays instead of astropy Table
             l = len(tzfit['chi2'])
             tzfit['targetid'] = np.array([tid]*l)
+
             if (archetypes):
                 if (len(archetype_spectype)==len(all_spectype)):
                     if n_nearest is None:
+                        if tzfit["coeff"].ndim==1: ## this makes sure that code doesn't fail if --archetypes-no-legendre is provided
+                            tzfit["coeff"] = tzfit["coeff"].reshape(-1, 1)
                         ibad = tzfit['coeff'][:,0]<=0. # means that best archetype has negative model
                     else:
                         ibad = np.any(tzfit['coeff'][:,:n_nearest]<0, axis=1) # any archetype has negative coeff
