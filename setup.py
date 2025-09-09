@@ -84,18 +84,11 @@ for m in message:
         print(message[m])
         sys.exit(1)
 
-setup_keywords = dict()
 #
 # Identify files in bin/ that are executable.
 #
 if os.path.isdir('bin'):
-    setup_keywords['scripts'] = [fname for fname in glob.glob(os.path.join('bin', '*'))
-                                 if not os.path.basename(fname).endswith('.rst')]
+    scripts = [fname for fname in glob.glob(os.path.join('bin', '*'))
+               if os.access(fname, os.X_OK)]
 
-#
-# Does install_redrock_templates install into redrock/templates?
-#
-if 'RR_TEMPLATE_DIR' not in os.environ:
-    setup_keywords['package_data'] = {'redrock': ['templates/*.fits']}
-
-setup(**setup_keywords)
+setup(scripts=scripts)
