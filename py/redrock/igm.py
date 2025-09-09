@@ -1,8 +1,8 @@
 """
-redrock.utils
-=============
+redrock.igm
+===========
 
-Redrock utility functions.
+Calculate intergalactic medium (IGM) absorption.
 """
 
 import sys
@@ -19,14 +19,14 @@ from . import constants
 
 class Inoue14(object):
     def __init__(self, scale_tau=1.):
-        """
+        r"""
         IGM absorption from Inoue et al. (2014)
-        
+
         Parameters
         ----------
         scale_tau : float
-            Parameter multiplied to the IGM :math:`\tau` values (exponential 
-            in the linear absorption fraction).  
+            Parameter multiplied to the IGM :math:`\tau` values (exponential
+            in the linear absorption fraction).
             I.e., :math:`f_\mathrm{igm} = e^{-\mathrm{scale\_tau} \tau}`.
 
         Copyright (c) 2016-2022 Gabriel Brammer
@@ -52,7 +52,7 @@ class Inoue14(object):
         Code updated in 2023 by Craig Warner to add GPU support.
         """
         super(Inoue14, self).__init__()
-        
+
         self._load_data()
         self.scale_tau = scale_tau
         self.has_gpu_data = False
@@ -62,24 +62,24 @@ class Inoue14(object):
         """C-like power, a**b
         """
         return a**b
-    
+
     def _load_data(self):
         from importlib import resources
         LAF_file = resources.files('redrock').joinpath('data/LAFcoeff.txt')
         DLA_file = resources.files('redrock').joinpath('data/DLAcoeff.txt')
-    
+
         data = np.loadtxt(LAF_file, unpack=True)
         ix, lam, ALAF1, ALAF2, ALAF3 = data
         self.lam = lam[:,np.newaxis]
         self.ALAF1 = ALAF1[:,np.newaxis]
         self.ALAF2 = ALAF2[:,np.newaxis]
         self.ALAF3 = ALAF3[:,np.newaxis]
-        
+
         data = np.loadtxt(DLA_file, unpack=True)
         ix, lam, ADLA1, ADLA2 = data
         self.ADLA1 = ADLA1[:,np.newaxis]
         self.ADLA2 = ADLA2[:,np.newaxis]
-                
+
         return True
 
     def copy_data_to_gpu(self):
@@ -152,15 +152,15 @@ class Inoue14(object):
             ADLA2 = self.ADLA2[:,:,None]
             l2 = self.lam[:,:,None]
         z1DLA = 2.0
-        
+
         tLSDLA_value = np.zeros_like(lobs*l2)
-        
+
         x0 = ((lobs / (1+zS)[:,None]) < l2) & (lobs < l2*(1.+z1DLA))
         x1 = ((lobs / (1+zS)[:,None]) < l2) & ~(lobs < l2*(1.+z1DLA))
-        
+
         tLSDLA_value[x0] += ((ADLA1/l2**2)*lobs**2)[x0]
         tLSDLA_value[x1] += ((ADLA2/l2**3)*lobs**3)[x1]
-                
+
         return tLSDLA_value.sum(axis=0)
 
 
@@ -176,9 +176,9 @@ class Inoue14(object):
             power = np.power
         z1DLA = 2.0
         lamL = 911.8
-        
+
         tLCDLA_value = np.zeros_like(lobs)
-        
+
         x0 = lobs < lamL*(1.+zS)[:,None]
 
         y0 = x0 & (zS[:,None] < z1DLA)
@@ -188,7 +188,7 @@ class Inoue14(object):
         x1 = lobs >= lamL*(1.+z1DLA)
         tLCDLA_value[y0 & x1] = 0.04696 * (power(1.0+zS[:,None], 3)*y0)[y0 & x1] - 0.01779 * (power(1.0+zS[:,None], 3.3)*y0)[y0 & x1] * power(lobs[y0 & x1]/lamL, (-3e-1)) - 0.02916 * power(lobs[y0 & x1]/lamL, 3)
         tLCDLA_value[y0 & ~x1] =0.6340 + 0.04696 * (power(1.0+zS[:,None], 3)*y0)[y0 & ~x1] - 0.01779 * (power(1.0+zS[:,None], 3.3)*y0)[y0 & ~x1] * power(lobs[y0 & ~x1]/lamL, (-3e-1)) - 0.1347 * power(lobs[y0 & ~x1]/lamL, 2) - 0.2905 * power(lobs[y0 & ~x1]/lamL, (-3e-1))
-        
+
         return tLCDLA_value
 
 
@@ -207,9 +207,9 @@ class Inoue14(object):
         lamL = 911.8
 
         tLCLAF_value = np.zeros_like(lobs)
-        
+
         x0 = lobs < lamL*(1.+zS)[:,None]
-        y0 = x0 & (zS[:,None] < z1LAF) 
+        y0 = x0 & (zS[:,None] < z1LAF)
         tLCLAF_value[y0] = 0.3248 * (power(lobs[y0]/lamL, 1.2) - (power(1.0+zS[:,None], -9e-1)*y0)[y0] * power(lobs[y0]/lamL, 2.1))
 
         y0 = x0 & (zS[:,None] < z2LAF)
@@ -225,7 +225,7 @@ class Inoue14(object):
         tLCLAF_value[y0 & x1] = 5.221e-4 * ((power(1.0+zS[:,None], 3.4)*y0)[y0 & x1] * power(lobs[y0 & x1]/lamL, 2.1) - power(lobs[y0 & x1]/lamL, 5.5))
         tLCLAF_value[y0 & x2] = 5.221e-4 * (power(1.0+zS[:,None], 3.4)*y0)[y0 & x2] * power(lobs[y0 & x2]/lamL, 2.1) + 0.2182 * power(lobs[y0 & x2]/lamL, 2.1) - 2.545e-2 * power(lobs[y0 & x2]/lamL, 3.7)
         tLCLAF_value[y0 & x3] = 5.221e-4 * (power(1.0+zS[:,None], 3.4)*y0)[y0 & x3] * power(lobs[y0 & x3]/lamL, 2.1) + 0.3248 * power(lobs[y0 & x3]/lamL, 1.2) - 3.140e-2 * power(lobs[y0 & x3]/lamL, 2.1)
-            
+
         return tLCLAF_value
 
 
@@ -268,15 +268,15 @@ class Inoue14(object):
 
     def build_grid(self, zgrid, lrest):
         """Build a spline interpolation object for fast IGM models
-        
+
         Returns: self.interpolate
         """
-        
+
         from scipy.interpolate import CubicSpline
         igm_grid = np.zeros((len(zgrid), len(lrest)))
         for iz in range(len(zgrid)):
             igm_grid[iz,:] = self.full_IGM(zgrid[iz], lrest*(1+zgrid[iz]))
-        
+
         self.interpolate = CubicSpline(zgrid, igm_grid)
 
 
