@@ -7,9 +7,16 @@ redrock Change Log
 
 * Use single precision for outputs; update readers (PR `#329`_).
 * Fix ``native_endian`` for numpy 2.x (PR `#332`_).
+* Bug fix for ``--archetypes-no-legendre`` mode failure and other issues (PR `#334`_).
+* Fix crash when using ``--allspec`` (PR `#336`_).
+* Update test matrix to catch additional NumPy 2 warnings; add
+  ``pyproject.toml`` file; update other top-level metadata files (PR `#341`_).
 
 .. _`#329`: https://github.com/desihub/redrock/pull/329
 .. _`#332`: https://github.com/desihub/redrock/pull/332
+.. _`#334`: https://github.com/desihub/redrock/pull/334
+.. _`#336`: https://github.com/desihub/redrock/pull/336
+.. _`#341`: https://github.com/desihub/redrock/pull/341
 
 0.20.4 (2025-03-14)
 -------------------
