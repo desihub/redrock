@@ -184,7 +184,7 @@ class PlotSpec(object):
                     np.max(model)*1.05)
 
         if (ymin==0.) & (ymax==0.):
-             ymax = 1.
+            ymax = 1.
 
         #- Label object type and redshift
         label = 'znum {} {} z={:.3f}'.format(self.znum, fulltype, zz['z'])

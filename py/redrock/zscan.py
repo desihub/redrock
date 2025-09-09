@@ -320,7 +320,13 @@ def per_camera_coeff_with_least_square_batch(target, tdata, weights, flux, wflux
                     for k in range(n_nbh, n_nbh+nleg):
                         tdata2[hs][:,k+nleg*i] = tdata[hs][j,:,k] # Legendre polynomials terms
                 tdata2[hs] = tdata2[hs][None,:,:]
-            zzchi2[j], zzcoeff[j] = calc_zchi2_batch(spectra, tdata2, weights, flux, wflux, 1, nbasis, solve_matrices_algorithm=method, solver_args=solver_args, prior=prior, use_gpu=use_gpu)
+
+            # calc_zchi2_batch returns zzchi2,zzcoeff tuple of length-1 arrays in this case
+            tmp_zzchi2, tmp_zcoeff = calc_zchi2_batch(spectra, tdata2, weights, flux, wflux, 1, nbasis,
+                                                      solve_matrices_algorithm=method, solver_args=solver_args,
+                                                      prior=prior, use_gpu=use_gpu)
+            zzchi2[j] = tmp_zzchi2[0]
+            zzcoeff[j] = tmp_zcoeff[0]
 
     # saving leading archetype coefficients in correct order
     ret_zcoeff['alpha'] = [zzcoeff[:,k] for k in range(n_nbh)] # archetype coefficient(s)
