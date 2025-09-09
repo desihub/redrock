@@ -198,7 +198,7 @@ def _trapz_rebin_batch(x, y, edges, myz, results, redshifted_x):
         ##Numba does not handle vectorized multiplication so we need to
         # use loop here to multiply by redshift
         for i in range(nx):
-          redshifted_x[i] = x[i]*(1.+myz[iz])
+            redshifted_x[i] = x[i]*(1.+myz[iz])
         ibasis = 0 #index counter for bases
         while ibasis < nbasis:
             ## * Uncomment the line below to change output shape * ##
@@ -253,11 +253,11 @@ def trapz_rebin(x, y, xnew=None, edges=None, myz=None, use_gpu=False, xmin=None,
     Args:
         x (array): input x values.
         y (1-d or 2-d array): input y values (batch mode allows 2-d array
-            with multiple bases). 
+            with multiple bases).
         edges (array): (optional) new bin edges.
         myz (array): (optional) redshift array to rebin in batch,
             applying redshifts on-the-fly to x
-        use_gpu (boolean): whether or not to use GPU algorithm 
+        use_gpu (boolean): whether or not to use GPU algorithm
         xmin (float): (optional) minimum x-value - x[0]*(1+myz.max()) will be
             used if omitted - this is useful to avoid GPU to CPU copying in
             the case where x is a CuPy array and providing the scalar value
@@ -396,7 +396,7 @@ def _trapz_rebin_batch_gpu(x, y, edges, myz, result_shape):
             (nbin, nbasis) whereas if redshift array of length 1 was given
             as input it should be (1, nbin, nbasis).  Similarly if the y
             array given to trapz_rebin is 1-d, the basis dimension is omitted
-            but if it is 2-d with (1, n) shape, it will explicitly be 1. 
+            but if it is 2-d with (1, n) shape, it will explicitly be 1.
 
 
     Returns:
@@ -439,7 +439,7 @@ def _trapz_rebin_batch_gpu(x, y, edges, myz, result_shape):
     n = nbin*nbasis*nz
     nt = len(x)
     if (result_shape is None):
-      result_shape = (nz, nbasis, nbin)
+        result_shape = (nz, nbasis, nbin)
 
     blocks = (n+block_size-1)//block_size
     result = cp.empty(result_shape, dtype=cp.float64)
@@ -492,7 +492,7 @@ def rebin_template(template, myz, dwave=None, dedges=None, use_gpu=False, xmin=N
     if (xmax is None):
         xmax = template.maxwave*(1+myz.min())
     #rebin all z and all bases in batch in parallel
-    #and return dict of 3-d numpy / cupy arrays 
+    #and return dict of 3-d numpy / cupy arrays
     if dwave is not None:
         #Handle the case where dwave is passed
         for hs, wave in dwave.items():
