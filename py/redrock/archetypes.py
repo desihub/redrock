@@ -340,8 +340,8 @@ class Archetype():
         #obs_wave = np.concatenate([dwave[key] for key in new_keys])
 
         nleg = legendre[list(legendre.keys())[0]].shape[0]
-        zzchi2 = np.zeros(self._narch, dtype=np.float64)
-        zzcoeff = np.zeros((self._narch,  1+ncam*(nleg)), dtype=np.float64)
+        #zzchi2 = np.zeros(self._narch, dtype=np.float64)
+        #zzcoeff = np.zeros((self._narch,  1+ncam*(nleg)), dtype=np.float64)
 
         if (trans is None):
             #Calculate Lyman transmission if not passed as dict
