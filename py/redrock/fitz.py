@@ -287,6 +287,8 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
                                              solve_matrices_algorithm=template.solve_matrices_algorithm,
                                              use_gpu=False)
             coeff = coeff[0,:]
+            pca_coeff = coeff
+
         except ValueError as err:
             if zmin<redshifts[0] or redshifts[-1]<zmin:
                 #- beyond redshift range can be invalid for template
@@ -341,7 +343,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
 
             results.append(dict(z=zbest, zerr=zerr, zwarn=zwarn,
                 chi2=chi2min, zz=zz, zzchi2=zzchi2,
-                coeff=coeff, fulltype=fulltype, fitmethod=archetype.method))
+                coeff=coeff, fulltype=fulltype, fitmethod=archetype.method, pca_method=template.method, pca_coeff=pca_coeff, pca_fulltype=template.full_type))
 
     #- Sort results by chi2min; detailed fits may have changed order
     ii = np.argsort([tmp['chi2'] for tmp in results])

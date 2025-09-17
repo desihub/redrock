@@ -523,10 +523,18 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             #tzfit = astropy.table.vstack(tzfit)
             ## Equivalent of astropy.table.vstack(tzfit) - vstack each array
             tzfit2 = dict()
+
             for k in tzfit[0].keys():
                 tzfit2[k] = list()
                 for i in range(len(tzfit)):
-                    tzfit2[k].append(tzfit[i][k])
+                    if k in tzfit[i].keys():
+                        tzfit2[k].append(tzfit[i][k])
+                    else:
+                        v = tzfit[0][k]
+                        tzfit2[k].append(
+                                        np.zeros_like(v) if isinstance(v, np.ndarray) else type(v)()
+                                    )
+
                 tzfit2[k] = np.vstack(tzfit2[k])
                 if (tzfit2[k].shape[1] == 1):
                     tzfit2[k] = tzfit2[k].flatten()
@@ -573,6 +581,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             for spectype in np.unique(tzfit['spectype']):
                 ii = np.where(tzfit['spectype'] == spectype)[0]
                 iikeep.extend(ii[0:nminima])
+
 
             if (len(iikeep) < l):
                 for k in tzfit.keys():
