@@ -658,9 +658,11 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             del allresults[tid]['meta']
 
         # Standardize column sizes
+
         if allzfit['subtype'].dtype != '<U20':
-            allzfit.replace_column('subtype', allzfit['subtype'].astype('<U20'))
-            #TODO: Think about standardizing the array dtype in case nearest neighbours is used
+            max_length = max(len(s) for s in allzfit['subtype']) # this is particularly important if ever use archetype nearest neighbour approach
+            dtype = f'<U{max_length}'
+            allzfit.replace_column('subtype', allzfit['subtype'].astype(dtype))
 
         if allzfit['spectype'].dtype != '<U6':
             allzfit.replace_column('spectype',allzfit['spectype'].astype('<U6'))
