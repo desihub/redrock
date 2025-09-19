@@ -21,6 +21,8 @@ from .zwarning import ZWarningMask as ZW
 
 from .igm import transmission_Lyman
 
+from .archetypes import split_archetype_coeff
+
 def get_dv(z, zref):
     """Returns velocity difference in km/s for two redshifts
 
@@ -340,10 +342,12 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
                 prior=None
             chi2min, coeff, fulltype = archetype.get_best_archetype(target,weights,flux,wflux,dwave,zbest, per_camera, n_nearest, trans=trans, use_gpu=use_gpu, prior=prior)
             del trans
+            subtype = fulltype.split(':::')[1]
 
+            archcoeff, legcoeff = split_archetype_coeff(subtype, coeff, ncamera, deg_legendre)
             results.append(dict(z=zbest, zerr=zerr, zwarn=zwarn,
                 chi2=chi2min, zz=zz, zzchi2=zzchi2,
-                coeff=coeff, fulltype=fulltype, fitmethod=archetype.method,
+                coeff=coeff, archcoeff=archcoeff, legcoeff=legcoeff, fulltype=fulltype, fitmethod=archetype.method,
                 pca_coeff=pca_coeff, pca_spectype=template._rrtype, pca_subtype=template.sub_type))
 
     #- Sort results by chi2min; detailed fits may have changed order
@@ -375,6 +379,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
     #a list of dicts of scalars and 1d arrays to a single dict
     #with 1d and 2d np arrays.
     tmp = dict()
+
     for k in results[0].keys():
         tmp[k] = list()
         for i in range(len(results)):

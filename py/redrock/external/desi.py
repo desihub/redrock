@@ -1160,7 +1160,7 @@ def rrdesi(options=None, comm=None):
 
             #- Evaluate best-fit models for local targets,
             #- then collect into all_models on rank 0
-            local_models = targets.eval_models(zbest, templates, archetypes)
+            local_models = targets.eval_models(zbest, templates, archetypes, args.archetype_legendre_degree)
             local_targetids = targets.local_target_ids()
             if targets.comm is not None:
                 all_models = targets.comm.gather(local_models, root=0)

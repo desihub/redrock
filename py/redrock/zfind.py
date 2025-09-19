@@ -523,7 +523,6 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             #tzfit = astropy.table.vstack(tzfit)
             ## Equivalent of astropy.table.vstack(tzfit) - vstack each array
             tzfit2 = dict()
-
             for k in tzfit[0].keys():
                 tzfit2[k] = list()
                 for i in range(len(tzfit)):
@@ -612,7 +611,6 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
         try:
             allzfit.columns.move_to_end('targetid', last=False)
             for k in allzfit.colnames:
-                print(f'INFO: k.lower(): {k.lower()}')
                 if 'pca' in k.lower():
                     allzfit.columns.move_to_end(k)
         except:

@@ -220,11 +220,10 @@ class Target(object):
             #- followed by ncamera*nlegendre coefficients
             #- import here to avoid circular import
             from .archetypes import split_archetype_coeff
-            archcoeff, legcoeff = split_archetype_coeff(subtype, coeff, len(self.bands))
-
+            archcoeff, legcoeff = split_archetype_coeff(subtype, coeff, len(self.bands), nleg)
             ax = archetypes[spectype]
             for i, sp in enumerate(self.spectra):
-                self.model[sp.wavehash] = ax.eval(subtype, archcoeff, sp.wave, z, R=sp.Rcsr, legcoeff=legcoeff[i])
+                self.model[sp.wavehash] = ax.eval(subtype, archcoeff, sp.wave, z, R=sp.Rcsr, legcoeff=legcoeff[i], deg_legendre=nleg)
 
         else:
             tx = templates[(spectype, subtype)]
@@ -439,7 +438,7 @@ class DistTargets(object):
         """
         return self._local_data()
 
-    def eval_models(self, bestfit, templates, archetypes=None):
+    def eval_models(self, bestfit, templates, archetypes=None, nleg=None):
         """
         Calls target.eval_model(bestfit, templates, archetypes) for each local target
 
@@ -460,7 +459,7 @@ class DistTargets(object):
         models = list()
         for tgt in self.local():
             i = np.where(bestfit['TARGETID'] == tgt.id)[0][0]
-            model = tgt.eval_model(bestfit[i], templates, archetypes)
+            model = tgt.eval_model(bestfit[i], templates, archetypes, nleg)
             models.append(model)
 
         return models
