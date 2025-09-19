@@ -532,7 +532,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     else:
                         v = tzfit[0][k]
                         tzfit2[k].append(
-                                        np.zeros_like(v) if isinstance(v, np.ndarray) else type(v)()
+                                        v if isinstance(v, np.ndarray) else type(v)()
                                     )
 
                 tzfit2[k] = np.vstack(tzfit2[k])
@@ -611,6 +611,10 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
         # Cosmetic: move TARGETID to be first column as primary key
         try:
             allzfit.columns.move_to_end('targetid', last=False)
+            for k in allzfit.colnames:
+                print(f'INFO: k.lower(): {k.lower()}')
+                if 'pca' in k.lower():
+                    allzfit.columns.move_to_end(k)
         except:
             # Must be using python2, don't mess with the order.
             pass

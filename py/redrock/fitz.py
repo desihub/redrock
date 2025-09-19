@@ -343,7 +343,8 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
 
             results.append(dict(z=zbest, zerr=zerr, zwarn=zwarn,
                 chi2=chi2min, zz=zz, zzchi2=zzchi2,
-                coeff=coeff, fulltype=fulltype, fitmethod=archetype.method, pca_method=template.method, pca_coeff=pca_coeff, pca_fulltype=template.full_type))
+                coeff=coeff, fulltype=fulltype, fitmethod=archetype.method,
+                pca_coeff=pca_coeff, pca_spectype=template._rrtype, pca_subtype=template.sub_type))
 
     #- Sort results by chi2min; detailed fits may have changed order
     ii = np.argsort([tmp['chi2'] for tmp in results])
