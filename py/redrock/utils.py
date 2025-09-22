@@ -173,7 +173,7 @@ def mp_array(original):
     # https://github.com/desihub/redrock/issues/250; capture it.
     if original.size == 0:
         return original
-    
+
     typecode = original.dtype.char
     shape = original.shape
 
@@ -258,8 +258,8 @@ def getGPUCountMPI(comm):
     return len(pci_id_list)
 
 def reduced_wavelength(wave):
-    """function to calculate reduced wavelength arrya for 
-    legendre polynomial in archetype mode, 
+    """function to calculate reduced wavelength arrya for
+    legendre polynomial in archetype mode,
     legendre polynomials are orthogonal in [-1,1]
     Args:
         wave (array): wavelength for which reduced wavelengths to be estimated
@@ -269,3 +269,11 @@ def reduced_wavelength(wave):
     wavemax = wave.max()
     wavemin = wave.min()
     return 2*(wave - wavemin) / (wavemax - wavemin) - 1
+
+def extra_columns_in_archetype_mode():
+    """dictionary of extra column to be added in archetye mode
+    """
+    pca_map = {"pca_coeff": "coeff", "pca_subtype": "subtype", "pca_spectype": "spectype"}
+    zero_like_keys = {"archcoeff", "legcoeff"}
+
+    return pca_map, zero_like_keys

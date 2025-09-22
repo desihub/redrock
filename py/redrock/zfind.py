@@ -17,7 +17,7 @@ import astropy.table
 
 from . import constants
 
-from .utils import elapsed
+from .utils import elapsed, extra_columns_in_archetype_mode
 
 from .targets import distribute_targets
 
@@ -260,6 +260,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
 
     if archetypes:
         archetype_spectype = list(archetypes.keys()) # to account for the case if only one archetype is provided
+        pca_map, zero_like_keys = extra_columns_in_archetype_mode()
 
     if not priors is None:
         priors = Priors(priors)
@@ -474,7 +475,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     if 'fulltype' in tmp.keys():#to take care of case when archetype is applied only for one template
                         spectype = list()
                         subtype = list()
-                        #l el is a list with one element (corresponding to each minimum)
+                        # el is a list with one element (corresponding to each minimum)
                         for el in tmp['fulltype']:
                             this_spectype, this_subtype = parse_fulltype(el[0])
                             spectype.append(this_spectype)
@@ -522,6 +523,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     tmp['coeff'] = c
             #tzfit = astropy.table.vstack(tzfit)
             ## Equivalent of astropy.table.vstack(tzfit) - vstack each array
+
             tzfit2 = dict()
             for k in tzfit[0].keys():
                 tzfit2[k] = list()
@@ -529,10 +531,15 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     if k in tzfit[i].keys():
                         tzfit2[k].append(tzfit[i][k])
                     else:
-                        v = tzfit[0][k]
-                        tzfit2[k].append(
-                                        v if isinstance(v, np.ndarray) else type(v)()
-                                    )
+                        row = tzfit[i]
+                        ref = tzfit[0][k]
+                        if k in pca_map and pca_map[k] in row:
+                            val = row[pca_map[k]]
+                            ref = tzfit[0][k]  # reference array
+                            val = np.pad(val, ((0,0),(0, max(0, ref.shape[1] - val.shape[1]))), constant_values=0)[:, :ref.shape[1]]
+                            tzfit2[k].append(val)
+                        elif k in zero_like_keys:
+                            tzfit2[k].append(np.zeros_like(tzfit[0][k]))
 
                 tzfit2[k] = np.vstack(tzfit2[k])
                 if (tzfit2[k].shape[1] == 1):
