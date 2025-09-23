@@ -14,7 +14,7 @@ import scipy.special
 
 from .utils import reduced_wavelength
 
-from .zscan import calc_zchi2_one, calc_zchi2_batch
+from .zscan import calc_zchi2_batch
 
 from .rebin import trapz_rebin
 
@@ -285,8 +285,7 @@ class Archetype():
 
         sstype = ['%s'%(self._subtype[k]) for k in iBest] # subtypes of best archetypes
         fsstype = ';'.join(sstype)
-        #print(sstype)
-        #print(z, zzchi2, zzcoeff, fsstype)
+
         return zzchi2[0], zzcoeff[0], make_fulltype(self._rrtype, fsstype)
 
     def get_best_archetype(self,target,weights,flux,wflux,dwave,z, per_camera, n_nearest, trans=None, solve_method='bvls', prior=None, use_gpu=False):
@@ -337,13 +336,7 @@ class Archetype():
         else:
             ncam = 1 # entire spectra
 
-        #wkeys = list(dwave.keys())
-        #new_keys = [wkeys[0], wkeys[2], wkeys[1]]
-        #obs_wave = np.concatenate([dwave[key] for key in new_keys])
-
         nleg = legendre[list(legendre.keys())[0]].shape[0]
-        #zzchi2 = np.zeros(self._narch, dtype=np.float64)
-        #zzcoeff = np.zeros((self._narch,  1+ncam*(nleg)), dtype=np.float64)
 
         if (trans is None):
             #Calculate Lyman transmission if not passed as dict
@@ -436,8 +429,7 @@ def split_archetype_coeff(subtype, coeff, nbands, nleg):
         subtype (str): comma separated archetype subtypes
         coeff (array): coefficients from redrock fit
         nbands (int): number of spectrograph bands (e.g. 3 for DESI b/r/z)
-        nleg (int): number of legendre terms per band
-        per_camera (bool): if True, will split legendre coeffcients in 2D array, each row representing one camera
+        nleg (int): maximum degree of legendre polynomial in archetype mode
     """
     narchetypes = len(subtype.split(';'))
     archcoeff = coeff[0:narchetypes]
