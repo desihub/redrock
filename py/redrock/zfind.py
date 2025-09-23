@@ -531,11 +531,12 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                 for i in range(len(tzfit)):
                     if k in tzfit[i].keys():
                         val = tzfit[i][k]
-                        if k in pca_map:
+                        if archetypes and k in pca_map:
+                            # this is to make sure in case of archetypes for multiple spectype we have uniform size for arrays
                             val = np.pad(val, ((0,0),(0, max(0, ref.shape[1] - val.shape[1]))), constant_values=0)[:, :ref.shape[1]]
                     else:
                         row = tzfit[i]
-                        if k in pca_map and pca_map[k] in row:
+                        if archetypes and k in pca_map and pca_map[k] in row:
                             val = row[pca_map[k]]
                             val = np.pad(val, ((0,0),(0, max(0, ref.shape[1] - val.shape[1]))), constant_values=0)[:, :ref.shape[1]]
                         elif k in zero_like_keys:
