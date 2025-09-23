@@ -288,8 +288,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
             (chi2, coeff) = calc_zchi2_batch(spectra, binned, weights, flux, wflux, 1, nbasis,
                                              solve_matrices_algorithm=template.solve_matrices_algorithm,
                                              use_gpu=False)
-            coeff = coeff[0,:]
-            pca_coeff = coeff
+            pca_coeff = coeff[0,:]
 
         except ValueError as err:
             if zmin<redshifts[0] or redshifts[-1]<zmin:
@@ -297,6 +296,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
                 coeff = np.zeros(template.nbasis)
                 zwarn |= ZW.Z_FITLIMIT
                 zwarn |= ZW.BAD_MINFIT
+                pca_coeff = np.copy(coeff)
             else:
                 #- Unknown problem; re-raise error
                 raise err

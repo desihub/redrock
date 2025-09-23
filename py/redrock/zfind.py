@@ -527,19 +527,20 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             tzfit2 = dict()
             for k in tzfit[0].keys():
                 tzfit2[k] = list()
+                ref = tzfit[0][k]  # reference array
                 for i in range(len(tzfit)):
                     if k in tzfit[i].keys():
-                        tzfit2[k].append(tzfit[i][k])
+                        val = tzfit[i][k]
+                        if k in pca_map:
+                            val = np.pad(val, ((0,0),(0, max(0, ref.shape[1] - val.shape[1]))), constant_values=0)[:, :ref.shape[1]]
                     else:
                         row = tzfit[i]
-                        ref = tzfit[0][k]
                         if k in pca_map and pca_map[k] in row:
                             val = row[pca_map[k]]
-                            ref = tzfit[0][k]  # reference array
                             val = np.pad(val, ((0,0),(0, max(0, ref.shape[1] - val.shape[1]))), constant_values=0)[:, :ref.shape[1]]
-                            tzfit2[k].append(val)
                         elif k in zero_like_keys:
-                            tzfit2[k].append(np.zeros_like(tzfit[0][k]))
+                            val = np.zeros_like(ref)
+                    tzfit2[k].append(val)
 
                 tzfit2[k] = np.vstack(tzfit2[k])
                 if (tzfit2[k].shape[1] == 1):
