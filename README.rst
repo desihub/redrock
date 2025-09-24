@@ -65,9 +65,13 @@ The method solves for the coefficients of the Legendre polynomials in each camer
 
 If you do not want to use default values, you should separately provide those arguments without the ``--archetypes-no-legendre`` flag.
 
-Example run (with all the default values)::
+Example run (with all the default values, including per camera mode)::
     
     rrdesi -i <spectra_file> --archetypes <archetype_dir or archetype_file> -o <output_file> -d <details_file.h5> 
+
+Example run (with all the default values but without per camera mode)::
+    
+    rrdesi -i <spectra_file> --archetypes <archetype_dir or archetype_file> -o <output_file> -d <details_file.h5> --archetype-per-camera False 
 
 Example run (with no archetype related default values)::
     
@@ -81,7 +85,7 @@ Example run::
         
     rrdesi -i <spectra_file> --archetypes <archetype_dir or archetype_file> -o <output_file> -d  <details_file.h5> --archetype-nnearest 2 
 
-For comment or help regarding archetypes, please contact AbhijeetAnand [at] lbl.gov
+For comment or help regarding archetypes, please contact abhijeetanand2011_at_gmail_dot_com.
 
 
 License
