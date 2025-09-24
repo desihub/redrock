@@ -175,7 +175,11 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
         (gpuweights, gpuflux, gpuwflux) = target.gpu_spectral_data()
         # Build dictionaries of wavelength bin edges, min/max, and centers
         gpuedges = { s.wavehash:(s.gpuedges, s.minedge, s.maxedge) for s in spectra }
-        #gpudwave = { s.wavehash:s.gpuwave for s in spectra }
+        gpudwave = { s.wavehash:s.gpuwave for s in spectra }
+
+    if not archetype is None:
+        #legendre = legendre_calculate(deg_legendre, dwave=dwave)
+        legendre = target.legendre(deg_legendre)
 
     results = list()
     #Moved default nz to arg list
@@ -284,7 +288,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
             (chi2, coeff) = calc_zchi2_batch(spectra, binned, weights, flux, wflux, 1, nbasis,
                                              solve_matrices_algorithm=template.solve_matrices_algorithm,
                                              use_gpu=False)
-            pca_coeff = coeff[0,:] # if archetypes are used this will also save the PCA results for that redshift
+            pca_coeff = coeff[0,:]
 
         except ValueError as err:
             if zmin<redshifts[0] or redshifts[-1]<zmin:
@@ -342,7 +346,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
 
             archcoeff, legcoeff = split_archetype_coeff(subtype, coeff, ncamera, deg_legendre)
             if per_camera:
-                legcoeff = [np.vstack(legcoeff)] # in per camera mode Legendre coefficents will be a 2D array (ncam, deg_legendre)
+                legcoeff = [np.vstack(legcoeff)]
             results.append(dict(z=zbest, zerr=zerr, zwarn=zwarn,
                 chi2=chi2min, zz=zz, zzchi2=zzchi2,
                 coeff=coeff, archcoeff=archcoeff, legcoeff=legcoeff, fulltype=fulltype, fitmethod=archetype.method,

@@ -668,7 +668,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
         for tid in targets.all_target_ids:
             del allresults[tid]['meta']
 
-        # Standardize column sizes (including archetype mode)
+        # Standardize column sizes
 
         if allzfit['subtype'].dtype != '<U20':
             max_length = max(len(s) for s in allzfit['subtype']) # this is particularly important if ever use archetype nearest neighbour approach
