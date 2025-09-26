@@ -108,7 +108,7 @@ def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
     Options:
         archetypes : list or dict of Archetype objects
         spec_header (dict-like): header of HDU 0 of input spectra
-        secondary_headers (dict-like): header of other HDUs than primary
+        secondary_headers (dict-like, astropy.io.fits.Header objects): header of other HDUs than primary
 
     Modifies input tables.meta['EXTNAME']
     """
@@ -299,7 +299,7 @@ class DistTargetsDESI(DistTargets):
                     self.secondary_headers["FIBERMAP"] = hdus["FIBERMAP"].header.copy()
                     exp_fmap = encode_table(Table(hdus["EXP_FIBERMAP"].data,
                         copy=True).as_array())
-                    self.secondary_headers["FIBERMAP"] = hdus["EXP_FIBERMAP"].header.copy()
+                    self.secondary_headers["EXP_FIBERMAP"] = hdus["EXP_FIBERMAP"].header.copy()
                     tsnr2 = encode_table(Table(hdus["SCORES"].data,
                         copy=True).as_array())
                     self.secondary_headers["SCORES"] = hdus["SCORES"].header.copy()
@@ -324,7 +324,7 @@ class DistTargetsDESI(DistTargets):
 
                     scores = encode_table(Table(hdus["SCORES"].data,
                         copy=True).as_array())
-                    self.secondary_headers["SCORES"] = hdus["FIBERMAP"].header.copy()
+                    self.secondary_headers["SCORES"] = hdus["SCORES"].header.copy()
                     tsnr2 = Table(compute_coadd_tsnr_scores(scores)[0])
 
                     #- we later rely upon exp_fmap having same order as the

@@ -23,6 +23,8 @@ from .igm import transmission_Lyman
 
 from .archetypes import split_archetype_coeff
 
+from .templates import parse_fulltype
+
 def get_dv(z, zref):
     """Returns velocity difference in km/s for two redshifts
 
@@ -342,7 +344,7 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
                 prior=None
             chi2min, coeff, fulltype = archetype.get_best_archetype(target,weights,flux,wflux,dwave,zbest, per_camera, n_nearest, trans=trans, use_gpu=use_gpu, prior=prior)
             del trans
-            subtype = fulltype.split(':::')[1]
+            subtype = parse_fulltype(fulltype)[1]
 
             archcoeff, legcoeff = split_archetype_coeff(subtype, coeff, ncamera, deg_legendre)
             if per_camera:

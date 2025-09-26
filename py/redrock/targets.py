@@ -191,6 +191,7 @@ class Target(object):
 
         Options:
             archetypes: dict[(SPECTYPE,SUBTYPE)] of Archetype objects
+            nleg (int): highest degree of Legendre polynomial
 
         Returns ``model`` dict of rendered best fit models keyed by wavehash
 
@@ -223,7 +224,7 @@ class Target(object):
             archcoeff, legcoeff = split_archetype_coeff(subtype, coeff, len(self.bands), nleg)
             ax = archetypes[spectype]
             for i, sp in enumerate(self.spectra):
-                self.model[sp.wavehash] = ax.eval(subtype, archcoeff, sp.wave, z, R=sp.Rcsr, legcoeff=legcoeff[i], deg_legendre=nleg)
+                self.model[sp.wavehash] = ax.eval(subtype, archcoeff, sp.wave, z, R=sp.Rcsr, legcoeff=legcoeff[i])
 
         else:
             tx = templates[(spectype, subtype)]

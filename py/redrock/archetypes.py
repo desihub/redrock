@@ -176,7 +176,7 @@ class Archetype():
             #return {hs:self._archetype['INTERP'](wave/(1.+z)) for hs, wave in dwave.items()}
         return result
 
-    def eval(self, subtype, coeff, wave, z, R=None, legcoeff=None, deg_legendre=None):
+    def eval(self, subtype, coeff, wave, z, R=None, legcoeff=None):
         """Return archetype for given subtype, coefficients, wavelengths, and redshift
 
         Args:
@@ -188,7 +188,6 @@ class Archetype():
         Options:
             R : array[nwave,nwave] resolution matrix to convolve with model
             legcoeff : array of additional legendre coefficients
-            deg_legendre : legendre polynomial degree
 
         Returns:
             archetype flux array
@@ -209,8 +208,10 @@ class Archetype():
             model += c*binned_archetype
 
         if legcoeff is not None:
-            if deg_legendre is None:
-                raise ValueError(f"ERROR: provide legendre polynomial degree")
+            if legcoeff.ndim==1:
+                deg_legendre = len(legcoeff)
+            if legcoeff.ndim>1:
+                deg_legendre = legcoeff.shape[1]
             legendre = np.array([scipy.special.legendre(i)( reduced_wavelength(wave) ) for i in range(deg_legendre)])
             model += legendre.T.dot(legcoeff).T
 
@@ -437,7 +438,6 @@ def split_archetype_coeff(subtype, coeff, nbands, nleg):
         coeff (array): coefficients from redrock fit
         nbands (int): number of spectrograph bands (e.g. 3 for DESI b/r/z)
         nleg (int): number of legendre terms per band
-        per_camera (bool): if True, will split legendre coeffcients in 2D array, each row representing one camera
     """
     narchetypes = len(subtype.split(';'))
     archcoeff = coeff[0:narchetypes]
