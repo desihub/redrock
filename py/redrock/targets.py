@@ -217,11 +217,11 @@ class Target(object):
             for sp in self.spectra:
                 self.model[sp.wavehash] = np.zeros(len(sp.wave), dtype=np.float32)
         elif fitmethod == 'ARCH':
-            #- Archetype fits have N nearest neighbor archetype coeffs
-            #- followed by ncamera*nlegendre coefficients
-            #- import here to avoid circular import
-            from .archetypes import split_archetype_coeff
-            archcoeff, legcoeff = split_archetype_coeff(subtype, coeff, len(self.bands), nleg)
+            #- Archetype fits have N nearest neighbor archetype coeffs saved in COEFF keyword
+            narchetypes = len(subtype.split(';'))
+            archcoeff, legcoeff = coeff[0:narchetypes], bestfit["LEGCOEFF"]
+            if legcoeff.ndim==1:
+                legcoeff = [legcoeff for i in range(len(self.spectra))]
             ax = archetypes[spectype]
             for i, sp in enumerate(self.spectra):
                 self.model[sp.wavehash] = ax.eval(subtype, archcoeff, sp.wave, z, R=sp.Rcsr, legcoeff=legcoeff[i])

@@ -164,7 +164,7 @@ class PlotSpec(object):
         specs_to_read = target.spectra
         for spec in specs_to_read:
             if self.archetypes:
-                mx = tp.eval(zz['subtype'], dwave, coeff, spec.wave, zz['z']) * (1+zz['z'])
+                mx = tp.eval(zz['subtype'], zz['coeff'][0:zz['ncoeff']], spec.wave, zz['z'], legcoeff=zz['legcoeff'])
             else:
                 mx = tp.eval(coeff[0:tp.nbasis], spec.wave, zz['z']) * (1+zz['z'])
             model = spec.R.dot(mx)

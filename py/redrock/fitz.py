@@ -347,11 +347,12 @@ def fitz(zchi2, redshifts, target, template, nminima=3, archetype=None, use_gpu=
             subtype = parse_fulltype(fulltype)[1]
 
             archcoeff, legcoeff = split_archetype_coeff(subtype, coeff, ncamera, deg_legendre)
+
             if per_camera:
                 legcoeff = [np.vstack(legcoeff)]
             results.append(dict(z=zbest, zerr=zerr, zwarn=zwarn,
                 chi2=chi2min, zz=zz, zzchi2=zzchi2,
-                coeff=coeff, archcoeff=archcoeff, legcoeff=legcoeff, fulltype=fulltype, fitmethod=archetype.method,
+                coeff=archcoeff, legcoeff=legcoeff, fulltype=fulltype, fitmethod=archetype.method,
                 pca_coeff=pca_coeff, pca_spectype=template._rrtype, pca_subtype=template.sub_type))
 
     #- Sort results by chi2min; detailed fits may have changed order
