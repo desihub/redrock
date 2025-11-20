@@ -672,6 +672,8 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
 
         if allzfit['subtype'].dtype != '<U20':
             max_length = max(len(s) for s in allzfit['subtype']) # this is particularly important if ever use archetype nearest neighbour approach
+            # keep min of U20 to maintain non-achetype datamodel (TODO: is this really needed?)
+            max_length = max(max_length, 20)
             dtype = f'<U{max_length}'
             allzfit.replace_column('subtype', allzfit['subtype'].astype(dtype))
 
