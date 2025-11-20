@@ -195,7 +195,9 @@ class Archetype():
         Notes:
             No factors of (1+z) are applied to the resampled flux, i.e.
             evaluating the same coeffs at different z does not conserve
-            integrated flux, but more directly maps model=templates.dot(coeff)
+            integrated flux, but more directly maps model=templates.dot(coeff).
+            If `legcoeff` is 1D it is applied to all cameras (like the templates);
+            if it is `2D[m,n]` then they are for `m` cameras and `n` polynomials.
         """
 
         subtypes = subtype.split(';')
