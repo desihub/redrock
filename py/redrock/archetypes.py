@@ -195,7 +195,9 @@ class Archetype():
         Notes:
             No factors of (1+z) are applied to the resampled flux, i.e.
             evaluating the same coeffs at different z does not conserve
-            integrated flux, but more directly maps model=templates.dot(coeff)
+            integrated flux, but more directly maps model=templates.dot(coeff).
+            If `legcoeff` is 1D it is applied to all cameras (like the templates);
+            if it is `2D[m,n]` then they are for `m` cameras and `n` polynomials.
         """
 
         subtypes = subtype.split(';')
@@ -208,7 +210,10 @@ class Archetype():
             model += c*binned_archetype
 
         if legcoeff is not None:
-            deg_legendre = len(legcoeff)
+            if legcoeff.ndim==1:
+                deg_legendre = len(legcoeff)
+            if legcoeff.ndim>1:
+                deg_legendre = legcoeff.shape[1]
             legendre = np.array([scipy.special.legendre(i)( reduced_wavelength(wave) ) for i in range(deg_legendre)])
             model += legendre.T.dot(legcoeff).T
 
@@ -335,13 +340,7 @@ class Archetype():
         else:
             ncam = 1 # entire spectra
 
-        #wkeys = list(dwave.keys())
-        #new_keys = [wkeys[0], wkeys[2], wkeys[1]]
-        #obs_wave = np.concatenate([dwave[key] for key in new_keys])
-
         nleg = legendre[list(legendre.keys())[0]].shape[0]
-        zzchi2 = np.zeros(self._narch, dtype=np.float64)
-        zzcoeff = np.zeros((self._narch,  1+ncam*(nleg)), dtype=np.float64)
 
         if (trans is None):
             #Calculate Lyman transmission if not passed as dict
@@ -395,11 +394,9 @@ class Archetype():
 
         if n_nearest is not None:
             best_chi2, best_coeff, best_fulltype = self.nearest_neighbour_model(target,weights,flux,wflux,dwave,z, n_nearest, zzchi2, trans, per_camera, dedges=dedges, binned=binned, use_gpu=use_gpu, prior=nnearest_prior, ncam=ncam)
-            #print(best_chi2, best_coeff, best_fulltype)
             return best_chi2, best_coeff, best_fulltype
         else:
             iBest = np.argmin(zzchi2)
-            #print(z, zzchi2[iBest], zzcoeff[iBest], self._full_type[iBest])
             return zzchi2[iBest], zzcoeff[iBest], self._full_type[iBest]
 
 
@@ -428,7 +425,7 @@ class All_archetypes():
 
         return
 
-def split_archetype_coeff(subtype, coeff, nbands, nleg=None):
+def split_archetype_coeff(subtype, coeff, nbands, nleg):
     """
     Split coeff array into archetype + legendre terms
 
@@ -436,26 +433,13 @@ def split_archetype_coeff(subtype, coeff, nbands, nleg=None):
         subtype (str): comma separated archetype subtypes
         coeff (array): coefficients from redrock fit
         nbands (int): number of spectrograph bands (e.g. 3 for DESI b/r/z)
-
-    Options
         nleg (int): number of legendre terms per band
-
-    Returns (archcoeff, legcoeff) where archcoeff is array of archetype coefficients
-    for each subtype, and legcoeff is list of legendre coefficients per band.
-
-    If nleg is None, it will be derived from counting non-zero terms of coeff.
-    Expected length of non-zero coeffs is num_subtypes + nbands*nleg.
     """
     narchetypes = len(subtype.split(';'))
     archcoeff = coeff[0:narchetypes]
     all_legcoeff = coeff[narchetypes:]
 
-    if nleg is None:
-        # derive number of legendre coefficients used from non-zero terms
-        nleg = np.count_nonzero(all_legcoeff) // nbands
-
     legcoeff = [all_legcoeff[i*nleg:(i+1)*nleg] for i in range(nbands)]
-
     return archcoeff, legcoeff
 
 def find_archetypes(archetypes_dir=None):

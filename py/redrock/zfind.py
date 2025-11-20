@@ -17,7 +17,7 @@ import astropy.table
 
 from . import constants
 
-from .utils import elapsed
+from .utils import elapsed, extra_columns_in_archetype_mode
 
 from .targets import distribute_targets
 
@@ -260,6 +260,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
 
     if archetypes:
         archetype_spectype = list(archetypes.keys()) # to account for the case if only one archetype is provided
+        pca_map, zero_like_keys = extra_columns_in_archetype_mode()
 
     if not priors is None:
         priors = Priors(priors)
@@ -474,7 +475,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     if 'fulltype' in tmp.keys():#to take care of case when archetype is applied only for one template
                         spectype = list()
                         subtype = list()
-                        #l el is a list with one element (corresponding to each minimum)
+                        # el is a list with one element (corresponding to each minimum)
                         for el in tmp['fulltype']:
                             this_spectype, this_subtype = parse_fulltype(el[0])
                             spectype.append(this_spectype)
@@ -522,11 +523,26 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     tmp['coeff'] = c
             #tzfit = astropy.table.vstack(tzfit)
             ## Equivalent of astropy.table.vstack(tzfit) - vstack each array
+
             tzfit2 = dict()
             for k in tzfit[0].keys():
                 tzfit2[k] = list()
+                ref = tzfit[0][k]  # reference array
                 for i in range(len(tzfit)):
-                    tzfit2[k].append(tzfit[i][k])
+                    if k in tzfit[i].keys():
+                        val = tzfit[i][k]
+                        if archetypes and k in pca_map:
+                            # this is to make sure in case of archetypes for multiple spectype we have uniform size for arrays
+                            val = np.pad(val, ((0,0),(0, max(0, ref.shape[1] - val.shape[1]))), constant_values=0)[:, :ref.shape[1]]
+                    else:
+                        row = tzfit[i]
+                        if archetypes and k in pca_map and pca_map[k] in row:
+                            val = row[pca_map[k]]
+                            val = np.pad(val, ((0,0),(0, max(0, ref.shape[1] - val.shape[1]))), constant_values=0)[:, :ref.shape[1]]
+                        elif k in zero_like_keys:
+                            val = np.zeros_like(ref)
+                    tzfit2[k].append(val)
+
                 tzfit2[k] = np.vstack(tzfit2[k])
                 if (tzfit2[k].shape[1] == 1):
                     tzfit2[k] = tzfit2[k].flatten()
@@ -574,6 +590,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                 ii = np.where(tzfit['spectype'] == spectype)[0]
                 iikeep.extend(ii[0:nminima])
 
+
             if (len(iikeep) < l):
                 for k in tzfit.keys():
                     tzfit[k] = tzfit[k][iikeep]
@@ -602,6 +619,9 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
         # Cosmetic: move TARGETID to be first column as primary key
         try:
             allzfit.columns.move_to_end('targetid', last=False)
+            for k in allzfit.colnames:
+                if 'pca' in k.lower():
+                    allzfit.columns.move_to_end(k)
         except:
             # Must be using python2, don't mess with the order.
             pass
@@ -649,9 +669,13 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
             del allresults[tid]['meta']
 
         # Standardize column sizes
+
         if allzfit['subtype'].dtype != '<U20':
-            allzfit.replace_column('subtype', allzfit['subtype'].astype('<U20'))
-            #TODO: Think about standardizing the array dtype in case nearest neighbours is used
+            max_length = max(len(s) for s in allzfit['subtype']) # this is particularly important if ever use archetype nearest neighbour approach
+            # keep min of U20 to maintain non-achetype datamodel (TODO: is this really needed?)
+            max_length = max(max_length, 20)
+            dtype = f'<U{max_length}'
+            allzfit.replace_column('subtype', allzfit['subtype'].astype(dtype))
 
         if allzfit['spectype'].dtype != '<U6':
             allzfit.replace_column('spectype',allzfit['spectype'].astype('<U6'))
@@ -673,6 +697,13 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
         if ncoeff != maxcoeff:
             coeff = np.zeros((ntarg, maxcoeff), dtype=allzfit['coeff'].dtype)
             coeff[:,0:ncoeff] = allzfit['coeff']
+            allzfit.replace_column('coeff', coeff)
+
+        # this is just to save space in COEFF array in case multiple archetypes are used
+        if len(np.unique(allzfit['ncoeff']))==1:
+            maxcoeff = int(np.unique(allzfit['ncoeff']))
+            coeff = np.zeros((ntarg, maxcoeff), dtype=allzfit['coeff'].dtype)
+            coeff = allzfit['coeff'][:,0:maxcoeff]
             allzfit.replace_column('coeff', coeff)
 
     elapsed(start_finalize, "Finalizing results", comm=targets.comm)

@@ -35,27 +35,27 @@ class TestArchetypes(unittest.TestCase):
         # followed by nbands * nleg Legendre coefficients
 
         #- 1 archetype, 3 bands, 1 legendre per band
-        ac, lc = split_archetype_coeff('ELG_12', [1,2,3,4], nbands=3)
+        ac, lc = split_archetype_coeff('ELG_12', [1,2,3,4], nbands=3, nleg=1)
         self.assertEqual(ac, [1,])
         self.assertEqual(lc, [[2,], [3,], [4,]])
 
         #- 1 archetype, 3 bands, 2 legendre per band
-        ac, lc = split_archetype_coeff('ELG_12', [1,2,3,4,5,6,7], nbands=3)
+        ac, lc = split_archetype_coeff('ELG_12', [1,2,3,4,5,6,7], nbands=3, nleg=2)
         self.assertEqual(ac, [1,])
         self.assertEqual(lc, [[2,3], [4,5], [6,7]])
 
         #- 1 archetype, 3 bands, 2 legendre per band, with trailing zeros
-        ac, lc = split_archetype_coeff('ELG_12', [1,2,3,4,5,6,7,0,0,0], nbands=3)
+        ac, lc = split_archetype_coeff('ELG_12', [1,2,3,4,5,6,7,0,0,0], nbands=3, nleg=2)
         self.assertEqual(ac, [1,])
         self.assertEqual(lc, [[2,3], [4,5], [6,7]])
 
         #- 2 archetypes, 3 bands, 2 legendre per band, with trailing zeros
-        ac, lc = split_archetype_coeff('ELG_12;LRG_5', [1,0,2,3,4,5,6,7,0,0,0], nbands=3)
+        ac, lc = split_archetype_coeff('ELG_12;LRG_5', [1,0,2,3,4,5,6,7,0,0,0], nbands=3, nleg=2)
         self.assertEqual(ac, [1,0])
         self.assertEqual(lc, [[2,3], [4,5], [6,7]])
 
         #- no legendre terms
-        ac, lc = split_archetype_coeff('ELG_12;LRG_5', [1,0,], nbands=3)
+        ac, lc = split_archetype_coeff('ELG_12;LRG_5', [1,0,], nbands=3, nleg=0)
         self.assertEqual(ac, [1,0])
         self.assertEqual(lc, [list(), list(), list()])
 
@@ -70,7 +70,13 @@ class TestArchetypes(unittest.TestCase):
         (weights, flux, wflux) = spectral_data(self.target.spectra)
         prior = prior_on_coeffs(1, self.target.nleg, 0.1, len(dwave.keys()))
 
+        # per camera mode
         chi2, coeff, fulltype = self.archetypes.get_best_archetype(self.target, weights, flux, wflux, dwave, z=0.5, per_camera=True, n_nearest=None, trans=None, solve_method='bvls', prior=prior, use_gpu=False)
+        assert len(coeff) == 1 + self.target.nleg * len(self.target.bands)
+
+        # without per camera mode
+        chi2, coeff, fulltype = self.archetypes.get_best_archetype(self.target, weights, flux, wflux, dwave, z=0.5, per_camera=False, n_nearest=None, trans=None, solve_method='bvls', prior=prior, use_gpu=False)
+        assert len(coeff) == 1 + self.target.nleg
 
     def test_archetype_without_legendre(self):
         """Test archetype method without legendre and prior terms"""
@@ -83,6 +89,7 @@ class TestArchetypes(unittest.TestCase):
         (weights, flux, wflux) = spectral_data(self.target.spectra)
         prior = None
         chi2, coeff, fulltype = self.archetypes.get_best_archetype(self.target, weights, flux, wflux, dwave, z=0.5, per_camera=False, n_nearest=None, trans=None, solve_method='bvls', prior=prior, use_gpu=False)
+        assert len(coeff) == 1 # single archetype
 
 
 

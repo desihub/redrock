@@ -191,6 +191,7 @@ class Target(object):
 
         Options:
             archetypes: dict[(SPECTYPE,SUBTYPE)] of Archetype objects
+            nleg (int): highest degree of Legendre polynomial
 
         Returns ``model`` dict of rendered best fit models keyed by wavehash
 
@@ -216,12 +217,11 @@ class Target(object):
             for sp in self.spectra:
                 self.model[sp.wavehash] = np.zeros(len(sp.wave), dtype=np.float32)
         elif fitmethod == 'ARCH':
-            #- Archetype fits have N nearest neighbor archetype coeffs
-            #- followed by ncamera*nlegendre coefficients
-            #- import here to avoid circular import
-            from .archetypes import split_archetype_coeff
-            archcoeff, legcoeff = split_archetype_coeff(subtype, coeff, len(self.bands))
-
+            #- Archetype fits have N nearest neighbor archetype coeffs saved in COEFF keyword
+            narchetypes = len(subtype.split(';'))
+            archcoeff, legcoeff = coeff[0:narchetypes], bestfit["LEGCOEFF"]
+            if legcoeff.ndim==1:
+                legcoeff = [legcoeff for i in range(len(self.spectra))]
             ax = archetypes[spectype]
             for i, sp in enumerate(self.spectra):
                 self.model[sp.wavehash] = ax.eval(subtype, archcoeff, sp.wave, z, R=sp.Rcsr, legcoeff=legcoeff[i])
@@ -439,7 +439,7 @@ class DistTargets(object):
         """
         return self._local_data()
 
-    def eval_models(self, bestfit, templates, archetypes=None):
+    def eval_models(self, bestfit, templates, archetypes=None, nleg=None):
         """
         Calls target.eval_model(bestfit, templates, archetypes) for each local target
 
@@ -460,7 +460,7 @@ class DistTargets(object):
         models = list()
         for tgt in self.local():
             i = np.where(bestfit['TARGETID'] == tgt.id)[0][0]
-            model = tgt.eval_model(bestfit[i], templates, archetypes)
+            model = tgt.eval_model(bestfit[i], templates, archetypes, nleg)
             models.append(model)
 
         return models

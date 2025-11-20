@@ -94,7 +94,7 @@ def _get_header(templates, archetypes=None, spec_header=None):
 
 def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
         templates, archetypes=None,
-        spec_header=None):
+        spec_header=None, secondary_headers=None):
     """Write zbest and fibermap Tables to outfile
 
     Args:
@@ -108,8 +108,12 @@ def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
     Options:
         archetypes : list or dict of Archetype objects
         spec_header (dict-like): header of HDU 0 of input spectra
+        secondary_headers (dict-like, astropy.io.fits.Header objects): header of other HDUs than primary
 
     Modifies input tables.meta['EXTNAME']
+
+    Note: `spec_header` is a dict of KEY/VALUE pairs, while `secondary_headers`
+    is a dict keyed by EXTNAME, with values that are Header objects with KEY/VALUE pairs.
     """
     # header keywords for both PRIMARY and REDSHIFTS HDU
     header = _get_header(templates, archetypes, spec_header)
@@ -124,9 +128,18 @@ def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
     hx.append(fits.PrimaryHDU(header=header))
     hx.append(fits.convenience.table_to_hdu(zbest))
     # ADM annotate_fibermap adds units to fibermap HDUs.
-    hx.append(annotate_fibermap(fits.convenience.table_to_hdu(fibermap)))
-    hx.append(fits.convenience.table_to_hdu(exp_fibermap))
-    hx.append(fits.convenience.table_to_hdu(tsnr2))
+    hdu_data = {}
+    hdu_data["FIBERMAP"] = annotate_fibermap(fits.convenience.table_to_hdu(fibermap))
+    hdu_data["EXP_FIBERMAP"] = fits.convenience.table_to_hdu(exp_fibermap)
+    hdu_data["TSNR2"] = fits.convenience.table_to_hdu(tsnr2)
+
+    for k in ("FIBERMAP", "EXP_FIBERMAP", "TSNR2"):
+        hdu = hdu_data[k]
+        hdu.name = k
+        if secondary_headers is not None and k in secondary_headers:
+            # Append only new cards from the saved header; don't overwrite existing ones
+            hdu.header.extend(secondary_headers[k].cards, update=False, strip=True, unique=True)
+        hx.append(hdu)
 
     outfile = os.path.expandvars(outfile)
     outdir = os.path.dirname(os.path.abspath(outfile))
@@ -263,6 +276,7 @@ class DistTargetsDESI(DistTargets):
         self._exp_fmaps = {}
         self._tsnr2 = {}         #- template signal-to-noise from SCORES
         self.header0 = None      #- header 0 of the first spectrafile
+        self.secondary_headers = None #- headers of other HDUs of the first spectrafile
 
         for sfile in spectrafiles:
             hdus = None
@@ -278,14 +292,20 @@ class DistTargetsDESI(DistTargets):
                 if self.header0 is None:
                     self.header0 = hdus[0].header.copy()
 
+                if self.secondary_headers is None:
+                    self.secondary_headers = {}
+
                 if 'EXP_FIBERMAP' in hdus:
                     input_coadded = True
                     coadd_fmap = encode_table(Table(hdus["FIBERMAP"].data,
                         copy=True).as_array())
+                    self.secondary_headers["FIBERMAP"] = hdus["FIBERMAP"].header.copy()
                     exp_fmap = encode_table(Table(hdus["EXP_FIBERMAP"].data,
                         copy=True).as_array())
+                    self.secondary_headers["EXP_FIBERMAP"] = hdus["EXP_FIBERMAP"].header.copy()
                     tsnr2 = encode_table(Table(hdus["SCORES"].data,
                         copy=True).as_array())
+                    self.secondary_headers["SCORES"] = hdus["SCORES"].header.copy()
                     for col in tsnr2.colnames.copy():
                         if col == 'TARGETID' or col.startswith('TSNR2_'):
                             continue
@@ -295,6 +315,7 @@ class DistTargetsDESI(DistTargets):
                     input_coadded = False
                     tmpfmap = encode_table(Table(hdus["FIBERMAP"].data,
                         copy=True).as_array())
+                    self.secondary_headers["FIBERMAP"] = hdus["FIBERMAP"].header.copy()
                     assert 'COADD_NUMEXP' not in tmpfmap.dtype.names
 
                     if np.all(tmpfmap['TILEID'] == tmpfmap['TILEID'][0]):
@@ -306,6 +327,7 @@ class DistTargetsDESI(DistTargets):
 
                     scores = encode_table(Table(hdus["SCORES"].data,
                         copy=True).as_array())
+                    self.secondary_headers["SCORES"] = hdus["SCORES"].header.copy()
                     tsnr2 = Table(compute_coadd_tsnr_scores(scores)[0])
 
                     #- we later rely upon exp_fmap having same order as the
@@ -1148,7 +1170,7 @@ def rrdesi(options=None, comm=None):
                         targets.fibermap, targets.exp_fibermap,
                         targets.tsnr2,
                         templates, archetypes=archetypes,
-                        spec_header=targets.header0)
+                        spec_header=targets.header0, secondary_headers=targets.secondary_headers)
 
             if comm is not None:
                 zbest = comm.bcast(zbest, root=0)
@@ -1160,7 +1182,7 @@ def rrdesi(options=None, comm=None):
 
             #- Evaluate best-fit models for local targets,
             #- then collect into all_models on rank 0
-            local_models = targets.eval_models(zbest, templates, archetypes)
+            local_models = targets.eval_models(zbest, templates, archetypes, args.archetype_legendre_degree)
             local_targetids = targets.local_target_ids()
             if targets.comm is not None:
                 all_models = targets.comm.gather(local_models, root=0)

@@ -47,7 +47,7 @@ def write_zscan(filename, zscan, zfit, clobber=False):
     zfit = zfit.copy()
 
     #- convert unicode to byte strings
-    for colname in ('spectype', 'subtype', 'fitmethod'):
+    for colname in ('spectype', 'subtype', 'fitmethod', 'pca_spectype', 'pca_subtype'):
         if colname in zfit.columns:
             if zfit[colname].dtype.kind == 'U':
                 zfit.replace_column(colname, np.char.encode(zfit[colname], 'ascii'))
