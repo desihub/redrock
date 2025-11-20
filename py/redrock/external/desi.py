@@ -111,6 +111,9 @@ def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
         secondary_headers (dict-like, astropy.io.fits.Header objects): header of other HDUs than primary
 
     Modifies input tables.meta['EXTNAME']
+
+    Note: `spec_header` is a dict of KEY/VALUE pairs, while `secondary_headers`
+    is a dict keyed by EXTNAME, with values that are Header objects with KEY/VALUE pairs.
     """
     # header keywords for both PRIMARY and REDSHIFTS HDU
     header = _get_header(templates, archetypes, spec_header)
@@ -135,7 +138,7 @@ def write_zbest(outfile, zbest, fibermap, exp_fibermap, tsnr2,
         hdu.name = k
         if secondary_headers is not None and k in secondary_headers:
             # Append only new cards from the saved header; don't overwrite existing ones
-            hdu.header.extend(secondary_headers[k].cards, update=False, strip=True)
+            hdu.header.extend(secondary_headers[k].cards, update=False, strip=True, unique=True)
         hx.append(hdu)
 
     outfile = os.path.expandvars(outfile)
