@@ -47,7 +47,7 @@ Running Redrock on desi spectra
 
     rrdesi -i <spectra_file> -o <output_file> -d <details_file.h5> 
 
-**2) With Archetypes**::
+**2) With Archetypes**
     
 In archetype mode, redrock can be run either with one particular archetype file (e.g., GALAXY, QSO or STAR), or you can also provide the directory that contains archetypes for different spectral classes.
 
@@ -77,7 +77,7 @@ Example run (with no archetype related default values)::
     
     rrdesi -i <spectra_file> --archetypes <archetype_dir or archetype_file> -o <output_file> -d <details_file.h5> --archetypes-no-legendre
 
-**3) Archetypes + Nearest neighbours (in chi2 space) approach**::
+**3) Archetypes + Nearest neighbours (in chi2 space) approach**
 
 Similar to archetypes (method - 2), it also looks for the nearest neighbours of the best archetypes in chi2 space, selects a few nearest neighbours (input provided by the user, ``--archetype-nnearest``) and then constructs a new set of templates combining these archetypes and Legendre polynomials to fit the galaxy spectra as described above. 
 
