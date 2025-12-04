@@ -701,7 +701,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
 
         # this is just to save space in COEFF array in case multiple archetypes are used
         if len(np.unique(allzfit['ncoeff']))==1:
-            maxcoeff = int(np.unique(allzfit['ncoeff']))
+            maxcoeff = int(np.unique(allzfit['ncoeff'])[0])
             coeff = np.zeros((ntarg, maxcoeff), dtype=allzfit['coeff'].dtype)
             coeff = allzfit['coeff'][:,0:maxcoeff]
             allzfit.replace_column('coeff', coeff)
