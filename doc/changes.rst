@@ -2,8 +2,15 @@
 redrock Change Log
 ==================
 
-0.21.0 (unreleased)
+0.21.1 (unreleased)
 -------------------
+
+* No changes yet.
+
+0.21.0 (2025-12-04)
+-------------------
+
+First version with numpy/2.x support and first version on PyPI.
 
 * Use single precision for outputs; update readers (PR `#329`_).
 * Fix ``native_endian`` for numpy 2.x (PR `#332`_).
