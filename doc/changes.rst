@@ -11,12 +11,15 @@ redrock Change Log
 * Fix crash when using ``--allspec`` (PR `#336`_).
 * Update test matrix to catch additional NumPy 2 warnings; add
   ``pyproject.toml`` file; update other top-level metadata files (PR `#341`_).
+* Track PCA/NMF coeffcients in archetype mode (PR `#342`_).
 
 .. _`#329`: https://github.com/desihub/redrock/pull/329
 .. _`#332`: https://github.com/desihub/redrock/pull/332
 .. _`#334`: https://github.com/desihub/redrock/pull/334
 .. _`#336`: https://github.com/desihub/redrock/pull/336
 .. _`#341`: https://github.com/desihub/redrock/pull/341
+.. _`#342`: https://github.com/desihub/redrock/pull/342
+
 
 0.20.4 (2025-03-14)
 -------------------
@@ -82,20 +85,27 @@ Used for DESI Jura run.
 * Ensure `FITMETHOD` holds 4-string `NONE` (addresses `#301`) (PR `#303`_).
 * Fix FITMETHOD bytes vs. str for details file output (PR `#304`_).
 * Remove unnecessary desispec dependency (PR `#306`_).
+* refactor template/archetype model eval (PR `#293`_).
+* include negative [OII] flux penalty in final minimization (PR `#296`_).
+* fix max_velo_diff for archetypes (PR `#302`_).
 
 .. _`#283`: https://github.com/desihub/redrock/pull/283
 .. _`#290`: https://github.com/desihub/redrock/pull/290
 .. _`#292`: https://github.com/desihub/redrock/pull/292
+.. _`#293`: https://github.com/desihub/redrock/pull/293
 .. _`#294`: https://github.com/desihub/redrock/pull/294
 .. _`#295`: https://github.com/desihub/redrock/pull/295
+.. _`#296`: https://github.com/desihub/redrock/pull/296
 .. _`#297`: https://github.com/desihub/redrock/pull/297
 .. _`#298`: https://github.com/desihub/redrock/pull/298
 .. _`#299`: https://github.com/desihub/redrock/pull/299
 .. _`#300`: https://github.com/desihub/redrock/pull/300
 .. _`#301`: https://github.com/desihub/redrock/issues/301
+.. _`#302`: https://github.com/desihub/redrock/pull/302
 .. _`#303`: https://github.com/desihub/redrock/pull/303
 .. _`#304`: https://github.com/desihub/redrock/pull/304
 .. _`#306`: https://github.com/desihub/redrock/pull/306
+
 
 0.19.0 (2024-04-19)
 -------------------
@@ -105,6 +115,7 @@ Used for DESI Jura run.
 * Versioned templates, NMF support, and updated IGM models (PR `#271`_).
 * Mask significantly negative flux (PR `#282`_).
 * Add ``results.read_zscan(..., select=targetids=...)`` option (PR `#289`_).
+* Support for Fastspec PCA templates (PR `#260`_).
 * Archetype updates:
 
   * Added default --nminima for archetypes (PR `#265`_).
@@ -123,6 +134,8 @@ Used for DESI Jura run.
 .. _`#278`: https://github.com/desihub/redrock/pull/278
 .. _`#282`: https://github.com/desihub/redrock/pull/282
 .. _`#289`: https://github.com/desihub/redrock/pull/289
+.. _`#260`: https://github.com/desihub/redrock/pull/260
+
 
 0.18.0 (2023-09-14)
 -------------------
