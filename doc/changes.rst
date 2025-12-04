@@ -2,7 +2,7 @@
 redrock Change Log
 ==================
 
-0.20.5 (unreleased)
+0.21.0 (unreleased)
 -------------------
 
 * Use single precision for outputs; update readers (PR `#329`_).
@@ -12,6 +12,7 @@ redrock Change Log
 * Update test matrix to catch additional NumPy 2 warnings; add
   ``pyproject.toml`` file; update other top-level metadata files (PR `#341`_).
 * Track PCA/NMF coeffcients in archetype mode (PR `#342`_).
+* Make DESI packages options for installation (PR `#343`_).
 
 .. _`#329`: https://github.com/desihub/redrock/pull/329
 .. _`#332`: https://github.com/desihub/redrock/pull/332
@@ -19,6 +20,7 @@ redrock Change Log
 .. _`#336`: https://github.com/desihub/redrock/pull/336
 .. _`#341`: https://github.com/desihub/redrock/pull/341
 .. _`#342`: https://github.com/desihub/redrock/pull/342
+.. _`#343`: https://github.com/desihub/redrock/pull/343
 
 
 0.20.4 (2025-03-14)
