@@ -1117,6 +1117,7 @@ def rrdesi(options=None, comm=None):
             zfit['spectype'][ii] = 'GALAXY'
             zfit['subtype'][ii] = ''
             zfit['coeff'][ii] = 0.
+            zfit['z'][ii] = 0.
             # ADM enforce 4-string in case we've only populated PCA/NMF.
             zfit['fitmethod'] = zfit['fitmethod'].astype('U4')
             zfit['fitmethod'][ii] = 'NONE'
