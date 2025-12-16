@@ -1098,8 +1098,8 @@ def rrdesi(options=None, comm=None):
             badpos = (fiberstatus & fibermask.BADPOSITION) != 0
             broken = (fiberstatus & fibermask.BROKENFIBER) != 0
             unassigned = (fiberstatus & fibermask.UNASSIGNED) != 0
-            bad = targets.fibermap['OBJTYPE'] == 'BAD'
             sky = targets.fibermap['OBJTYPE'] == 'SKY'
+            bad = (targets.fibermap['OBJTYPE'] != 'TGT') & ~sky
 
             badcoverage = np.zeros(len(fiberstatus), dtype=bool)
             for key in ('BADCOLUMN', 'BADAMPB', 'BADAMPR', 'BADAMPZ'):
@@ -1129,6 +1129,9 @@ def rrdesi(options=None, comm=None):
 
             ii = np.isin(zfit['targetid'], targetids[badcoverage])
             zfit['zwarn'][ii] |= ZWarningMask.LITTLE_COVERAGE
+
+            ii = np.isin(zfit['targetid'], targetids[bad])
+            zfit['zwarn'][ii] |= ZWarningMask.BAD_TARGET
 
         # gather templates and archetypes for final I/O header metadata
         templates = dict()
