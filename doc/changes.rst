@@ -5,7 +5,9 @@ redrock Change Log
 0.21.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Set ZWARN BAD_TARGET for OBJTYPE != (SKY or TGT).  (PR `#344`_).
+
+.. _`#344`: https://github.com/desihub/redrock/pull/344
 
 0.21.0 (2025-12-04)
 -------------------
