@@ -544,7 +544,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                     tzfit2[k].append(val)
 
                 tzfit2[k] = np.vstack(tzfit2[k])
-                if (tzfit2[k].shape[1] == 1):
+                if (k != 'coeff') and (tzfit2[k].shape[1] == 1):
                     tzfit2[k] = tzfit2[k].flatten()
             tzfit = tzfit2
 
@@ -689,7 +689,7 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                 maxcoeff = max(np.max([t.template.nbasis for t in templates]), ncamera*(deg_legendre)+1)
 
         if allzfit['coeff'].ndim == 1:
-            ntarg = allzfit['coeff'].shape
+            ntarg = allzfit['coeff'].shape[0]
             ncoeff = 1
         else:
             ntarg, ncoeff = allzfit['coeff'].shape
