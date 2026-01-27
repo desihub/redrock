@@ -6,8 +6,10 @@ redrock Change Log
 -------------------
 
 * Set ZWARN BAD_TARGET for OBJTYPE != (SKY or TGT).  (PR `#344`_).
+* Fix bug for case of single template (PR `#346`_).
 
 .. _`#344`: https://github.com/desihub/redrock/pull/344
+.. _`#346`: https://github.com/desihub/redrock/pull/346
 
 0.21.0 (2025-12-04)
 -------------------
