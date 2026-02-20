@@ -1170,6 +1170,20 @@ def rrdesi(options=None, comm=None):
                 # Allow 4 char for ARCH (vs. PCA/NMF) even if archetypes aren't used
                 zbest['FITMETHOD'] = zbest['FITMETHOD'].astype('U4')
 
+                # Change data types to reduce file size
+                zbest['ZERR'] = zbest['ZERR'].astype('float32')
+                zbest['ZWARN'] = zbest['ZWARN'].astype('int32')
+                zbest['NPIXELS'] = zbest['NPIXELS'].astype('int32')
+                zbest['NCOEFF'] = zbest['NCOEFF'].astype('int16')
+                zbest['COEFF'] = zbest['COEFF'].astype('float32')
+                zbest['CHI2'] = zbest['CHI2'].astype('float32')
+                zbest['DELTACHI2'] = zbest['DELTACHI2'].astype('float32')
+
+                # Change SUBTYPE to 3 characters or max length if longer
+                max_subtype_len = max(len(s) for s in zbest['SUBTYPE'])
+                subtype_len = max(3, max_subtype_len)
+                zbest['SUBTYPE'] = zbest['SUBTYPE'].astype(f'U{subtype_len}')
+
                 write_zbest(args.outfile, zbest,
                         targets.fibermap, targets.exp_fibermap,
                         targets.tsnr2,
