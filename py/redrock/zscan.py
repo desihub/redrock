@@ -1125,18 +1125,24 @@ def solve_matrices(M, y, solve_algorithm="PCA", solver_args=None, use_gpu=False)
 
     """
 
-    if solve_algorithm.upper() == "PCA":
-        #Use PCA via linalg.solve in either numpy or cupy
+    solve_algorithm = solve_algorithm.upper()
+    if solve_algorithm == "PCA":
+        # Use PCA via linalg.solve in either numpy or cupy
+        # For numpy/2.x and cupy 14.x, if M has dimensions (...,m,m) then y needs dimensions (m,) or (..., m, k).
+        # linalg.solve no longer supports M.shape=(...,m,m) and y.shape=(..., m), thus the reshaping logic
+        # which uses k=1 to temporarily update y.shape = (...,m,1).
+        # See https://github.com/cupy/cupy/pull/8629 and
+        # https://numpy.org/doc/stable/reference/generated/numpy.linalg.solve.html#numpy.linalg.solve
         if (use_gpu):
             #Use cupy linalg.solve to solve for zcoeff in batch for all_M and
             #all_y where all_M and all_y are 3d and 2d arrays representing
             #M and y at every redshift bin for the given template.
             #There is no Error thrown by cupy's version.
-            return cp.linalg.solve(M, y)
+            return cp.linalg.solve(M, y.reshape(y.shape+(1,))).reshape(y.shape)
         else:
             #Use numpy linalg.solve which throws exception
             try:
-                return np.linalg.solve(M, y)
+                return np.linalg.solve(M, y.reshape(y.shape+(1,))).reshape(y.shape)
             except np.linalg.LinAlgError:
                 raise
     elif solve_algorithm in ("NMF", "NNLS"):
