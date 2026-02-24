@@ -1131,7 +1131,7 @@ def solve_matrices(M, y, solve_algorithm="PCA", solver_args=None, use_gpu=False)
         # For numpy/2.x and cupy 14.x, if M has dimensions (...,m,m) then y needs
         # dimensions (m,) or (..., m, k).
         # linalg.solve no longer supports M.shape=(...,m,m) and y.shape=(..., m),
-        # thus the reshaping logic which uses k=1 to temporarily update
+        # thus requiring reshaping logic with k=1 to temporarily update
         # y.shape = (...,m,1).
         # See https://github.com/cupy/cupy/pull/8629 and
         # https://numpy.org/doc/stable/reference/generated/numpy.linalg.solve.html#numpy.linalg.solve
