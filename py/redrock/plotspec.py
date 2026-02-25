@@ -171,10 +171,10 @@ class PlotSpec(object):
             flux = spec.flux.copy()
             isbad = (spec.ivar == 0)
             ## model[isbad] = mx[isbad]
-            flux[isbad] = np.NaN
+            flux[isbad] = np.nan
             self._ax2.plot(spec.wave, medfilt(flux, self.smooth), alpha=0.5)
             self._ax2.plot(spec.wave, medfilt(mx, self.smooth), 'k:', alpha=0.8)
-            model[isbad] = np.NaN
+            model[isbad] = np.nan
             self._ax2.plot(spec.wave, medfilt(model, self.smooth), 'k-',
                 alpha=0.8)
 
