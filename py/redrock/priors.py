@@ -98,8 +98,8 @@ class Priors():
             prior values on the redshift grid.
 
         Warning:
-            * np.NaN <= np.NaN -> False
-            * np.NaN <=/>= 0.0  -> False
+            * np.nan <= np.nan -> False
+            * np.nan <=/>= 0.0  -> False
             * np.inf >= 0.0 -> True
             * np.inf >= np.inf -> True
 
@@ -112,7 +112,7 @@ class Priors():
               the minima is the first or the last point !
         """
 
-        prior = np.where(np.abs(z - z0) < s0/2, 0., np.NaN)
+        prior = np.where(np.abs(z - z0) < s0/2, 0., np.nan)
 
         if np.all(np.isnan(prior)):
             return prior
