@@ -395,6 +395,9 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                 for rs in res:
                     results[rs[0]][ft]['zfit'] = rs[1]
 
+            for p in procs:
+                p.join()
+
         elapsed(start, "    Finished in", comm=targets.comm)
     elapsed(start_findbest, "Finding best redshift", comm=targets.comm)
 

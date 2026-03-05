@@ -1090,6 +1090,9 @@ def calc_zchi2_targets(targets, templates, mp_procs=1, use_gpu=False):
                     zcoeff[tid] = res[2][j]
                     penalty[tid] = res[3][j]
 
+            for p in procs:
+                p.join()
+
         elapsed(start, "    Finished in", comm=targets.comm)
 
         for tid in sorted(zchi2.keys()):
