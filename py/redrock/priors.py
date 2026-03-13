@@ -34,10 +34,10 @@ class Priors():
         sigma = h['PRIORS'].data['SIGMA']
         self._param = { targetid[i]:{'Z':z[i], 'SIGMA':sigma[i]} for i in range(z.size) }
 
-        h.close()
-
         self._type = h['PRIORS'].data['FUNCTION'][0]
         self._func = getattr(self,self._type)
+
+        h.close()
 
         return
 
