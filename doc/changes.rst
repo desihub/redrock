@@ -2,14 +2,23 @@
 redrock Change Log
 ==================
 
-0.21.1 (unreleased)
+0.22.0 (unreleased)
 -------------------
 
 * Set ZWARN BAD_TARGET for OBJTYPE != (SKY or TGT).  (PR `#344`_).
 * Fix bug for case of single template (PR `#346`_).
+* Downgrade rr columns to lower precision (PR `#347`_).
+* Support numpy/2 and cupy/14 linalg.solve shape requirements (PR `#348`_).
+* Fix np.NaN -> np.nan for numpy 2.x compatibility (PR `#350`_).
+* Prevent too many open files error in multiprocessing mode (PR `#351`_).
 
 .. _`#344`: https://github.com/desihub/redrock/pull/344
 .. _`#346`: https://github.com/desihub/redrock/pull/346
+.. _`#347`: https://github.com/desihub/redrock/pull/347
+.. _`#348`: https://github.com/desihub/redrock/pull/348
+.. _`#350`: https://github.com/desihub/redrock/pull/350
+.. _`#351`: https://github.com/desihub/redrock/pull/351
+
 
 0.21.0 (2025-12-04)
 -------------------
@@ -136,7 +145,11 @@ Used for DESI Jura run.
   * Docstring cleanup (PR `#267`_).
   * Fix --archetype_nnearest option (PR `#272`_).
   * fix --archetype-legendre-degree=0 crash corner case (PR `#278`_).
+  * per camera prior gpu (PR `#255`_, `#259`_).
 
+.. _`#255`: https://github.com/desihub/redrock/pull/255
+.. _`#259`: https://github.com/desihub/redrock/pull/259
+.. _`#260`: https://github.com/desihub/redrock/pull/260
 .. _`#263`: https://github.com/desihub/redrock/pull/263
 .. _`#264`: https://github.com/desihub/redrock/pull/264
 .. _`#265`: https://github.com/desihub/redrock/pull/265
@@ -147,7 +160,6 @@ Used for DESI Jura run.
 .. _`#278`: https://github.com/desihub/redrock/pull/278
 .. _`#282`: https://github.com/desihub/redrock/pull/282
 .. _`#289`: https://github.com/desihub/redrock/pull/289
-.. _`#260`: https://github.com/desihub/redrock/pull/260
 
 
 0.18.0 (2023-09-14)
@@ -163,12 +175,15 @@ Significant speedups through GPU support, and bug fixes for archetype mode.
 * Fix used of max_gpuprocs (PR `#236`_).
 * Bug fixes for archetype mode (PR `#238`_).
 * Added min/maxwave to templates.py that store wave[0] (PR `#239`_).
-* Fix archetype mode numba conflict (PR `#240`_).
+* Fix archetype mode numba conflict (PR `#240`_, `#241`_).
 * Fix archetype mode with wrong input dir (PR `#244`_).
 * Refactor GPU to CPU copying for big speedup (PR `#245`_).
 * Fix unit test_gpu_zscan (PR `#247`_).
 * Update readthedocs config (PR `#252`_).
+* xmax typo leading to segfaults (PR `#258`_).
+* Modified unit tests to ensure that both cupy install and CUDA device (PR `#228`_).
 
+.. _`#228`: https://github.com/desihub/redrock/pull/228
 .. _`#229`: https://github.com/desihub/redrock/pull/229
 .. _`#230`: https://github.com/desihub/redrock/pull/230
 .. _`#232`: https://github.com/desihub/redrock/pull/232
@@ -178,10 +193,13 @@ Significant speedups through GPU support, and bug fixes for archetype mode.
 .. _`#238`: https://github.com/desihub/redrock/pull/238
 .. _`#239`: https://github.com/desihub/redrock/pull/239
 .. _`#240`: https://github.com/desihub/redrock/pull/240
+.. _`#241`: https://github.com/desihub/redrock/pull/241
 .. _`#244`: https://github.com/desihub/redrock/pull/244
 .. _`#245`: https://github.com/desihub/redrock/pull/245
 .. _`#247`: https://github.com/desihub/redrock/pull/247
 .. _`#252`: https://github.com/desihub/redrock/pull/252
+.. _`#258`: https://github.com/desihub/redrock/pull/258
+
 
 0.17.9 (2023-12-01)
 -------------------
@@ -205,10 +223,11 @@ to support templates trained with different models.
 
 * Major refactor to expand GPU support; 2x faster on GPUs, 25% faster on CPUs.
   Also fixes support for files with more than 1k input targets
-  (PR `#211`_, `#225`_).
+  (PR `#211`_, `#225`_, `#226`_).
 
 .. _`#211`: https://github.com/desihub/redrock/pull/211
 .. _`#225`: https://github.com/desihub/redrock/pull/225
+.. _`#226`: https://github.com/desihub/redrock/pull/226
 
 0.16.0 (2022-08-08)
 -------------------
@@ -218,7 +237,11 @@ to support templates trained with different models.
 * Update GitHub test automation (PR `#210`_).
 * Avoid bad fits when ranking zchi2 vs. z minima; fixes redshift pileup
   for new QSO templates at edges of zscan range (PR `#218`_).
+* gpu-ify zscan (PR `#204`_).
+* Simplify distribution of work to processes  (PR `#207`_).
 
+.. _`#204`: https://github.com/desihub/redrock/pull/204
+.. _`#207`: https://github.com/desihub/redrock/pull/207
 .. _`#209`: https://github.com/desihub/redrock/pull/209
 .. _`#210`: https://github.com/desihub/redrock/pull/210
 .. _`#218`: https://github.com/desihub/redrock/pull/218
@@ -247,9 +270,11 @@ to support templates trained with different models.
 0.15.1 (2022-01-20)
 -------------------
 
+* update top hat prior (PR `#199`_).
 * add dependency keywords to redrock output (PR `#200`_).
 * set zwarn LITTLE_COVERAGE for badamp/badcol (PR `#201`_).
 
+.. _`#199`: https://github.com/desihub/redrock/pull/199
 .. _`#200`: https://github.com/desihub/redrock/pull/200
 .. _`#201`: https://github.com/desihub/redrock/pull/201
 
@@ -361,6 +386,7 @@ Version used for 18.11 software release.
 * Bug fix when using subset of targetids (PR `#139`_).
 * Small interface useability updates (PR `#142`_, `#143`_).
 * Fix R normalization cut bug impacting tags 0.12.0 and 0.12.1 (PR `#144`_).
+* Fix bug dictionnary results (PR `#145`_).
 * Mask sky lines 5577 and 9793.5 (PR `#146`_).
 * Standarize ZBEST output format for easier concatenating tables (PR `#149`_).
 
@@ -371,6 +397,7 @@ Version used for 18.11 software release.
 .. _`#142`: https://github.com/desihub/redrock/pull/142
 .. _`#143`: https://github.com/desihub/redrock/pull/143
 .. _`#144`: https://github.com/desihub/redrock/pull/144
+.. _`#145`: https://github.com/desihub/redrock/pull/145
 .. _`#146`: https://github.com/desihub/redrock/pull/146
 .. _`#147`: https://github.com/desihub/redrock/pull/147
 .. _`#149`: https://github.com/desihub/redrock/pull/149
