@@ -318,7 +318,7 @@ def transmission_IGM_Inoue14(zObj, lObs, use_gpu=False):
     return T
 
 
-def transmission_Lyman_CaluraKamble(zObj,lObs, use_gpu=False,
+def transmission_Lyman_empirical(zObj,lObs, use_gpu=False,
                                     model='Calura12'):
     """Calculate the transmitted flux fraction from the Lyman series
     This returns the transmitted flux fraction:
@@ -329,7 +329,8 @@ def transmission_Lyman_CaluraKamble(zObj,lObs, use_gpu=False,
         zObj (array of float): Redshifts of objects
         lObs (array of float): wavelength grid
         use_gpu (boolean): whether to use CUPY
-        model (str): Calura12 or Kamble20, IGM model constants to use
+        model (str): which IGM model constants to use;
+                    currently supports Calura12, Kamble20, Turner24
 
     Returns:
         array of float: transmitted flux fraction T[nz, nlambda]
@@ -364,7 +365,7 @@ def transmission_Lyman_CaluraKamble(zObj,lObs, use_gpu=False,
     return T
 
 
-igm_models = ('Calura12', 'Kamble20', 'Inoue14', 'None', None)
+igm_models = ('Calura12', 'Kamble20', 'Inoue14', 'Turner24', 'None', None)
 
 def transmission_Lyman(zObj, lObs, use_gpu=False, model='Calura12', always_return_array=True):
     """Calculate the transmitted flux fraction from the Lyman series
@@ -417,8 +418,8 @@ def transmission_Lyman(zObj, lObs, use_gpu=False, model='Calura12', always_retur
 
     if always_return_array and (min_wave > constants.LyA_wavelength or model is None or model == 'None'):
         T = xp.ones( (nz, nwave) )
-    elif model in ('Calura12', 'Kamble20'):
-        T = transmission_Lyman_CaluraKamble(zObj, lObs, use_gpu=use_gpu, model=model)
+    elif model in ('Calura12', 'Kamble20', 'Turner24'):
+        T = transmission_Lyman_empirical(zObj, lObs, use_gpu=use_gpu, model=model)
     elif model == 'Inoue14':
         T = transmission_IGM_Inoue14(zObj, lObs, use_gpu=use_gpu)
     else:
