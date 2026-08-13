@@ -5,7 +5,9 @@ redrock Change Log
 0.22.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Also propagate UNIQPIX keyword to output (PR `#354`_).
+
+.. _`#354`: https://github.com/desihub/redrock/pull/354
 
 0.22.0 (2026-03-18)
 -------------------
