@@ -86,6 +86,7 @@ def _get_header(templates, archetypes=None, spec_header=None):
     if spec_header is not None:
         for key in ('SPGRP', 'SPGRPVAL', 'TILEID', 'SPECTRO', 'PETAL',
                 'NIGHT', 'EXPID', 'HPXPIXEL', 'HPXNSIDE', 'HPXNEST',
+                'UNIQPIX', 'HEALPIX',
                 'SURVEY', 'PROGRAM', 'FAPRGRM'):
             if key in spec_header:
                 header[key] = spec_header[key]
