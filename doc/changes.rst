@@ -2,7 +2,12 @@
 redrock Change Log
 ==================
 
-0.22.1 (unreleased)
+0.22.2 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.22.1 (2026-09-17)
 -------------------
 
 * Also propagate UNIQPIX keyword to output (PR `#354`_).
