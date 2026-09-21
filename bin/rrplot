@@ -1,68 +1,73 @@
 #!/usr/bin/env python
 
+import sys
 import argparse
 import redrock
 import redrock.templates
 import redrock.archetypes
 import redrock.plotspec
 
-parser = argparse.ArgumentParser(description="Plot redrock results for"
-    " DESI or BOSS target spectra.")
+def main():
+    parser = argparse.ArgumentParser(description="Plot redrock results for"
+        " DESI or BOSS target spectra.")
 
-parser.add_argument("--datatype", type=str, default='desi',
-    required=False, help="input data type: desi or boss")
+    parser.add_argument("--datatype", type=str, default='desi',
+        required=False, help="input data type: desi or boss")
 
-parser.add_argument("--specfile", type=str, default=None,
-    required=True, help="input spectra or spPlate files", nargs='*')
+    parser.add_argument("--specfile", type=str, default=None,
+        required=True, help="input spectra or spPlate files", nargs='*')
 
-parser.add_argument("--targetids", type=str, default=None,
-    required=False, help="comma-separated list of target IDs")
+    parser.add_argument("--targetids", type=str, default=None,
+        required=False, help="comma-separated list of target IDs")
 
-parser.add_argument("--rrfile", type=str, default=None,
-    required=True, help="redrock details h5 file from rrdesi/rrboss")
+    parser.add_argument("--rrfile", type=str, default=None,
+        required=True, help="redrock details h5 file from rrdesi/rrboss")
 
-parser.add_argument("--allspec", default=False, action="store_true",
-    required=False, help="use individual spectra instead of coadd")
+    parser.add_argument("--allspec", default=False, action="store_true",
+        required=False, help="use individual spectra instead of coadd")
 
-parser.add_argument("-t", "--templates", type=str, default=None,
-    required=False, help="template directory")
+    parser.add_argument("-t", "--templates", type=str, default=None,
+        required=False, help="template directory")
 
-parser.add_argument("--archetypes", type=str, default=None,
-    required=False, help="archetype file or directory")
+    parser.add_argument("--archetypes", type=str, default=None,
+        required=False, help="archetype file or directory")
 
-parser.add_argument("--use-archetype", default=False, action="store_true",
-    required=False, help="Use archetype to compare different best fit")
+    parser.add_argument("--use-archetype", default=False, action="store_true",
+        required=False, help="Use archetype to compare different best fit")
 
-args = parser.parse_args()
+    args = parser.parse_args()
 
-#- Templates
-templates_path = redrock.templates.find_templates(args.templates)
-templates = {}
-for el in templates_path:
-    t = redrock.templates.Template(filename=el)
-    templates[t.full_type] = t
+    #- Templates
+    templates_path = redrock.templates.find_templates(args.templates)
+    templates = {}
+    for el in templates_path:
+        t = redrock.templates.Template(filename=el)
+        templates[t.full_type] = t
 
-#- Targetids
-targetids = None
-if args.targetids is not None:
-    targetids = [ int(x) for x in args.targetids.split(",") ]
+    #- Targetids
+    targetids = None
+    if args.targetids is not None:
+        targetids = [ int(x) for x in args.targetids.split(",") ]
 
-#- Archetypes
-if args.use_archetype:
-    archetypes = redrock.archetypes.All_archetypes(archetypes_dir=args.archetypes)
-else:
-    archetypes = False
+    #- Archetypes
+    if args.use_archetype:
+        archetypes = redrock.archetypes.All_archetypes(archetypes_dir=args.archetypes)
+    else:
+        archetypes = False
 
-#- Data
-if args.datatype=='desi':
-    from redrock.external import desi
-    targets = desi.DistTargetsDESI(args.specfile[0], targetids=targetids, coadd=(not args.allspec))._my_data
-elif args.datatype=='boss':
-    from redrock.external import boss
-    targets, targetids = boss.read_spectra(args.specfile, targetids=targetids, coadd=(not args.allspec))
+    #- Data
+    if args.datatype=='desi':
+        from redrock.external import desi
+        targets = desi.DistTargetsDESI(args.specfile[0], targetids=targetids, coadd=(not args.allspec))._my_data
+    elif args.datatype=='boss':
+        from redrock.external import boss
+        targets, targetids = boss.read_spectra(args.specfile, targetids=targetids, coadd=(not args.allspec))
 
-#- Redrock
-zscan, zfit = redrock.results.read_zscan(args.rrfile)
+    #- Redrock
+    zscan, zfit = redrock.results.read_zscan(args.rrfile)
 
-#- Plot
-p = redrock.plotspec.PlotSpec(targets, templates, zscan, zfit, archetypes=archetypes)
+    #- Plot
+    p = redrock.plotspec.PlotSpec(targets, templates, zscan, zfit, archetypes=archetypes)
+
+if __name__ == "__main__":
+    sys.exit(main())

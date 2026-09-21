@@ -432,4 +432,4 @@ def main():
         run_redrock(args, comm=comm)
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

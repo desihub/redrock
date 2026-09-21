@@ -4,6 +4,8 @@
 Redrock for BOSS - serial / multiprocessing entry point.
 """
 
+import sys
 from redrock.external import boss
 
-boss.rrboss(comm=None)
+if __name__ == "__main__":
+    sys.exit(boss.rrboss(comm=None))

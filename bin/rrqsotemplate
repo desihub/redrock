@@ -16,41 +16,41 @@ from empca import empca
 import redrock
 from desispec.interpolation import resample_flux
 
-parser = optparse.OptionParser(usage = "%prog [options]")
-parser.add_option("-i", "--infile", type="string",  help="input BOSS QSO eigenspectra")
-parser.add_option("-o", "--outfile", type="string",  help="output filename")
-parser.add_option('--version', type=str, help='Template version')
+def main():
+    parser = optparse.OptionParser(usage = "%prog [options]")
+    parser.add_option("-i", "--infile", type="string",  help="input BOSS QSO eigenspectra")
+    parser.add_option("-o", "--outfile", type="string",  help="output filename")
+    parser.add_option('--version', type=str, help='Template version')
 
-opts, args = parser.parse_args()
+    opts, args = parser.parse_args()
 
-eigenboss, hdr = fits.getdata(opts.infile, 0, header=True)
-wave = 10**(hdr['COEFF0'] + np.arange(eigenboss.shape[1])*hdr['COEFF1'])
+    eigenboss, hdr = fits.getdata(opts.infile, 0, header=True)
+    wave = 10**(hdr['COEFF0'] + np.arange(eigenboss.shape[1])*hdr['COEFF1'])
 
-#- Write output
-#- TODO: move to redrock.io.write_template
-header = fits.Header()
-header['CRVAL1'] = (hdr['COEFF0'], 'restframe starting wavelength [Angstroms]')
-header['CDELT1'] = hdr['COEFF1']
-header['LOGLAM'] = (1, 'wavelength grid sampled in log(lambda)')
-header['RRTYPE']   = 'QSO'
-header['RRSUBTYP'] = ''
-# header['RRINPUT'] = opts.infile
-header['RRVER'] = redrock.__version__
-header['VERSION'] = (opts.version, 'Template version')
-header['INSPEC'] = os.path.basename(opts.infile)
-header['EXTNAME'] = 'BASIS_VECTORS'
+    #- Write output
+    #- TODO: move to redrock.io.write_template
+    header = fits.Header()
+    header['CRVAL1'] = (hdr['COEFF0'], 'restframe starting wavelength [Angstroms]')
+    header['CDELT1'] = hdr['COEFF1']
+    header['LOGLAM'] = (1, 'wavelength grid sampled in log(lambda)')
+    header['RRTYPE']   = 'QSO'
+    header['RRSUBTYP'] = ''
+    # header['RRINPUT'] = opts.infile
+    header['RRVER'] = redrock.__version__
+    header['VERSION'] = (opts.version, 'Template version')
+    header['INSPEC'] = os.path.basename(opts.infile)
+    header['EXTNAME'] = 'BASIS_VECTORS'
 
-hdus = fits.HDUList()
-hdus.append(fits.PrimaryHDU(eigenboss, header=header))
+    hdus = fits.HDUList()
+    hdus.append(fits.PrimaryHDU(eigenboss, header=header))
 
-#- placeholder
-# c = np.zeros((10, eigenboss.shape[0]))
-# hdus.append(fits.ImageHDU(c, name='ARCHETYPE_COEFF'))
+    #- placeholder
+    # c = np.zeros((10, eigenboss.shape[0]))
+    # hdus.append(fits.ImageHDU(c, name='ARCHETYPE_COEFF'))
 
-hdus.writeto(opts.outfile, clobber=True)
-print('RR: Wrote '+opts.outfile)
+    hdus.writeto(opts.outfile, clobber=True)
+    print('RR: Wrote '+opts.outfile)
 
-
-
-
+if __name__ == "__main__":
+    sys.exit(main())
 
