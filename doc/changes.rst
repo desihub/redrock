@@ -2,7 +2,12 @@
 redrock Change Log
 ==================
 
-0.22.2 (unreleased)
+0.22.3 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.22.2 (2026-09-22)
 -------------------
 
 * Add ``if __name__ == "__main__"`` script wrappers for multiprocessing
