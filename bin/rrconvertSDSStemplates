@@ -7,7 +7,7 @@ import optparse
 from astropy.io import fits
 import redrock
 
-def convert():
+def main():
 
     parser = optparse.OptionParser(usage = "%prog [options]")
     parser.add_option("-i", "--infile", type="string", help="input SDSS templates")
@@ -86,4 +86,5 @@ def convert():
 
     return
 
-convert()
+if __name__ == "__main__":
+    sys.exit(main())
