@@ -5,7 +5,10 @@ redrock Change Log
 0.22.2 (unreleased)
 -------------------
 
-* No changes yet.
+* Add ``if __name__ == "__main__"`` script wrappers for multiprocessing
+  robustness (PR `#356`_).
+
+.. _`#356`: https://github.com/desihub/redrock/pull/356
 
 0.22.1 (2026-09-17)
 -------------------
