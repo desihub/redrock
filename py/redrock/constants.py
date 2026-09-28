@@ -16,10 +16,10 @@ LyA_wavelength = 1215.67
 Lyman_series = dict()
 Lyman_series['Calura12'] = {
     'Lya'     : { 'line':LyA_wavelength, 'A':0.0023,    'B':3.64, 'var_evol':3.8 },
-    'Lyb'     : { 'line':1025.72,  'A':0.0023/5.2615,   'B':3.64, 'var_evol':3.8 },
-    'Ly3'     : { 'line':972.537,  'A':0.0023/14.356,   'B':3.64, 'var_evol':3.8 },
-    'Ly4'     : { 'line':949.7431, 'A':0.0023/29.85984, 'B':3.64, 'var_evol':3.8 },
-    'Ly5'     : { 'line':937.8035, 'A':0.0023/53.36202, 'B':3.64, 'var_evol':3.8 },
+    'Lyb'     : { 'line':1025.72,  'A':0.0023*(1025.72/LyA_wavelength)/5.2615,   'B':3.64, 'var_evol':3.8 },
+    'Ly3'     : { 'line':972.537,  'A':0.0023*(972.537/LyA_wavelength)/14.356,   'B':3.64, 'var_evol':3.8 },
+    'Ly4'     : { 'line':949.7431, 'A':0.0023*(949.7431/LyA_wavelength)/29.85984, 'B':3.64, 'var_evol':3.8 },
+    'Ly5'     : { 'line':937.8035, 'A':0.0023*(937.8035/LyA_wavelength)/53.36202, 'B':3.64, 'var_evol':3.8 },
 }
 
 # Lyman-alpha values from Kamble et al. 2020 (Arxiv: 1904.01110)
