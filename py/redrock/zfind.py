@@ -465,6 +465,8 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
         #     ft = t.template.full_type
 
         allzfit = list()
+        # set ncoeff for to common length for all targets
+        global_ncoeff = max(t.template.nbasis for t in templates)
         for tid in targets.all_target_ids:
             tzfit = list()
             for fulltype in allresults[tid]:
@@ -516,7 +518,9 @@ def zfind(targets, templates, mp_procs=1, nminima=3, archetypes=None, priors=Non
                 tzfit.append(tmp)
                 del allresults[tid][fulltype]['zfit']
 
-            maxncoeff = max([tmp['coeff'].shape[1] for tmp in tzfit])
+            # if priors are passed, one target may have different maxcoeff_tgt than global value
+            maxncoeff_tgt = max([tmp['coeff'].shape[1] for tmp in tzfit]) # may exceed global_ncoeff in archetype mode
+            maxncoeff = max(maxncoeff_tgt, global_ncoeff)
 
             for tmp in tzfit:
                 if tmp['coeff'].shape[1] < maxncoeff:
