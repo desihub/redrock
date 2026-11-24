@@ -1,4 +1,6 @@
 import unittest
+import os
+import tempfile
 from io import BytesIO
 
 import numpy as np
@@ -6,6 +8,9 @@ from astropy.table import Table
 
 from ..zfind import zfind, sort_zfit, calc_deltachi2, sort_zfit_dict, sort_dict_by_cols
 from .. zwarning import ZWarningMask as ZW
+from ..targets import DistTargetsCopy
+from ..templates import Template, DistTemplate
+from . import util
 
 class TestZFind(unittest.TestCase):
     """Test redrock.zfind
@@ -137,6 +142,41 @@ class TestZFind(unittest.TestCase):
         zfit['rank'] =np.array([1,0,2])
         sort_zfit_dict(zfit)
         self.assertEqual(list(zfit['rank']), list(range(len(zfit['rank']))))
+
+    def test_zfind_priors_ncoeff(self):
+        """zfind with priors where targets end up with different max ncoeff (PR #357)"""
+        np.random.seed(0)
+        t1 = util.get_target(0.2); t1.id = 111
+        t2 = util.get_target(0.2); t2.id = 222
+        dtarg = DistTargetsCopy([t1, t2])
+        dwave = dtarg.wavegrids()
+
+        #- GALAXY template has 3 basis vectors; STAR has 2 and a disjoint z range
+        galaxy = util.get_template(spectype='GALAXY', redshifts=np.linspace(0.15, 0.3, 50))
+        star = Template(spectype='STAR', subtype='X', redshifts=np.linspace(-0.002, 0.002, 21),
+                        wave=galaxy.wave, flux=galaxy.flux[0:2])
+        self.assertNotEqual(galaxy.nbasis, star.nbasis)
+        templates = [DistTemplate(galaxy, dwave), DistTemplate(star, dwave)]
+
+        #- tophat priors leave t1 with only STAR minima (ncoeff=2)
+        #- and t2 with only GALAXY minima (ncoeff=3)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            priorfile = os.path.join(tmpdir, 'priors.fits')
+            Table(dict(TARGETID=[111, 222], Z=[0.0, 0.25], SIGMA=[0.002, 0.05],
+                       FUNCTION=['tophat', 'tophat']),
+                  meta=dict(EXTNAME='PRIORS')).write(priorfile)
+            zscan, zfit = zfind(dtarg, templates, priors=priorfile)
+
+        maxnbasis = max(galaxy.nbasis, star.nbasis)
+        self.assertEqual(zfit['coeff'].shape[1], maxnbasis)
+        z1 = zfit[zfit['targetid'] == 111]
+        z2 = zfit[zfit['targetid'] == 222]
+        self.assertTrue(np.all(z1['spectype'] == 'STAR'))
+        self.assertTrue(np.all(z2['spectype'] == 'GALAXY'))
+        self.assertTrue(np.all(z1['ncoeff'] == star.nbasis))
+        self.assertTrue(np.all(z2['ncoeff'] == galaxy.nbasis))
+        #- STAR coefficients beyond its nbasis are zero-padded
+        self.assertTrue(np.all(z1['coeff'][:, star.nbasis:] == 0.0))
 
     def test_calc_deltachi2(self):
 
