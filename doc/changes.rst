@@ -2,10 +2,18 @@
 redrock Change Log
 ==================
 
-0.22.3 (unreleased)
+0.22.4 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.22.3 (2026-11-24)
+-------------------
+
+* Set ncoeff globally rather than per target to support priors with
+  templates of different sizes (PR `#357`_).
+
+.. _`#357`: https://github.com/desihub/redrock/pull/357
 
 0.22.2 (2026-09-22)
 -------------------
